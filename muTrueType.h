@@ -520,9 +520,9 @@ mutt is developed primarily off of these sources of documentation:
 
 			#endif
 
-	// @DOCLINE # TrueType information
+	// @DOCLINE # Direct table information
 
-		// @DOCLINE There are several structs used to give an overview of a TrueType font. This section covers those structs.
+		// @DOCLINE mutt gives an API for querying information about tables stored within a TrueType font.
 
 		// @DOCLINE ## Table
 
@@ -684,28 +684,28 @@ mutt is developed primarily off of these sources of documentation:
 			};
 			typedef struct muttHheaInfo muttHheaInfo;
 
-		// @DOCLINE ## General TrueType information struct
+	// @DOCLINE # General TrueType information
 
-			// @DOCLINE The struct `muttInfo` is used to refer to the general information about a TrueType font, and is used to refer to a TrueType font across multiple function calls. It has the following documented members:
+		// @DOCLINE The struct `muttInfo` is used to refer to the general information about a TrueType font, and is used to refer to a TrueType font across multiple function calls. It has the following documented members:
 
-			struct muttInfo {
-				// @DOCLINE `data`: the data of the TrueType font, defined below: @NLNT
-				muByte* data;
-				// @DOCLINE `size`: the size of the TrueType font data, in bytes, defined below: @NLNT
-				size_m size;
+		struct muttInfo {
+			// @DOCLINE `data`: the data of the TrueType font, defined below: @NLNT
+			muByte* data;
+			// @DOCLINE `size`: the size of the TrueType font data, in bytes, defined below: @NLNT
+			size_m size;
 
-				// @DOCLINE `req`: the required tables in the TrueType font data, defined below: @NLNT
-				muttRequiredTables req;
+			// @DOCLINE `req`: the required tables in the TrueType font data, defined below: @NLNT
+			muttRequiredTables req;
 
-				// @DOCLINE `head_info`: information retrieved from the required "head" table, defined below: @NLNT
-				muttHeadInfo head_info;
-				// @DOCLINE `maxp_info`: information retrieved from the required "maxp" table, defined below: @NLNT
-				muttMaxpInfo maxp_info;
-				// @DOCLINE `hhea_info`: information retrieved from the required "hhea" table, defined below: @NLNT
-				muttHheaInfo hhea_info;
-			}; typedef struct muttInfo muttInfo;
+			// @DOCLINE `head_info`: information retrieved from the required "head" table, defined below: @NLNT
+			muttHeadInfo head_info;
+			// @DOCLINE `maxp_info`: information retrieved from the required "maxp" table, defined below: @NLNT
+			muttMaxpInfo maxp_info;
+			// @DOCLINE `hhea_info`: information retrieved from the required "hhea" table, defined below: @NLNT
+			muttHheaInfo hhea_info;
+		}; typedef struct muttInfo muttInfo;
 
-			// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mutt_truetype_get_info`, and are invalid upon its respective call to `mutt_truetype_let_info`. The members are meant to be read, not written.
+		// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mutt_truetype_get_info`, and are invalid upon its respective call to `mutt_truetype_let_info`. The members are meant to be read, not written.
 
 		// @DOCLINE ## Retrieve TrueType information
 
