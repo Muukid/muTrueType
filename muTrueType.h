@@ -24,7 +24,90 @@ More information about the general structure of a mu library is provided at [the
 
 # Demos
 
-Demos that quickly show the gist of the library and how it works are available in the `demos` folder.
+The documentation for this library is fairly explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
+
+# General overview
+
+mutt is a fairly complicated library, so this section gives an overview of the library. More explicit documentation comes after this section.
+
+## Loading a TrueType font
+
+A TrueType font is loaded in as a `muttInfo` struct, and needs to be manually destroyed once successfully loaded. Loading a TrueType font could look something like:
+
+```c
+// Load TrueType file
+
+FILE* fptr = fopen("font.ttf", "rb");
+
+// Get size
+
+fseek(fptr, 0L, SEEK_END);
+size_t fsize = ftell(fptr);
+fseek(fptr, 0L, SEEK_SET);
+
+// Load data into buffer
+
+muByte* data = (muByte*)malloc(fsize);
+fread(data, fsize, 1, fptr);
+
+// Close file
+
+fclose(fptr);
+
+// Generate information
+
+muttResult res = MUTT_SUCCESS;
+muttInfo info = mutt_truetype_get_info(&res, data, fsize);
+
+// ...(do things regarding the font)...
+
+// Free up information
+
+mutt_truetype_let_info(&info);
+free(data);
+```
+
+Note that this means that the data passed to `mutt_truetype_get_info` is assumed to exist and stay constant as long as `info` is alive.
+
+## Low-level information querying
+
+mutt has the ability to give low-level information about a TrueType font.
+
+### Tables
+
+mutt directly stores information about required tables, such as their position in the TrueType font data and their byte-length. These tables are:
+
+* "cmap" (`muttInfo.req.cmap`)
+
+* "glyf" (`muttInfo.req.glyf`)
+
+* "head" (`muttInfo.req.head`)
+
+* "hhea" (`muttInfo.req.hhea`)
+
+* "hmtx" (`muttInfo.req.hmtx`)
+
+* "loca" (`muttInfo.req.loca`)
+
+* "maxp" (`muttInfo.req.maxp`)
+
+* "name" (`muttInfo.req.name`)
+
+* "post" (`muttInfo.req.post`)
+
+mutt also allows the values implied in several tables to be accessed directly as readable values. These tables are:
+
+* "head" (`muttInfo.head_info`; respective struct `muttHeadInfo`)
+
+* "maxp" (`muttInfo.maxp_info`; respective struct `muttMaxpInfo`)
+
+* "hhea" (`muttInfo.hhea_info`; respective struct `muttHheaInfo`)
+
+For other tables, their contents are extremely variable (such as when they have an array of elements), and are queried via dedicated functions in mutt. These tables are:
+
+* "name" (see "Name table" section)
+
+* "loca" (see "Loca table" section)
 
 # Licensing
 
@@ -479,72 +562,127 @@ mutt is developed primarily off of these sources of documentation:
 				muttTable post;
 			}; typedef struct muttRequiredTables muttRequiredTables;
 
-		// @DOCLINE ## General gylph information
+		// @DOCLINE ## Head table information
 
-			// @DOCLINE The struct `muttGeneralGylphInfo` represents general information about the glyphs that are defined by a TrueType font. It has the following members:
+			// @DOCLINE The struct `muttHeadInfo` is used to define the information provided by the necessary "head" table within a TrueType font. It has the following members:
 
-			struct muttGeneralGlyphInfo {
-				// @DOCLINE * `glyph_count`: the "number of glyphs in the font", defined below: @NLNT
-				uint16_m glyph_count;
-				// @DOCLINE * `max_points`: the "maximum [number of] points in a non-composite glyph", defined below: @NLNT
-				uint16_m max_points;
-				// @DOCLINE * `max_contours`: the "maximum [number of] contours in a non-composite glyph", defined below: @NLNT
-				uint16_m max_contours;
-				// @DOCLINE * `max_composite_points`: the "maximum [number of] points in a composite glyph", defined below: @NLNT
-				uint16_m max_composite_points;
-				// @DOCLINE * `max_composite_contours`: the "maximum [number of] contours in a composite glyph", defined below: @NLNT
-				uint16_m max_composite_contours;
-				// @DOCLINE * `head_flags`: flags for the head table: @NLNT
-				uint16_m head_flags;
-				// @DOCLINE * `units_per_em`: the units per em, defined below: @NLNT
+			struct muttHeadInfo {
+				// @DOCLINE * `major_version`: equivalent to "majorVersion" in the "head" table, defined below: @NLNT
+				uint16_m major_version;
+				// @DOCLINE * `minor_version`: equivalent to "minorVersion" in the "head" table, defined below: @NLNT
+				uint16_m minor_version;
+				// @DOCLINE * `font_revision_high`: equivalent to the high-bytes of "fontRevision" in the "head" table, defined below: @NLNT
+				int16_m font_revision_high;
+				// @DOCLINE * `font_revision_low`: equivalent to the low-bytes of "fontRevision" in the "head" table, defined below: @NLNT
+				int16_m font_revision_low;
+				// @DOCLINE * `checksum_adjustment`: equivalent to "checksumAdjustment" in the "head" table, defined below: @NLNT
+				uint32_m checksum_adjustment;
+				// @DOCLINE * `magic_number`: equivalent to "magicNumber" in the "head" table, defined below: @NLNT
+				uint32_m magic_number;
+				// @DOCLINE * `flags`: equivalent to "flags" in the "head" table, defined below: @NLNT
+				uint16_m flags;
+				// @DOCLINE * `units_per_em`: equivalent to "unitsPerEm" in the "head" table, defined below: @NLNT
 				uint16_m units_per_em;
-				// @DOCLINE * `x_min`: minimum x-coordinate for all defined glyph bounding boxes, defined below: @NLNT
-				int16_m x_min;
-				// @DOCLINE * `y_min`: minimum y-coordinate for all defined glyph bounding boxes, defined below: @NLNT
-				int16_m y_min;
-				// @DOCLINE * `x_max`: maximum x-coordinate for all defined glyph bounding boxes, defined below: @NLNT
-				int16_m x_max;
-				// @DOCLINE * `y_max`: maximum y-coordinate for all defined glyph bounding boxes, defined below: @NLNT
-				int16_m y_max;
-				// @DOCLINE * `mac_style`: corresponds to macStyle in the "head" table, defined below: @NLNT
-				uint16_m mac_style;
-				// @DOCLINE * `lowest_rec_ppem`: "smallest readable size in pixels", defined below: @NLNT
-				uint16_m lowest_rec_ppem;
-			};
-			typedef struct muttGeneralGlyphInfo muttGeneralGlyphInfo;
-
-			// @DOCLINE Most of this information is based off of the "head" table and the "maxp" table.
-
-			// @DOCLINE ### Mac style macros
-
-				// @DOCLINE To make interacting with `muttGeneralGlyphInfo.mac_style` easier, mutt defines several macros to check for the bits within its given value. Said values are defined below:
-
-				// @DOCLINE * `MUTT_MAC_STYLE_BOLD`: bit 0; "Bold (if set to 1)".
-				#define MUTT_MAC_STYLE_BOLD 0
-				// @DOCLINE * `MUTT_MAC_STYLE_ITALIC`: bit 1; "Italic (if set to 1)".
-				#define MUTT_MAC_STYLE_ITALIC 1
-				// @DOCLINE * `MUTT_MAC_STYLE_UNDERLINE`: bit 2; "Underline (if set to 1)".
-				#define MUTT_MAC_STYLE_UNDERLINE 2
-				// @DOCLINE * `MUTT_MAC_STYLE_OUTLINE`: bit 3; "Outline (if set to 1)".
-				#define MUTT_MAC_STYLE_OUTLINE 3
-				// @DOCLINE * `MUTT_MAC_STYLE_SHADOW`: bit 4; "Shadow (if set to 1)".
-				#define MUTT_MAC_STYLE_SHADOW 4
-				// @DOCLINE * `MUTT_MAC_STYLE_CONDENSED`: bit 5; "Condensed (if set to 1)".
-				#define MUTT_MAC_STYLE_CONDENSED 5
-				// @DOCLINE * `MUTT_MAC_STYLE_EXTENDED`: bit 6; "Extended (if set to 1)".
-				#define MUTT_MAC_STYLE_EXTENDED 6
-
-		// @DOCLINE ## Advanced font information
-
-			// @DOCLINE The struct `muttAdvancedInfo` is used to refer to more specific general information about a TrueType font. It has the following members:
-
-			struct muttAdvancedInfo {
-				// @DOCLINE * `created`: the time this font was initially created; in number of seconds since 12:00 midnight on 1 January 1904 in GMT/UTC time, defined below: @NLNT
+				// @DOCLINE * `created`: equivalent to "created" in the "head" table, defined below: @NLNT
 				int64_m created;
-				// @DOCLINE * `modified`: the time this font was last modified; in number of seconds since 12:00 midnight on 1 January 1904 in GMT/UTC time, defined below: @NLNT
+				// @DOCLINE * `modified`: equivalent to "modified" in the "head" table, defined below: @NLNT
 				int64_m modified;
+				// @DOCLINE * `x_min`: equivalent to "xMin" in the "head" table, defined below: @NLNT
+				int16_m x_min;
+				// @DOCLINE * `y_min`: equivalent to "yMin" in the "head" table, defined below: @NLNT
+				int16_m y_min;
+				// @DOCLINE * `x_max`: equivalent to "xMax" in the "head" table, defined below: @NLNT
+				int16_m x_max;
+				// @DOCLINE * `y_max`: equivalent to "yMax" in the "head" table, defined below: @NLNT
+				int16_m y_max;
+				// @DOCLINE * `mac_style`: equivalent to "macStyle" in the "head" table, defined below: @NLNT
+				uint16_m mac_style;
+				// @DOCLINE * `lowest_rec_ppem`: equivalent to "lowestRecPPEM" in the "head" table, defined below: @NLNT
+				uint16_m lowest_rec_ppem;
+				// @DOCLINE * `font_direction_hint`: equivalent to "fontDirectionHint" in the "head" table, defined below: @NLNT
+				int16_m font_direction_hint;
+				// @DOCLINE * `index_to_loc_format`: equivalent to "indexToLocFormat" in the "head" table, defined below: @NLNT
+				int16_m index_to_loc_format;
+				// @DOCLINE * `glyph_data_format`: equivalent to "glyphDataFormat" in the "head" table, defined below: @NLNT
+				int16_m glyph_data_format;
 			};
-			typedef struct muttAdvancedInfo muttAdvancedInfo;
+			typedef struct muttHeadInfo muttHeadInfo;
+
+		// @DOCLINE ## Maxp table information
+
+			// @DOCLINE The struct `muttMaxpInfo` is used to define the information provided by the necessary "maxp" table within a TrueType font. It has the following members:
+
+			struct muttMaxpInfo {
+				// @DOCLINE * `version_high`: equivalent to the high-bytes of "version" in the "maxp" table, defined below: @NLNT
+				uint16_m version_high;
+				// @DOCLINE * `version_low`: equivalent to the low-bytes of "version" in the "maxp" table, defined below: @NLNT
+				uint16_m version_low;
+				// @DOCLINE * `num_glyphs`: equivalent to "numGlyphs" in the "maxp" table, defined below: @NLNT
+				uint16_m num_glyphs;
+				// @DOCLINE * `max_points`: equivalent to "maxPoints" in the "maxp" table, defined below: @NLNT
+				uint16_m max_points;
+				// @DOCLINE * `max_contours`: equivalent to "maxContours" in the "maxp" table, defined below: @NLNT
+				uint16_m max_contours;
+				// @DOCLINE * `max_composite_points`: equivalent to "maxCompositePoints" in the "maxp" table, defined below: @NLNT
+				uint16_m max_composite_points;
+				// @DOCLINE * `max_composite_contours`: equivalent to "maxCompositeContours" in the "maxp" table, defined below: @NLNT
+				uint16_m max_composite_contours;
+				// @DOCLINE * `max_zones`: equivalent to "maxZones" in the "maxp" table, defined below: @NLNT
+				uint16_m max_zones;
+				// @DOCLINE * `max_twilight_points`: equivalent to "maxTwilightPoints" in the "maxp" table, defined below: @NLNT
+				uint16_m max_twilight_points;
+				// @DOCLINE * `max_storage`: equivalent to "maxStorage" in the "maxp" table, defined below: @NLNT
+				uint16_m max_storage;
+				// @DOCLINE * `max_function_defs`: equivalent to "maxFunctionDefs" in the "maxp" table, defined below: @NLNT
+				uint16_m max_function_defs;
+				// @DOCLINE * `max_instruction_defs`: equivalent to "maxInstructionDefs" in the "maxp" table, defined below: @NLNT
+				uint16_m max_instruction_defs;
+				// @DOCLINE * `max_stack_elements`: equivalent to "maxStackElements" in the "maxp" table, defined below: @NLNT
+				uint16_m max_stack_elements;
+				// @DOCLINE * `max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the "maxp" table, defined below: @NLNT
+				uint16_m max_size_of_instructions;
+				// @DOCLINE * `max_component_elements`: equivalent to "maxComponentElements" in the "maxp" table, defined below: @NLNT
+				uint16_m max_component_elements;
+				// @DOCLINE * `max_component_depth`: equivalent to "maxComponentDepth" in the "maxp" table, defined below: @NLNT
+				uint16_m max_component_depth;
+			};
+			typedef struct muttMaxpInfo muttMaxpInfo;
+
+		// @DOCLINE ## Hhea table information
+
+			// @DOCLINE The struct `muttHheaInfo` is used to define the information provided by the necessary "hhea" table within a TrueType font. It has the following members:
+
+			struct muttHheaInfo {
+				// @DOCLINE * `major_version`: equivalent to "majorVersion" in the "hhea" table, defined below: @NLNT
+				uint16_m major_version;
+				// @DOCLINE * `minor_version`: equivalent to "minorVersion" in the "hhea" table, defined below: @NLNT
+				uint16_m minor_version;
+				// @DOCLINE * `ascender`: equivalent to "ascender" in the "hhea" table, defined below: @NLNT
+				int16_m ascender;
+				// @DOCLINE * `descender`: equivalent to "descender" in the "hhea" table, defined below: @NLNT
+				int16_m descender;
+				// @DOCLINE * `line_gap`: equivalent to "lineGap" in the "hhea" table, defined below: @NLNT
+				int16_m line_gap;
+				// @DOCLINE * `advance_max_width`: equivalent to "advanceWidthMax" in the "hhea" table, defined below: @NLNT
+				uint16_m advance_max_width;
+				// @DOCLINE * `min_left_side_bearing`: equivalent to "minLeftSideBearing" in the "hhea" table, defined below: @NLNT
+				int16_m min_left_side_bearing;
+				// @DOCLINE * `min_right_side_bearing`: equivalent to "minRightSideBearing" in the "hhea" table, defined below: @NLNT
+				int16_m min_right_side_bearing;
+				// @DOCLINE * `x_max_extent`: equivalent to "xMaxExtent" in the "hhea" table, defined below: @NLNT
+				int16_m x_max_extent;
+				// @DOCLINE * `caret_slope_rise`: equivalent to "caretSlopeRise" in the "hhea" table, defined below: @NLNT
+				int16_m caret_slope_rise;
+				// @DOCLINE * `caret_slope_run`: equivalent to "caretSlopeRun" in the "hhea" table, defined below: @NLNT
+				int16_m caret_slope_run;
+				// @DOCLINE * `caret_offset`: equivalent to "caretOffset" in the "hhea" table, defined below: @NLNT
+				int16_m caret_offset;
+				// @DOCLINE * `metric_data_format`: equivalent to "metricDataFormat" in the "hhea" table, defined below: @NLNT
+				int16_m metric_data_format;
+				// @DOCLINE * `number_of_hmetrics`: equivalent to "numberOfHMetrics" in the "hhea" table, defined below: @NLNT
+				uint16_m number_of_hmetrics;
+			};
+			typedef struct muttHheaInfo muttHheaInfo;
 
 		// @DOCLINE ## General TrueType information struct
 
@@ -559,10 +697,12 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE `req`: the required tables in the TrueType font data, defined below: @NLNT
 				muttRequiredTables req;
 
-				// @DOCLINE `glyph_info`: general information about the glyphs specified in the TrueType font data, defined below: @NLNT
-				muttGeneralGlyphInfo glyph_info;
-				// @DOCLINE `adv_info`: advanced information about the font, defined below: @NLNT
-				muttAdvancedInfo adv_info;
+				// @DOCLINE `head_info`: information retrieved from the required "head" table, defined below: @NLNT
+				muttHeadInfo head_info;
+				// @DOCLINE `maxp_info`: information retrieved from the required "maxp" table, defined below: @NLNT
+				muttMaxpInfo maxp_info;
+				// @DOCLINE `hhea_info`: information retrieved from the required "hhea" table, defined below: @NLNT
+				muttHheaInfo hhea_info;
 			}; typedef struct muttInfo muttInfo;
 
 			// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mutt_truetype_get_info`, and are invalid upon its respective call to `mutt_truetype_let_info`. The members are meant to be read, not written.
@@ -652,110 +792,116 @@ mutt is developed primarily off of these sources of documentation:
 				muttEncodingID encoding_id;
 			}; typedef struct muttEncoding muttEncoding;
 
-	// @DOCLINE # General font information
+	// @DOCLINE # Name table
 
-		// @DOCLINE There are several attributes about a font that can be stored within a TrueType file, to which mutt gives an API to retrieve this information. This section does not include glyph data; that is covered in a later section.
+		// @DOCLINE mutt can retrieve information from the "name" table in TrueType based on a requested name ID.
 
-		// @DOCLINE ## Names
+		// @DOCLINE ## Name ID
 
-			// @DOCLINE mutt can retrieve information from the "name" table in TrueType based on a requested name ID.
+			// @DOCLINE The type `muttNameID` (`uint16_m`) is used to represent a name ID in TrueType. Any value based on the TrueType standard will work, but this type gives a representation for some common name IDs.
 
-			// @DOCLINE ### Name ID
+			#define muttNameID uint16_m
 
-				// @DOCLINE The type `muttNameID` (`uint16_m`) is used to represent a name ID in TrueType. Any value based on the TrueType standard will work, but this type gives a representation for some common name IDs.
+			// @DOCLINE ### Values
 
-				#define muttNameID uint16_m
+			// @DOCLINE * `MUTT_NAME_COPYRIGHT_NOTICE`: ID 0 based on TrueType standards; "Copyright notice."
+			#define MUTT_NAME_COPYRIGHT_NOTICE 0
+			// @DOCLINE * `MUTT_NAME_FONT_FAMILY`: ID 1 based on TrueType standards; "Font Family name."
+			#define MUTT_NAME_FONT_FAMILY 1
+			// @DOCLINE * `MUTT_NAME_FONT_SUBFAMILY`: ID 2 based on TrueType standards; "Font Subfamily name."
+			#define MUTT_NAME_FONT_SUBFAMILY 2
+			// @DOCLINE * `MUTT_NAME_FULL_FONT_NAME`: ID 4 based on TrueType standards; "Full font name".
+			#define MUTT_NAME_FULL_FONT_NAME 4
+			// @DOCLINE * `MUTT_NAME_VERSION_STRING`: ID 5 based on TrueType standards; "Version string."
+			#define MUTT_NAME_VERSION_STRING 5
+			// @DOCLINE * `MUTT_NAME_TRADEMARK`: ID 7 based on TrueType standards; "Trademark."
+			#define MUTT_NAME_TRADEMARK 7
+			// @DOCLINE * `MUTT_NAME_MANUFACTURER`: ID 8 based on TrueType standards; "Manufacturer Name."
+			#define MUTT_NAME_MANUFACTURER 8
+			// @DOCLINE * `MUTT_NAME_DESIGNER`: ID 9 based on TrueType standards; "Designer."
+			#define MUTT_NAME_DESIGNER 9
+			// @DOCLINE * `MUTT_NAME_DESCRIPTION`: ID 10 based on TrueType standards; "Description."
+			#define MUTT_NAME_DESCRIPTION 10
+			// @DOCLINE * `MUTT_NAME_VENDOR_URL`: ID 11 based on TrueType standards; "URL of Vendor."
+			#define MUTT_NAME_VENDOR_URL 11
+			// @DOCLINE * `MUTT_NAME_DESIGNER_URL`: ID 12 based on TrueType standards; "URL of Designer."
+			#define MUTT_NAME_DESIGNER_URL 12
+			// @DOCLINE * `MUTT_NAME_LICENSE_DESCRIPTION`: ID 13 based on TrueType standards; "License Description."
+			#define MUTT_NAME_LICENSE_DESCRIPTION 13
+			// @DOCLINE * `MUTT_NAME_LICENSE_INFO_URL`: ID 14 based on TrueType standards; "License Info URL."
+			#define MUTT_NAME_LICENSE_INFO_URL 14
+			// @DOCLINE * `MUTT_NAME_TYPOGRAPHIC_FAMILY`: ID 16 based on TrueType standards; "Typographic Family name."
+			#define MUTT_NAME_TYPOGRAPHIC_FAMILY 16
+			// @DOCLINE * `MUTT_NAME_SAMPLE_TEXT`: ID 19 based on TrueType standards; "Sample text."
+			#define MUTT_NAME_SAMPLE_TEXT 19
 
-				// @DOCLINE #### Values
+			// @DOCLINE ### Name
 
-				// @DOCLINE * `MUTT_NAME_COPYRIGHT_NOTICE`: ID 0 based on TrueType standards; "Copyright notice."
-				#define MUTT_NAME_COPYRIGHT_NOTICE 0
-				// @DOCLINE * `MUTT_NAME_FONT_FAMILY`: ID 1 based on TrueType standards; "Font Family name."
-				#define MUTT_NAME_FONT_FAMILY 1
-				// @DOCLINE * `MUTT_NAME_FONT_SUBFAMILY`: ID 2 based on TrueType standards; "Font Subfamily name."
-				#define MUTT_NAME_FONT_SUBFAMILY 2
-				// @DOCLINE * `MUTT_NAME_FULL_FONT_NAME`: ID 4 based on TrueType standards; "Full font name".
-				#define MUTT_NAME_FULL_FONT_NAME 4
-				// @DOCLINE * `MUTT_NAME_VERSION_STRING`: ID 5 based on TrueType standards; "Version string."
-				#define MUTT_NAME_VERSION_STRING 5
-				// @DOCLINE * `MUTT_NAME_TRADEMARK`: ID 7 based on TrueType standards; "Trademark."
-				#define MUTT_NAME_TRADEMARK 7
-				// @DOCLINE * `MUTT_NAME_MANUFACTURER`: ID 8 based on TrueType standards; "Manufacturer Name."
-				#define MUTT_NAME_MANUFACTURER 8
-				// @DOCLINE * `MUTT_NAME_DESIGNER`: ID 9 based on TrueType standards; "Designer."
-				#define MUTT_NAME_DESIGNER 9
-				// @DOCLINE * `MUTT_NAME_DESCRIPTION`: ID 10 based on TrueType standards; "Description."
-				#define MUTT_NAME_DESCRIPTION 10
-				// @DOCLINE * `MUTT_NAME_VENDOR_URL`: ID 11 based on TrueType standards; "URL of Vendor."
-				#define MUTT_NAME_VENDOR_URL 11
-				// @DOCLINE * `MUTT_NAME_DESIGNER_URL`: ID 12 based on TrueType standards; "URL of Designer."
-				#define MUTT_NAME_DESIGNER_URL 12
-				// @DOCLINE * `MUTT_NAME_LICENSE_DESCRIPTION`: ID 13 based on TrueType standards; "License Description."
-				#define MUTT_NAME_LICENSE_DESCRIPTION 13
-				// @DOCLINE * `MUTT_NAME_LICENSE_INFO_URL`: ID 14 based on TrueType standards; "License Info URL."
-				#define MUTT_NAME_LICENSE_INFO_URL 14
-				// @DOCLINE * `MUTT_NAME_TYPOGRAPHIC_FAMILY`: ID 16 based on TrueType standards; "Typographic Family name."
-				#define MUTT_NAME_TYPOGRAPHIC_FAMILY 16
-				// @DOCLINE * `MUTT_NAME_SAMPLE_TEXT`: ID 19 based on TrueType standards; "Sample text."
-				#define MUTT_NAME_SAMPLE_TEXT 19
+			#ifdef MUTT_NAMES
 
-				// @DOCLINE #### Name
+			// @DOCLINE The function `mutt_name_id_get_name` converts a `muttNameID` value to a `const char*` representation, defined below: @NLNT
+			MUDEF const char* mutt_name_id_get_name(muttNameID nameID);
 
-				#ifdef MUTT_NAMES
+			// @DOCLINE The function `mutt_name_id_get_nice_name` converts a `muttNameID` value to a more readable `const char*` representation, defined below: @NLNT
+			MUDEF const char* mutt_name_id_get_nice_name(muttNameID nameID);
 
-				// @DOCLINE The function `mutt_name_id_get_name` converts a `muttNameID` value to a `const char*` representation, defined below: @NLNT
-				MUDEF const char* mutt_name_id_get_name(muttNameID nameID);
+			// @DOCLINE Note that these functions are only defined if `MUTT_NAMES` is defined before the inclusion of the header file.
 
-				// @DOCLINE The function `mutt_name_id_get_nice_name` converts a `muttNameID` value to a more readable `const char*` representation, defined below: @NLNT
-				MUDEF const char* mutt_name_id_get_nice_name(muttNameID nameID);
+			// @DOCLINE These functions return `"MUTT_UNKNOWN"` if a respective name could not be found.
 
-				// @DOCLINE Note that these functions are only defined if `MUTT_NAMES` is defined before the inclusion of the header file.
+			#endif
 
-				// @DOCLINE These functions return `"MUTT_UNKNOWN"` if a respective name could not be found.
+		// @DOCLINE ## Get names
 
-				#endif
+			// @DOCLINE ### Get offered name IDs
 
-			// @DOCLINE ### Get names
+				// @DOCLINE The function `mutt_truetype_get_name_ids` is used to retrieve the name IDs offered by a TrueType font, defined below: @NLNT
+				MUDEF uint16_m mutt_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
 
-				// @DOCLINE #### Get offered name IDs
+				// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
+				#define mu_truetype_get_name_ids(...) mutt_truetype_get_name_ids(__VA_ARGS__)
 
-					// @DOCLINE The function `mutt_truetype_get_name_ids` is used to retrieve the name IDs offered by a TrueType font, defined below: @NLNT
-					MUDEF uint16_m mutt_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
+				// @DOCLINE This function returns the amount of name IDs specified by the font. If `ids` is not 0, `ids` is expected to be a pointer to an array of `uint16_m`s at least the length of the amount of name IDs specified by the font, and will be written to as such.
 
-					// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-					#define mu_truetype_get_name_ids(...) mutt_truetype_get_name_ids(__VA_ARGS__)
+			// @DOCLINE ### Get name
 
-					// @DOCLINE This function returns the amount of name IDs specified by the font. If `ids` is not 0, `ids` is expected to be a pointer to an array of `uint16_m`s at least the length of the amount of name IDs specified by the font, and will be written to as such.
+				// @DOCLINE The function `mutt_truetype_get_name` retrieves the string for a given name ID, defined below: @NLNT
+				MUDEF char* mutt_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length);
 
-				// @DOCLINE #### Get name
+				// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
+				#define mu_truetype_get_name(...) mutt_truetype_get_name(__VA_ARGS__)
 
-					// @DOCLINE The function `mutt_truetype_get_name` retrieves the string for a given name ID, defined below: @NLNT
-					MUDEF char* mutt_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length);
+				// @DOCLINE This function returns a pointer to an offset in the TrueType font data within `info` which holds the name.
 
-					// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-					#define mu_truetype_get_name(...) mutt_truetype_get_name(__VA_ARGS__)
+				// @DOCLINE `name_id_index` is the index of the name ID being requested; for example, if the font in question offers 7 name IDs and you wanted the 5th name ID specified, `name_id_index` should be 4. `name_id_index` is *not* the name ID, but instead the index the name in question specified by the font.
 
-					// @DOCLINE This function returns a pointer to an offset in the TrueType font data within `info` which holds the name.
+				// @DOCLINE If `length` is not 0, `length` is dereferenced and set to the length of the name in bytes.
 
-					// @DOCLINE `name_id_index` is the index of the name ID being requested; for example, if the font in question offers 7 name IDs and you wanted the 5th name ID specified, `name_id_index` should be 4. `name_id_index` is *not* the name ID, but instead the index the name in question specified by the font.
+				// @DOCLINE If `encoding` is not 0, `encoding` is dereferenced and set to the encoding of the string.
 
-					// @DOCLINE If `length` is not 0, `length` is dereferenced and set to the length of the name in bytes.
+				// @DOCLINE Note that the function returned does not necessarily have a null-terminating character.
 
-					// @DOCLINE If `encoding` is not 0, `encoding` is dereferenced and set to the encoding of the string.
+	// @DOCLINE # Loca table
 
-					// @DOCLINE Note that the function returned does not necessarily have a null-terminating character.
+		// @DOCLINE ## Glyph ID referencing
 
-	// @DOCLINE # Glyph information
+			// @DOCLINE The type `muttGlyphID` (defined as `uint16_m`) is used to refer to a glyph specified by a TrueType font. It matches a glyph's index as specified in the "loca" table. Characters can be converted to these types with the "cmap" section of the mutt API.
 
-		// @DOCLINE mutt can be used to extract information about particular glyphs stored within a TrueType font, including glyph data.
+			#define muttGlyphID uint16_m
 
-		// @DOCLINE ## Glyph reference
-
-			// @DOCLINE The type `muttGlyphID` (defined as `uint16_m`) is used to refer to a glyph specified by a TrueType font. Values under this type are *not* codepoints or anything relating to actual character references, they only act as a reference to a glyph. Characters can be converted to these types with other parts of mutt.
-
-			#define muttGylphID uint16_m
+			// @DOCLINE Note that a `muttGlyphID` can refer to either a simple or a composite glyph.
 
 			// @DOCLINE Note that the value '0' will always be valid for a `muttGlyphID` in regards to a valid TrueType font, as all TrueType fonts have to specify a glyph for missing characters. This value is used by mutt to refer to a glyph that doesn't exist (for example, if a corresponding `muttGlyphID` is requested for a given character but the font doesn't specify it, 0 is returned, giving the missing character glyph).
+
+		// @DOCLINE ## Get glyf table via glyph ID
+
+			// @DOCLINE The function `mutt_truetype_get_glyf_table` returns a pointer to a glyf table data from a glyph ID based off of the "loca" table data, defined below: @NLNT
+			MUDEF muByte* mutt_truetype_get_glyf_table(muttInfo* info, muttGlyphID id);
+
+			// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
+			#define mu_truetype_get_glyf_table(...) mutt_truetype_get_glyf_table(__VA_ARGS__)
+
+			// @DOCLINE `id` must be a valid glyph ID value and less than `info.maxp_info.num_glyphs`.
 
 	// @DOCLINE # Version macro
 
@@ -900,41 +1046,128 @@ mutt is developed primarily off of these sources of documentation:
 				}
 			}
 
-			muByte* maxp = &data[info.req.maxp.offset];
-			muByte* head = &data[info.req.head.offset];
-
-			/* General glyph info */
+			/* Head info */
 			{
+				muByte* head = &data[info.req.head.offset];
 				uint16_m u16;
-
-				info.glyph_info.glyph_count = mu_rbe_uint16((&maxp[4]));
-				info.glyph_info.max_points = mu_rbe_uint16((&maxp[6]));
-				info.glyph_info.max_contours = mu_rbe_uint16((&maxp[8]));
-				info.glyph_info.max_composite_points = mu_rbe_uint16((&maxp[10]));
-				info.glyph_info.max_composite_contours = mu_rbe_uint16((&maxp[12]));
-				info.glyph_info.head_flags = mu_rbe_uint16((&head[16]));
-				info.glyph_info.units_per_em = mu_rbe_uint16((&head[18]));
-				u16 = mu_rbe_uint16((&head[36]));
-				info.glyph_info.x_min = *(int16_m*)&u16;
-				u16 = mu_rbe_uint16((&head[38]));
-				info.glyph_info.y_min = *(int16_m*)&u16;
-				u16 = mu_rbe_uint16((&head[40]));
-				info.glyph_info.x_max = *(int16_m*)&u16;
-				u16 = mu_rbe_uint16((&head[42]));
-				info.glyph_info.y_max = *(int16_m*)&u16;
-				info.glyph_info.mac_style = mu_rbe_uint16((&head[44]));
-				info.glyph_info.lowest_rec_ppem = mu_rbe_uint16((&head[46]));
-			}
-
-			/* Advanced info */
-			{
 				uint64_m u64;
 
-				// ?
-				u64 = mu_rbe_uint64((&head[18]));
-				info.adv_info.modified = *(int64_m*)&u64;
-				u64 = mu_rbe_uint64((&head[26]));
-				info.adv_info.modified = *(int64_m*)&u64;
+				/*
+				0:  uint16 majorVersion
+				2:  uint16 minorVersion
+				4:  int16  fontRevision.high
+				6:  int16  fontRevision.low
+				8:  uint32 checksumAdjustment
+				12: uint32 magicNumber
+				16: uint16 flags
+				18: uint16 unitsPerEm
+				20: int64  created
+				28: int64  modified
+				36: int16  xMin
+				38: int16  yMin
+				40: int16  xMax
+				42: int16  yMax
+				44: uint16 macStyle
+				46: uint16 lowestRecPPEM
+				48: int16  fontDirectionHint
+				50: int16  indexToLocFormat
+				52: int16  glyphDataFormat*/
+
+				info.head_info.major_version = mu_rbe_uint16((&head[0]));
+				info.head_info.minor_version = mu_rbe_uint16((&head[2]));
+				u16 = mu_rbe_uint16((&head[4])); info.head_info.font_revision_high = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[6])); info.head_info.font_revision_low = *(int16_m*)&u16;
+				info.head_info.checksum_adjustment = mu_rbe_uint32((&head[8]));
+				info.head_info.magic_number = mu_rbe_uint32((&head[12]));
+				info.head_info.flags = mu_rbe_uint16((&head[16]));
+				info.head_info.units_per_em = mu_rbe_uint16((&head[18]));
+				u64 = mu_rbe_uint64((&head[20])); info.head_info.created = *(int64_m*)&u64;
+				u64 = mu_rbe_uint64((&head[28])); info.head_info.modified = *(int64_m*)&u64;
+				u16 = mu_rbe_uint16((&head[36])); info.head_info.x_min = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[38])); info.head_info.y_min = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[40])); info.head_info.x_max = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[42])); info.head_info.y_max = *(int16_m*)&u16;
+				info.head_info.mac_style = mu_rbe_uint16((&head[44]));
+				info.head_info.lowest_rec_ppem = mu_rbe_uint16((&head[46]));
+				u16 = mu_rbe_uint16((&head[48])); info.head_info.font_direction_hint = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[50])); info.head_info.index_to_loc_format = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&head[52])); info.head_info.glyph_data_format = *(int16_m*)&u16;
+			}
+
+			/* Maxp info */
+			{
+				muByte* maxp = &data[info.req.maxp.offset];
+
+				/*
+				0:  uint32 version
+				4:  uint16 numGlyphs
+				6:  uint16 maxPoints
+				8:  uint16 maxContours
+				10: uint16 maxCompositePoints
+				12: uint16 maxCompositeContours
+				14: uint16 maxZones
+				16: uint16 maxTwilightPoints
+				18: uint16 maxStorage
+				20: uint16 maxFunctionDefs
+				22: uint16 maxInstructionDefs
+				24: uint16 maxStackElements
+				26: uint16 maxSizeOfInstructions
+				28: uint16 maxComponentElements
+				30: uint16 maxComponentDepth*/
+
+				info.maxp_info.version_high = mu_rbe_uint16((&maxp[0]));
+				info.maxp_info.version_low = mu_rbe_uint16((&maxp[2]));
+				info.maxp_info.num_glyphs = mu_rbe_uint16((&maxp[4]));
+				info.maxp_info.max_points = mu_rbe_uint16((&maxp[6]));
+				info.maxp_info.max_contours = mu_rbe_uint16((&maxp[8]));
+				info.maxp_info.max_composite_points = mu_rbe_uint16((&maxp[10]));
+				info.maxp_info.max_composite_contours = mu_rbe_uint16((&maxp[12]));
+				info.maxp_info.max_zones = mu_rbe_uint16((&maxp[14]));
+				info.maxp_info.max_twilight_points = mu_rbe_uint16((&maxp[16]));
+				info.maxp_info.max_storage = mu_rbe_uint16((&maxp[18]));
+				info.maxp_info.max_function_defs = mu_rbe_uint16((&maxp[20]));
+				info.maxp_info.max_instruction_defs = mu_rbe_uint16((&maxp[22]));
+				info.maxp_info.max_stack_elements = mu_rbe_uint16((&maxp[24]));
+				info.maxp_info.max_size_of_instructions = mu_rbe_uint16((&maxp[26]));
+				info.maxp_info.max_component_elements = mu_rbe_uint16((&maxp[28]));
+				info.maxp_info.max_component_depth = mu_rbe_uint16((&maxp[30]));
+			}
+
+			/* Hhea info */
+			{
+				muByte* hhea = &data[info.req.hhea.offset];
+				uint16_m u16;
+
+				/*
+				0:  uint16 major_version;
+				2:  uint16 minor_version;
+				4:  int16  ascender;
+				6:  int16  descender;
+				8:  int16  line_gap;
+				10: uint16 advance_max_width;
+				12: int16  min_left_side_bearing;
+				14: int16  min_right_side_bearing;
+				16: int16  x_max_extent;
+				18: int16  caret_slope_rise;
+				20: int16  caret_slope_run;
+				22: int16  caret_offset;
+				32: int16  metric_data_format;
+				34: uint16 number_of_hmetrics;*/
+
+				info.hhea_info.major_version = mu_rbe_uint16((&hhea[0]));
+				info.hhea_info.minor_version = mu_rbe_uint16((&hhea[2]));
+				u16 = mu_rbe_uint16((&hhea[4])); info.hhea_info.ascender = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[6])); info.hhea_info.descender = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[8])); info.hhea_info.line_gap = *(int16_m*)&u16;
+				info.hhea_info.advance_max_width = mu_rbe_uint16((&hhea[10]));
+				u16 = mu_rbe_uint16((&hhea[12])); info.hhea_info.min_left_side_bearing = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[14])); info.hhea_info.min_right_side_bearing = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[16])); info.hhea_info.x_max_extent = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[18])); info.hhea_info.caret_slope_rise = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[20])); info.hhea_info.caret_slope_run = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[22])); info.hhea_info.caret_offset = *(int16_m*)&u16;
+				u16 = mu_rbe_uint16((&hhea[32])); info.hhea_info.metric_data_format = *(int16_m*)&u16;
+				info.hhea_info.number_of_hmetrics = mu_rbe_uint16((&hhea[34]));
 			}
 
 			return info; if (result) {}
@@ -944,7 +1177,7 @@ mutt is developed primarily off of these sources of documentation:
 			return; if (info) {}
 		}
 
-	/* Names */
+	/* Name table */
 
 		MUDEF uint16_m mutt_truetype_get_name_ids(muttInfo* info, uint16_m* ids) {
 			muByte* name = &info->data[info->req.name.offset];
@@ -988,6 +1221,24 @@ mutt is developed primarily off of these sources of documentation:
 			uint16_m storage_offset = mu_rbe_uint16((name+4));
 			uint16_m string_offset = mu_rbe_uint16((name_record+10));
 			return (char*)(name+storage_offset+string_offset);
+		}
+
+	/* Loca table */
+
+		MUDEF muByte* mutt_truetype_get_glyf_table(muttInfo* info, muttGlyphID id) {
+			muByte* loca = &info->data[info->req.loca.offset];
+			muByte* glyf = &info->data[info->req.glyf.offset];
+
+			// Offset16 handling
+			if (info->head_info.index_to_loc_format == 0) {
+				uint16_m offset = mu_rbe_uint16((&loca[id*sizeof(uint16_m)]));
+				return &glyf[((uint32_m)offset)*2];
+			}
+			// Offset32 handling
+			else {
+				uint32_m offset = mu_rbe_uint32((&loca[id*sizeof(uint32_m)]));
+				return &glyf[offset];
+			}
 		}
 
 	#ifdef __cplusplus
