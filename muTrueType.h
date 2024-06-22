@@ -7,6 +7,8 @@ Licensed under MIT License or public domain, whichever you prefer.
 More explicit license information at the end of file.
 
 @TODO Allow access to table information.
+@TODO Define more macros.
+@TODO Optimize searches.
 */
 
 /* @DOCBEGIN
@@ -57,17 +59,17 @@ fclose(fptr);
 // Generate information
 
 muttResult res = MUTT_SUCCESS;
-muttInfo info = mutt_truetype_get_info(&res, data, fsize);
+muttInfo info = mu_truetype_get_info(&res, data, fsize);
 
 // ...(do things regarding the font)...
 
 // Free up information
 
-mutt_truetype_let_info(&info);
+mu_truetype_let_info(&info);
 free(data);
 ```
 
-Note that this means that the data passed to `mutt_truetype_get_info` is assumed to exist and stay constant as long as `info` is alive.
+Note that this means that the data passed to `mu_truetype_get_info` is assumed to exist and stay constant as long as `info` is alive.
 
 ## Low-level information querying
 
@@ -112,6 +114,10 @@ For other tables, their contents are extremely variable (such as when they have 
 # Licensing
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
+
+# Library safety
+
+This library, as of right now, performs very few checks against threats such as attack vectors; use at your own risk.
 
 # TrueType documentation
 
@@ -705,15 +711,12 @@ mutt is developed primarily off of these sources of documentation:
 			muttHheaInfo hhea_info;
 		}; typedef struct muttInfo muttInfo;
 
-		// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mutt_truetype_get_info`, and are invalid upon its respective call to `mutt_truetype_let_info`. The members are meant to be read, not written.
+		// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mu_truetype_get_info`, and are invalid upon its respective call to `mu_truetype_let_info`. The members are meant to be read, not written.
 
 		// @DOCLINE ## Retrieve TrueType information
 
-			// @DOCLINE The function `mutt_truetype_get_info` retrieves information about TrueType data and stores it in a `muttInfo` struct, defined below: @NLNT
-			MUDEF muttInfo mutt_truetype_get_info(muttResult* result, muByte* data, size_m size);
-
-			// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-			#define mu_truetype_get_info(...) mutt_truetype_get_info(0, __VA_ARGS__)
+			// @DOCLINE The function `mu_truetype_get_info` retrieves information about TrueType data and stores it in a `muttInfo` struct, defined below: @NLNT
+			MUDEF muttInfo mu_truetype_get_info(muttResult* result, muByte* data, size_m size);
 
 			// @DOCLINE Every successful call to `mutt_true_type_get_info` must be matched with a call to `mutt_true_type_let_info`.
 
@@ -721,11 +724,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Free TrueType information
 
-			// @DOCLINE The function `mutt_truetype_let_info` frees the information retrieved about TrueType data stored in a `muttInfo` struct, defined below: @NLNT
-			MUDEF void mutt_truetype_let_info(muttInfo* info);
-
-			// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-			#define mu_truetype_let_info(...) mutt_truetype_let_info(__VA_ARGS__)
+			// @DOCLINE The function `mu_truetype_let_info` frees the information retrieved about TrueType data stored in a `muttInfo` struct, defined below: @NLNT
+			MUDEF void mu_truetype_let_info(muttInfo* info);
 
 			// @DOCLINE This function must be called on every successfully created `muttInfo` struct.
 
@@ -855,21 +855,15 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE ### Get offered name IDs
 
-				// @DOCLINE The function `mutt_truetype_get_name_ids` is used to retrieve the name IDs offered by a TrueType font, defined below: @NLNT
-				MUDEF uint16_m mutt_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
-
-				// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-				#define mu_truetype_get_name_ids(...) mutt_truetype_get_name_ids(__VA_ARGS__)
+				// @DOCLINE The function `mu_truetype_get_name_ids` is used to retrieve the name IDs offered by a TrueType font, defined below: @NLNT
+				MUDEF uint16_m mu_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
 
 				// @DOCLINE This function returns the amount of name IDs specified by the font. If `ids` is not 0, `ids` is expected to be a pointer to an array of `uint16_m`s at least the length of the amount of name IDs specified by the font, and will be written to as such.
 
 			// @DOCLINE ### Get name
 
-				// @DOCLINE The function `mutt_truetype_get_name` retrieves the string for a given name ID, defined below: @NLNT
-				MUDEF char* mutt_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length);
-
-				// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-				#define mu_truetype_get_name(...) mutt_truetype_get_name(__VA_ARGS__)
+				// @DOCLINE The function `mu_truetype_get_name` retrieves the string for a given name ID, defined below: @NLNT
+				MUDEF char* mu_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length);
 
 				// @DOCLINE This function returns a pointer to an offset in the TrueType font data within `info` which holds the name.
 
@@ -895,13 +889,106 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Get glyf table via glyph ID
 
-			// @DOCLINE The function `mutt_truetype_get_glyf_table` returns a pointer to a glyf table data from a glyph ID based off of the "loca" table data, defined below: @NLNT
-			MUDEF muByte* mutt_truetype_get_glyf_table(muttInfo* info, muttGlyphID id);
+			// @DOCLINE The function `mu_truetype_get_glyf_table` returns a pointer to a glyf table data from a glyph ID based off of the "loca" table data, defined below: @NLNT
+			MUDEF muByte* mu_truetype_get_glyf_table(muttInfo* info, muttGlyphID id, uint32_m* length);
 
-			// @DOCLINE Its non-result-checking equivalent macro is defined below: @NLNT
-			#define mu_truetype_get_glyf_table(...) mutt_truetype_get_glyf_table(__VA_ARGS__)
+			// @DOCLINE If `length` is not 0, `length` is dereferenced and set to the length of the glyf table data being pointed to in bytes.
 
 			// @DOCLINE `id` must be a valid glyph ID value and less than `info.maxp_info.num_glyphs`.
+
+	// @DOCLINE # Cmap table
+
+		// @DOCLINE ## Encoding record definition
+
+			// @DOCLINE The struct `muttEncodingRecord` is used to define a TrueType cmap encoding record. It has the following members:
+
+			struct muttEncodingRecord {
+				// @DOCLINE * `encoding`: the encoding, defined below: @NLNT
+				muttEncoding encoding;
+				// @DOCLINE * `subtable`: a pointer to the subtable in the TrueType data, defined below: @NLNT
+				muByte* subtable;
+				// @DOCLINE * `format`: the format of the subtable, defined below: @NLNT
+				uint16_m format;
+				// @DOCLINE * `language`: the Macintosh-specific language of the subtable, defined below: @NLNT
+				uint32_m language;
+			};
+			typedef struct muttEncodingRecord muttEncodingRecord;
+
+			// @DOCLINE The member "`language`" is 0 if `format` does not have a language field.
+
+		// @DOCLINE ## Get encoding record
+
+			// @DOCLINE The function `mu_truetype_get_encoding_record` retrieves a requested encoding record given in the cmap table of a given TrueType font, defined below: @NLNT
+			MUDEF void mu_truetype_get_encoding_record(muttInfo* info, muttEncodingRecord* record, uint16_m id);
+
+			// @DOCLINE `id` is the index of the encoding record; the amount of encoding records (and optionally all of the encoding records) can be retrieved via the function `mu_truetype_get_encoding_records`.
+
+		// @DOCLINE ## Get all encoding records
+
+			// @DOCLINE The function `mu_truetype_get_encoding_records` retrieves the encoding records listed in the cmap table of a given TrueType font, defined below: @NLNT
+			MUDEF uint16_m mu_truetype_get_encoding_records(muttInfo* info, muttEncodingRecord* records);
+
+			// @DOCLINE This function returns the amount of encoding records stored within the given TrueType font.
+
+			// @DOCLINE If `records` is not 0, `records` should be a `muttEncodingRecord` array of a length equivalent to how many encoding records are stored within the given TrueType font.
+
+		// @DOCLINE ## Cmap formats
+
+			// @DOCLINE Since TrueType stores its cmap data in multiple formats, mutt has a struct and corresponding lookup function for each supported format type.
+
+			// @DOCLINE ### Format 4
+
+				// @DOCLINE #### Struct
+
+				// @DOCLINE The struct for format 4 is `muttFormat4`, and its members are:
+
+				struct muttFormat4 {
+					// @DOCLINE `table`: a pointer to the table data, defined below: @NLNT
+					muByte* table;
+					// @DOCLINE `length`: equivalent to "length" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m length;
+					// @DOCLINE `language`: equivalent to "language" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m language;
+					// @DOCLINE `seg_count_x2`: equivalent to "segCountX2" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m seg_count_x2;
+					// @DOCLINE `seg_count`: `seg_count_x2` divided by two, defined below: @NLNT
+					uint16_m seg_count;
+					// @DOCLINE `search_range`: equivalent to "searchRange" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m search_range;
+					// @DOCLINE `entry_selector`: equivalent to "entrySelector" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m entry_selector;
+					// @DOCLINE `range_shift`: equivalent to "rangeShift" in the format 4 cmap subtable, defined below: @NLNT
+					uint16_m range_shift;
+					// @DOCLINE `end_code`: a pointer to the "endCode" byte data in the format 4 cmap subtable, defined below: @NLNT
+					muByte* end_code;
+					// @DOCLINE `start_code`: a pointer to the "startCode" byte data in the format 4 cmap subtable, defined below: @NLNT
+					muByte* start_code;
+					// @DOCLINE `id_delta`: a pointer to the "idDelta" byte data in the format 4 cmap subtable, defined below: @NLNT
+					muByte* id_delta;
+					// @DOCLINE `id_range_offset`: a pointer to the "idRangeOffset" byte data in the format 4 cmap subtable, defined below: @NLNT
+					muByte* id_range_offset;
+					// @DOCLINE `glyph_id_array`: a pointer to the "glyphIdArray" byte data in the format 4 cmap subtable, defined below: @NLNT
+					muByte* glyph_id_array;
+					// @DOCLINE `glyph_id_length`: the length of `glyph_id_array`, in bytes, defined below: @NLNT
+					uint16_m glyph_id_length;
+				};
+				typedef struct muttFormat4 muttFormat4;
+
+				// @DOCLINE #### Get format 4 information
+
+				// @DOCLINE The function `mu_truetype_get_format_4` is used to get information about a format 4 cmap subtable, defined below: @NLNT
+				MUDEF void mu_truetype_get_format_4(muByte* subtable, muttFormat4* format);
+
+				// @DOCLINE `subtable` is equivalent to `muttEncodingRecord.subtable` if `muttEncodingRecord.format` equals 4.
+
+				// @DOCLINE #### Get glyph from format 4
+
+				// @DOCLINE The function `mu_truetype_get_glyph_format_4` returns a glyph ID from a format 4 cmap subtable, defined below: @NLNT
+				MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint32_m character_code);
+
+				// @DOCLINE `character_code` is a valid character code in regards to the respective encoding record's platform & encoding ID.
+
+				// @DOCLINE This function returns 0 if the given character code is not mapped.
 
 	// @DOCLINE # Version macro
 
@@ -980,7 +1067,7 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Get/Let info */
 
-		MUDEF muttInfo mutt_truetype_get_info(muttResult* result, muByte* data, size_m size) {
+		MUDEF muttInfo mu_truetype_get_info(muttResult* result, muByte* data, size_m size) {
 			muttInfo info = MU_ZERO_STRUCT(muttInfo);
 
 			info.data = data;
@@ -1173,13 +1260,13 @@ mutt is developed primarily off of these sources of documentation:
 			return info; if (result) {}
 		}
 
-		MUDEF void mutt_truetype_let_info(muttInfo* info) {
+		MUDEF void mu_truetype_let_info(muttInfo* info) {
 			return; if (info) {}
 		}
 
 	/* Name table */
 
-		MUDEF uint16_m mutt_truetype_get_name_ids(muttInfo* info, uint16_m* ids) {
+		MUDEF uint16_m mu_truetype_get_name_ids(muttInfo* info, uint16_m* ids) {
 			muByte* name = &info->data[info->req.name.offset];
 
 			// Give count if that's all we need
@@ -1198,7 +1285,7 @@ mutt is developed primarily off of these sources of documentation:
 			return count;
 		}
 
-		MUDEF char* mutt_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length) {
+		MUDEF char* mu_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length) {
 			muByte* name = &info->data[info->req.name.offset];
 			// Get to the respective NameRecord
 			muByte* name_record = name + 6 + (name_id_index*12);
@@ -1225,21 +1312,145 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Loca table */
 
-		MUDEF muByte* mutt_truetype_get_glyf_table(muttInfo* info, muttGlyphID id) {
+		MUDEF muByte* mu_truetype_get_glyf_table(muttInfo* info, muttGlyphID id, uint32_m* length) {
 			muByte* loca = &info->data[info->req.loca.offset];
 			muByte* glyf = &info->data[info->req.glyf.offset];
 
 			// Offset16 handling
 			if (info->head_info.index_to_loc_format == 0) {
 				uint16_m offset = mu_rbe_uint16((&loca[id*sizeof(uint16_m)]));
-				return &glyf[((uint32_m)offset)*2];
+				muByte* ptr = &glyf[((uint32_m)offset)*2];
+				if (length) {
+					*length = (uint32_m)(mu_truetype_get_glyf_table(info, id+1, 0) - ptr);
+				}
+				return ptr;
 			}
 			// Offset32 handling
 			else {
 				uint32_m offset = mu_rbe_uint32((&loca[id*sizeof(uint32_m)]));
-				return &glyf[offset];
+				muByte* ptr = &glyf[offset];
+				if (length) {
+					*length = (uint32_m)(mu_truetype_get_glyf_table(info, id+1, 0) - ptr);
+				}
+				return ptr;
 			}
 		}
+
+	/* Cmap table */
+
+		MUDEF void mu_truetype_get_encoding_record(muttInfo* info, muttEncodingRecord* record, uint16_m id) {
+			// Calculate pointer to the encoding record
+			muByte* ptr = &info->data[info->req.cmap.offset+4+((uint32_m)(id)*8)];
+
+			// Read data
+			record->encoding.platform_id = mu_rbe_uint16((ptr));
+			record->encoding.encoding_id = mu_rbe_uint16((&ptr[2]));
+			record->subtable = &info->data[info->req.cmap.offset+mu_rbe_uint32((&ptr[4]))];
+			record->format = mu_rbe_uint16((record->subtable));
+
+			// Get language
+			if (record->format >= 8 && record->format < 14) {
+				record->language = mu_rbe_uint32((&record->subtable[8]));
+			} else if (record->format < 8) {
+				record->language = (uint32_m)mu_rbe_uint16((&record->subtable[4]));
+			} else {
+				record->language = 0;
+			}
+		}
+
+		MUDEF uint16_m mu_truetype_get_encoding_records(muttInfo* info, muttEncodingRecord* records) {
+			uint16_m rec = mu_rbe_uint16((&info->data[info->req.cmap.offset+2]));
+			if (!records) {
+				return rec;
+			}
+
+			for (uint16_m id = 0; id < rec; id += 1) {
+				mu_truetype_get_encoding_record(info, &records[id], id);
+			}
+			return rec;
+		}
+
+		/* Format 4 */
+
+			MUDEF void mu_truetype_get_format_4(muByte* subtable, muttFormat4* format) {
+				/*
+				0: uint16 format
+				2: uint16 length
+				4: uint16 language
+				6: uint16 seg_count_x2 // uint16 seg_count=seg_count_x2/2
+				8: uint16 search_range
+				10: uint16 entry_selector
+				12: uint16 range_shift
+				14: uint16 end_code[seg_count]
+				// 14+seg_count_x2: uint16 reserved_pad
+				16+seg_count_x2: uint16 start_code[seg_count]
+				16+(2*seg_count_x2): int16 id_delta[seg_count]
+				16+(3*seg_count_x2): uint16 id_range_offset[seg_count]
+				16+(4*seg_count_x2): uint16 glyph_id_array[]*/
+				format->table = subtable;
+				format->length = mu_rbe_uint16((&subtable[2]));
+				format->language = mu_rbe_uint16((&subtable[4]));
+				format->seg_count_x2 = mu_rbe_uint16((&subtable[6]));
+				format->seg_count = format->seg_count_x2 / 2;
+				format->search_range = mu_rbe_uint16((&subtable[8]));
+				format->entry_selector = mu_rbe_uint16((&subtable[10]));
+				format->range_shift = mu_rbe_uint16((&subtable[12]));
+				format->end_code = &subtable[14];
+				format->start_code = &subtable[16+format->seg_count_x2];
+				format->id_delta = &subtable[16+(2*format->seg_count_x2)];
+				format->id_range_offset = &subtable[16+(3*format->seg_count_x2)];
+				format->glyph_id_array = &subtable[16+(4*format->seg_count_x2)];
+				format->glyph_id_length = format->length - (16+(4*format->seg_count_x2));
+			}
+
+			MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint32_m character_code) {
+				// Find segment ID which "character_code" is located in
+				// Note: segment is always x2
+				uint16_m segment = 0;
+				uint16_m start_code;
+				muBool found = MU_FALSE;
+				for (; segment < format->seg_count; segment += 2) {
+					start_code = mu_rbe_uint16((&format->start_code[segment]));
+					uint16_m end_code = mu_rbe_uint16((&format->end_code[segment]));
+					if (character_code >= start_code && character_code <= end_code) {
+						found = MU_TRUE;
+						break;
+					}
+				}
+
+				if (!found) {
+					return 0;
+				}
+
+				uint16_m id_range_offset = mu_rbe_uint16((&format->id_range_offset[segment]));
+				uint16_m u16 = mu_rbe_uint16((&format->id_delta[segment]));
+				int16_m delta_id = *(int16_m*)&u16;
+				uint16_m glyph_id;
+
+				if (id_range_offset != 0) {
+					uint16_m glyph_index = (segment/2) - format->seg_count + id_range_offset/2 + (character_code - start_code);
+					if (glyph_index >= format->glyph_id_length) {
+						return 0;
+					}
+
+					glyph_id = mu_rbe_uint16((&format->glyph_id_array[glyph_index*2]));
+					if (glyph_id == 0) {
+						return 0;
+					}
+
+					// ? (confirm that this works and is good)
+					if (delta_id < 0 && -delta_id > glyph_id) {
+						glyph_id = glyph_id - delta_id;
+					} else {
+						glyph_id += delta_id;
+					}
+				} else {
+					// ? (confirm that this works and is good)
+					glyph_id = (uint16_m)((int32_m)delta_id + (int32_m)character_code);
+				}
+
+				return glyph_id;
+			}
 
 	#ifdef __cplusplus
 	}
