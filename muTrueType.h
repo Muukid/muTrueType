@@ -9,13 +9,18 @@ More explicit license information at the end of file.
 @TODO Allow access to table information.
 @TODO Define more macros.
 @TODO Optimize searches.
+@TODO Add an option for querying name IDs without user allocation.
 */
 
 /* @DOCBEGIN
 
 # muTrueType v1.0.0
 
-muTrueType (abbreviated to 'mutt') is a public domain header-only single-file C library for retrieving data from the TrueType file format and rendering it to a bitmap via several rendering methods. To use it, download the `muTrueType.h` file, add it to your include path, and include it like so:
+muTrueType (abbreviated to 'mutt') is a public domain header-only single-file C library for retrieving data from the TrueType file format and rendering it to a bitmap via several rendering methods.
+
+***WARNING!*** This library is still under heavy development, has no official releases, and won't be stable until its first public release v1.0.0.
+
+To use it, download the `muTrueType.h` file, add it to your include path, and include it like so:
 
 ```c
 #define MUTT_IMPLEMENTATION
@@ -110,6 +115,8 @@ For other tables, their contents are extremely variable (such as when they have 
 * "name" (see "Name table" section)
 
 * "loca" (see "Loca table" section)
+
+* "cmap" (see "Cmap table" section)
 
 # Licensing
 
@@ -990,6 +997,116 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE This function returns 0 if the given character code is not mapped.
 
+	// @DOCLINE # Glyf table
+
+		// @DOCLINE ## Header information
+
+			// @DOCLINE The header information about a glyph is the information provided by the "Glyph Header". It is represented as the struct `muttGlyphHeader` in mutt.
+
+			// @DOCLINE ### Struct
+
+				// @DOCLINE The struct `muttGlyphHeader` has the following members:
+
+				struct muttGlyphHeader {
+					// @DOCLINE * `data`: a pointer to the glyph header data, defined below: @NLNT
+					muByte* data;
+					// @DOCLINE * `number_of_contours`: equivalent to "numberOfContours" in the "Glyph Header" of the "glyf" table, defined below: @NLNT
+					int16_m number_of_contours;
+					// @DOCLINE * `x_min`: equivalent to "xMin" in the "Glyph Header" of the "glyf" table, defined below: @NLNT
+					int16_m x_min;
+					// @DOCLINE * `y_min`: equivalent to "yMin" in the "Glyph Header" of the "glyf" table, defined below: @NLNT
+					int16_m y_min;
+					// @DOCLINE * `x_max`: equivalent to "xMax" in the "Glyph Header" of the "glyf" table, defined below: @NLNT
+					int16_m x_max;
+					// @DOCLINE * `y_max`: equivalent to "yMax" in the "Glyph Header" of the "glyf" table, defined below: @NLNT
+					int16_m y_max;
+				};
+				typedef struct muttGlyphHeader muttGlyphHeader;
+
+			// @DOCLINE ### Retrieve glyph header
+
+				// @DOCLINE The function `mu_truetype_get_glyph_header` retrieves the glyph header of a given glyph, defined below: @NLNT
+				MUDEF void mu_truetype_get_glyph_header(muByte* table, muttGlyphHeader* header);
+
+				// @DOCLINE `table` must be a pointer to a valid glyph table; a pointer to a specific glyph table based on a glyph ID can be accessed via the "loca" table.
+
+				// @DOCLINE Note that when calling `mu_truetype_get_glyf_table`, if `length` is set to 0, then this function should not be called on it, as it is a glyph with no description, existing as an empty glyph, and calling this function on it will return the description of some other glyph.
+
+		// @DOCLINE ## Simple glyph data
+
+			// @DOCLINE mutt can be used to extract simple glyph data, represented by the struct `muttSimpleGlyph`.
+
+			// @DOCLINE ### Struct
+
+				// @DOCLINE The struct `muttSimpleGlyph` represents the data of a simple glyph. It has the following members:
+
+				struct muttSimpleGlyph {
+					// @DOCLINE * `end_pts_of_contours`: a pointer to memory from `muttGlyphHeader->data`; equivalent to "endPtsOfContours" in the "Simple Glyph table", defined below: @NLNT
+					muByte* end_pts_of_contours;
+					// @DOCLINE * `instruction_length`: equivalent to "instructionLength" in the "Simple Glyph table", defined below: @NLNT
+					uint16_m instruction_length;
+					// @DOCLINE * `instructions`: a pointer to memory from `muttGlyphHeader->data`; equivalent to "instructions" in the "Simple Glyph table", defined below: @NLNT
+					uint8_m* instructions;
+					// @DOCLINE * `flags`: 0 or a pointer to user-allocated memory; an array of flags for each point in the glyph, defined below: @NLNT
+					uint8_m* flags;
+					// @DOCLINE * `x_coordinates`: 0 or a pointer to user-allocated memory; an array of X-coordinates for each point in the glyph, defined below: @NLNT
+					int16_m* x_coordinates;
+					// @DOCLINE * `y_coordinates`: 0 or a pointer to user-allocated memory; an array of Y-coordinates for each point in the glyph, defined below: @NLNT
+					int16_m* y_coordinates;
+				};
+				typedef struct muttSimpleGlyph muttSimpleGlyph;
+
+				// @DOCLINE `end_pts_of_contours` is a pointer to where "endPtsOfContours" lies in `muttGlyphHeader->data`, and is filled in automatically by `mu_truetype_get_simple_glyph`. The data type of "endPtsOfContours" is "uint16", meaning that endianness conversions may need to be performed to retrieve the correct value, hence why the data type of `end_pts_of_contours` is `muByte*`; to retrieve an element from this list, use the function `mu_truetype_get_contour_end_pt`.
+
+				// @DOCLINE `instruction_length` is automatically filled in by `mu_truetype_get_simple_glyph`.
+
+				// @DOCLINE `instructions` is a pointer to where "instructions" lies in `muttGlyphHeader->data`, and is filled in automatically by `mu_truetype_get_simple_glyph`. Because the data type of "instructions" is "uint8", it can be read directly, hence why the data type of `instructions` is `uint8_m*`.
+
+				// @DOCLINE If `flags`, `x_coordinates`, or `y_coordinates` are not set to 0 upon being called to `mu_truetype_get_simple_glyph`, `flags` is expected to be a pointer to user-allocated memory whose size is at least `sizeof(uint8_m) * mu_truetype_get_contour_end_pt(muttSimpleGlyph, muttGlyphHeader->number_of_contours-1)`.
+
+				// @DOCLINE The interpretation for `flags` is different than how it is defined in the "Simple Glyph table" in TrueType's documentation: whereas "flags" in the "Simple Glyph table" can represent multiple flags with one flag element, `flags` in `muttGlyphHeader` has an element for every single point; `flags[n]` is the flag for point `n`.
+
+				// @DOCLINE If `flags`, `x_coordinates`, or `y_coordinates` are not set to 0 upon being called to `mu_truetype_get_simple_glyph`, `x_coordinates` is expected to be a pointer to user-allocated memory whose size is at least `sizeof(int32_m) * mu_truetype_get_contour_end_pt(muttSimpleGlyph, muttGlyphHeader->number_of_contours-1)`. The same logic applies to `y_coordinates`.
+
+				// @DOCLINE The interpretation for `x_coordinates` and `y_coordinates` are different than how it is defined in the "Simple Glyph table" in TrueType's documentation: whereas "xCoordinates" and "yCoordinates" in the "Simple Glyph table" can represent multiple coordinates with one element, `x_coordinates` and `y_coordinates` in `muttGlyphHeader` have an element for every single point; `x_coordinates[n]` and `y_coordinates[n]` are the coordinates for point `n`. This also means that the values stored in the coordinate arrays within `muttGlyphHeader` store the raw coordinates in FUnits, whereas in the "Simple Glyph table", they're stored as offsets from the previous point.
+
+			// @DOCLINE ### Flag macros
+
+				// @DOCLINE The following macros are defined to make bit-masking the flag values of a glyph easier:
+
+				// @DOCLINE * `MUTT_ON_CURVE_POINT`: equivalent to "ON_CURVE_POINT", defined below: @NLNT
+				#define MUTT_ON_CURVE_POINT 0x01
+				// @DOCLINE * `MUTT_X_SHORT_VECTOR`: equivalent to "X_SHORT_VECTOR", defined below: @NLNT
+				#define MUTT_X_SHORT_VECTOR 0x02
+				// @DOCLINE * `MUTT_Y_SHORT_VECTOR`: equivalent to "Y_SHORT_VECTOR", defined below: @NLNT
+				#define MUTT_Y_SHORT_VECTOR 0x04
+				// @DOCLINE * `MUTT_REPEAT_FLAG`: equivalent to "REPEAT_FLAG", defined below: @NLNT
+				#define MUTT_REPEAT_FLAG 0x08
+				// @DOCLINE * `MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR`: equivalent to "X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR", defined below: @NLNT
+				#define MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR 0x10
+				// @DOCLINE * `MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR`: equivalent to "Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR", defined below: @NLNT
+				#define MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR 0x20
+				// @DOCLINE * `MUTT_OVERLAP_SIMPLE`: equivalent to "OVERLAP_SIMPLE", defined below: @NLNT
+				#define MUTT_OVERLAP_SIMPLE 0x40
+
+			// @DOCLINE ### Get simple glyph data
+
+				// @DOCLINE The function `mu_truetype_get_simple_glyph` is used to retrieve a simple glyph's data, defined below: @NLNT
+				MUDEF uint16_m mu_truetype_get_simple_glyph(muttGlyphHeader* header, muttSimpleGlyph* glyph);
+
+				// @DOCLINE If `glyph` is 0, the amount of points within the glyph is returned. This is useful for allocating the memory necessary for the data first and then retrieving all of the data without additional unnecessary operations.
+
+				// @DOCLINE If `glyph` is not 0, `flags`, `x_coordinates`, and `y_coordinates` must all rather be 0 (to which they will be ignored) or all valid pointers to arrays of their respective type with a length of at least the nmuber of points in the glyph.
+
+				// @DOCLINE See the "Struct" section for `muttSimpleGlyph` for specific memory requirements and how to interpret the values that this function fills in.
+
+			// @DOCLINE ### Get contour end point
+
+				// @DOCLINE The function `mu_truetype_get_contour_end_pt` retrieves a value from the "endPtsOfContours" array within a "Simple Glyph table", defined below: @NLNT
+				MUDEF uint16_m mu_truetype_get_contour_end_pt(muttSimpleGlyph* glyph, uint16_m contour);
+
+				// @DOCLINE `contour` must be below the number of contours for the respective glyph.
+
 	// @DOCLINE # Version macro
 
 		// @DOCLINE mutt defines three macros to define the version of mutt: `MUTT_VERSION_MAJOR`, `MUTT_VERSION_MINOR`, and `MUTT_VERSION_PATCH`, following the format of `vMAJOR.MINOR.PATCH`.
@@ -1451,6 +1568,163 @@ mutt is developed primarily off of these sources of documentation:
 
 				return glyph_id;
 			}
+
+	/* Glyf table */
+
+		MUDEF void mu_truetype_get_glyph_header(muByte* table, muttGlyphHeader* header) {
+			uint16_m u16;
+			header->data = table;
+			u16 = mu_rbe_uint16((&table[0])); header->number_of_contours = *(int16_m*)&u16;
+			u16 = mu_rbe_uint16((&table[2])); header->x_min = *(int16_m*)&u16;
+			u16 = mu_rbe_uint16((&table[4])); header->y_min = *(int16_m*)&u16;
+			u16 = mu_rbe_uint16((&table[6])); header->x_max = *(int16_m*)&u16;
+			u16 = mu_rbe_uint16((&table[8])); header->y_max = *(int16_m*)&u16;
+		}
+
+		MUDEF uint16_m mu_truetype_get_simple_glyph(muttGlyphHeader* header, muttSimpleGlyph* glyph) {
+			muByte* data;
+			uint16_m p; // (point count tracker)
+
+			// Calculate amount of points
+			data = &header->data[10]; // (to endPtsOfContours)
+			uint16_m num_of_points = mu_rbe_uint16((&data[(uint32_m)(header->number_of_contours-1) * (uint32_m)(2)])); // (endPtsOfContours[numberOfContours-1]+1)
+			num_of_points += 1;
+
+			// Return points if needed
+			if (!glyph) {
+				return num_of_points;
+			}
+
+			/* end_pts_of_contours */
+
+			glyph->end_pts_of_contours = data;
+			data += (uint32_m)(header->number_of_contours)*(uint32_m)(2);
+
+			/* instruction_length */
+
+			glyph->instruction_length = mu_rbe_uint16(data);
+			data += 2;
+
+			/* instructions */
+
+			glyph->instructions = (uint8_m*)data;
+			data += glyph->instruction_length;
+
+			/* Flags */
+
+			if (glyph->flags == 0) {
+				return 0;
+			}
+
+			for (p = 0; p < num_of_points; p++) {
+				glyph->flags[p] = (uint8_m)data[0];
+
+				if (glyph->flags[p] & MUTT_REPEAT_FLAG) {
+					uint8_m rep_count = (uint8_m)data[1];
+
+					for (uint8_m i = 0; i < rep_count; i++) {
+						glyph->flags[p+i+1] = glyph->flags[p];
+						data += 1;
+					}
+
+					p += rep_count;
+				}
+
+				data += 1;
+			}
+
+			// "data" is incorrect by now...
+
+			/* X-coordinates */
+
+			uint8_m flag;
+			uint8_m size;
+			uint16_m u16;
+
+			for (p = 0; p < num_of_points; p++) {
+				flag = glyph->flags[p];
+
+				// Get coordinate value alone
+
+				if (flag & MUTT_X_SHORT_VECTOR) {
+					// 1 byte long
+					size = 1;
+					if (flag & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+						// Positive
+						glyph->x_coordinates[p] = (int16_m)(mu_rbe_uint8(data));
+					} else {
+						// Negative
+						glyph->x_coordinates[p] = -((int16_m)(mu_rbe_uint8(data)));
+					}
+				} else {
+					if (flag & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+						// Duplicate from before
+						if (p > 0) {
+							glyph->x_coordinates[p] = glyph->x_coordinates[p-1];
+						}
+						continue; // (no further interpretation or moving needed)
+					} else {
+						// 2 bytes long, signed
+						size = 2;
+						u16 = mu_rbe_uint16(data);
+						glyph->x_coordinates[p] = *(int16_m*)&u16;
+					}
+				}
+
+				// Fix coordinate value
+				if (p != 0) {
+					glyph->x_coordinates[p] += glyph->x_coordinates[p-1];
+				}
+
+				data += size;
+			}
+
+			/* Y-coordinates */
+
+			for (p = 0; p < num_of_points; p++) {
+				flag = glyph->flags[p];
+
+				// Get coordinate value alone
+
+				if (flag & MUTT_Y_SHORT_VECTOR) {
+					// 1 byte long
+					size = 1;
+					if (flag & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+						// Positive
+						glyph->y_coordinates[p] = (int16_m)(mu_rbe_uint8(data));
+					} else {
+						// Negative
+						glyph->y_coordinates[p] = -((int16_m)(mu_rbe_uint8(data)));
+					}
+				} else {
+					if (flag & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+						// Duplicate from before
+						if (p > 0) {
+							glyph->y_coordinates[p] = glyph->y_coordinates[p-1];
+						}
+						continue; // (no further interpretation or moving needed)
+					} else {
+						// 2 bytes long, signed
+						size = 2;
+						u16 = mu_rbe_uint16(data);
+						glyph->y_coordinates[p] = *(int16_m*)&u16;
+					}
+				}
+
+				// Fix coordinate value
+				if (p != 0) {
+					glyph->y_coordinates[p] += glyph->y_coordinates[p-1];
+				}
+
+				data += size;
+			}
+
+			return 0;
+		}
+
+		MUDEF uint16_m mu_truetype_get_contour_end_pt(muttSimpleGlyph* glyph, uint16_m contour) {
+			return mu_rbe_uint16((&glyph->end_pts_of_contours[(uint32_m)(contour)*(uint32_m)(2)]));
+		}
 
 	#ifdef __cplusplus
 	}
