@@ -6,10 +6,10 @@ No warranty implied; use at your own risk.
 Licensed under MIT License or public domain, whichever you prefer.
 More explicit license information at the end of file.
 
-@TODO Allow access to table information.
 @TODO Define more macros.
 @TODO Optimize searches.
-@TODO Add an option for querying name IDs without user allocation.
+@TODO Add safety checks.
+@TODO Add manual error checker.
 */
 
 /* @DOCBEGIN
@@ -31,11 +31,11 @@ More information about the general structure of a mu library is provided at [the
 
 # Demos
 
-The documentation for this library is fairly explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
+The documentation for this library is rather explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
 
 # General overview
 
-mutt is a fairly complicated library, so this section gives an overview of the library. More explicit documentation comes after this section.
+mutt is a rather complicated library, so this section gives an overview of the library. More explicit documentation comes after this section.
 
 ## Loading a TrueType font
 
@@ -82,7 +82,9 @@ mutt has the ability to give low-level information about a TrueType font.
 
 ### Tables
 
-mutt directly stores information about required tables, such as their position in the TrueType font data and their byte-length. These tables are:
+mutt has the ability to give information about the tables stored within a TrueType font. All of the tables that are offered by a given TrueType font can be retrieved manually; see the "Table retrieval" section for more.
+
+mutt also internally stores information about required tables within the `muttInfo` struct, such as their position in the TrueType font data and their byte-length. These tables are:
 
 * "cmap" (`muttInfo.req.cmap`)
 
@@ -117,6 +119,8 @@ For other tables, their contents are extremely variable (such as when they have 
 * "loca" (see "Loca table" section)
 
 * "cmap" (see "Cmap table" section)
+
+* "glyf" (see "Glyf table" section)
 
 # Licensing
 
@@ -707,6 +711,9 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE `size`: the size of the TrueType font data, in bytes, defined below: @NLNT
 			size_m size;
 
+			// @DOCLINE `table_count`: the amount of tables within the TrueType font data, defined below: @NLNT
+			uint16_m table_count;
+
 			// @DOCLINE `req`: the required tables in the TrueType font data, defined below: @NLNT
 			muttRequiredTables req;
 
@@ -735,6 +742,28 @@ mutt is developed primarily off of these sources of documentation:
 			MUDEF void mu_truetype_let_info(muttInfo* info);
 
 			// @DOCLINE This function must be called on every successfully created `muttInfo` struct.
+
+	// @DOCLINE # Table retrieval
+
+		// @DOCLINE mutt can retrieve information about all of the tables offered in a TrueType ofnt.
+
+		// @DOCLINE ## Get table amount
+
+			// @DOCLINE The function `mu_truetype_get_table_count` returns the amount of tables within a given TrueType font, defined below: @NLNT
+			MUDEF uint16_m mu_truetype_get_table_count(muttInfo* info);
+
+			// @DOCLINE This function returns `info->table_count`.
+
+		// @DOCLINE ## Get table information
+
+			// @DOCLINE The function `mu_truetype_get_table` retrieves information about a requested table witin a given TrueType font, defined below: @NLNT
+			MUDEF void mu_truetype_get_table(muttInfo* info, uint16_m table, muttTable* table_info, char* name);
+
+			// @DOCLINE `table` must be a valid index referring to a table, less than `info->table_count`.
+
+			// @DOCLINE `table_info`, if not 0, will be dereferenced and filled in with information about the table.
+
+			// @DOCLINE `name`, if not 0, will be filled with the 4-byte identifier for the table.
 
 	// @DOCLINE # Platform-specific encoding
 
@@ -866,6 +895,13 @@ mutt is developed primarily off of these sources of documentation:
 				MUDEF uint16_m mu_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
 
 				// @DOCLINE This function returns the amount of name IDs specified by the font. If `ids` is not 0, `ids` is expected to be a pointer to an array of `uint16_m`s at least the length of the amount of name IDs specified by the font, and will be written to as such.
+
+			// @DOCLINE ### Get particular name ID
+
+				// @DOCLINE The function `mu_truetype_get_name_id` returns the name ID of a specific name, defined below: @NLNT
+				MUDEF uint16_m mu_truetype_get_name_id(muttInfo* info, uint16_m index);
+
+				// @DOCLINE `index` is the index of the name ID being requested.
 
 			// @DOCLINE ### Get name
 
@@ -1115,6 +1151,22 @@ mutt is developed primarily off of these sources of documentation:
 		#define MUTT_VERSION_MINOR 0
 		#define MUTT_VERSION_PATCH 0
 
+	// @DOCLINE # C standard library dependencies
+
+		// @DOCLINE mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
+
+		#if !defined(mu_memcpy)
+
+			// @DOCLINE ## `string.h` dependencies
+			#include <string.h>
+
+			// @DOCLINE `mu_memcpy`: equivalent to `memcpy`.
+			#ifndef mu_memcpy
+				#define mu_memcpy memcpy
+			#endif
+
+		#endif
+
 	#ifdef __cplusplus
 	}
 	#endif
@@ -1191,18 +1243,17 @@ mutt is developed primarily off of these sources of documentation:
 			info.size = size;
 
 			size_m p = 0;
-			uint16_m tables;
 
 			/* Offset subtable */
 			{
 				p += 4;
-				tables = mu_rbe_uint16((&data[p]));
+				info.table_count = mu_rbe_uint16((&data[p]));
 				p += 8;
 			}
 
 			/* Table directories */
 			{
-				for (uint16_m i = 0; i < tables; i++) {
+				for (uint16_m i = 0; i < info.table_count; i++) {
 					// tag
 					uint32_m u32 = mu_rbe_uint32((&data[p]));
 
@@ -1381,6 +1432,25 @@ mutt is developed primarily off of these sources of documentation:
 			return; if (info) {}
 		}
 
+	/* Tables */
+
+		MUDEF uint16_m mu_truetype_get_table_count(muttInfo* info) {
+			return info->table_count;
+		}
+
+		MUDEF void mu_truetype_get_table(muttInfo* info, uint16_m table, muttTable* table_info, char* name) {
+			muByte* table_data = &info->data[12+(16*(uint32_m)table)];
+
+			if (table_info) {
+				table_info->offset = mu_rbe_uint32((&table_data[8]));
+				table_info->length = mu_rbe_uint32((&table_data[12]));
+			}
+
+			if (name) {
+				mu_memcpy(name, table_data, 4);
+			}
+		}
+
 	/* Name table */
 
 		MUDEF uint16_m mu_truetype_get_name_ids(muttInfo* info, uint16_m* ids) {
@@ -1400,6 +1470,15 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			return count;
+		}
+
+		MUDEF uint16_m mu_truetype_get_name_id(muttInfo* info, uint16_m index) {
+			/*muByte* name = &info->data[info->req.name.offset];
+			muByte* offsets = name + 6;
+			muByte* index_offset = offsets + (12*(uint32_m)index);
+			return mu_rbe_uint16((&index_offset[6]));*/
+			// Into: (lol)
+			return mu_rbe_uint16((&(&info->data[info->req.name.offset] + 6 + (12*(uint32_m)index))[6]));
 		}
 
 		MUDEF char* mu_truetype_get_name(muttInfo* info, uint16_m name_id_index, muttEncoding* encoding, uint16_m* length) {
@@ -1632,8 +1711,6 @@ mutt is developed primarily off of these sources of documentation:
 
 				data += 1;
 			}
-
-			// "data" is incorrect by now...
 
 			/* X-coordinates */
 

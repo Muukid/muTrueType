@@ -17,11 +17,11 @@ More information about the general structure of a mu library is provided at [the
 
 # Demos
 
-The documentation for this library is fairly explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
+The documentation for this library is rather explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
 
 # General overview
 
-mutt is a fairly complicated library, so this section gives an overview of the library. More explicit documentation comes after this section.
+mutt is a rather complicated library, so this section gives an overview of the library. More explicit documentation comes after this section.
 
 ## Loading a TrueType font
 
@@ -68,7 +68,9 @@ mutt has the ability to give low-level information about a TrueType font.
 
 ### Tables
 
-mutt directly stores information about required tables, such as their position in the TrueType font data and their byte-length. These tables are:
+mutt has the ability to give information about the tables stored within a TrueType font. All of the tables that are offered by a given TrueType font can be retrieved manually; see the "Table retrieval" section for more.
+
+mutt also internally stores information about required tables within the `muttInfo` struct, such as their position in the TrueType font data and their byte-length. These tables are:
 
 * "cmap" (`muttInfo.req.cmap`)
 
@@ -103,6 +105,8 @@ For other tables, their contents are extremely variable (such as when they have 
 * "loca" (see "Loca table" section)
 
 * "cmap" (see "Cmap table" section)
+
+* "glyf" (see "Glyf table" section)
 
 # Licensing
 
@@ -615,6 +619,13 @@ size_m size;
 ```
 
 
+`table_count`: the amount of tables within the TrueType font data, defined below: 
+
+```c
+uint16_m table_count;
+```
+
+
 `req`: the required tables in the TrueType font data, defined below: 
 
 ```c
@@ -668,6 +679,36 @@ MUDEF void mu_truetype_let_info(muttInfo* info);
 
 
 This function must be called on every successfully created `muttInfo` struct.
+
+# Table retrieval
+
+mutt can retrieve information about all of the tables offered in a TrueType ofnt.
+
+## Get table amount
+
+The function `mu_truetype_get_table_count` returns the amount of tables within a given TrueType font, defined below: 
+
+```c
+MUDEF uint16_m mu_truetype_get_table_count(muttInfo* info);
+```
+
+
+This function returns `info->table_count`.
+
+## Get table information
+
+The function `mu_truetype_get_table` retrieves information about a requested table witin a given TrueType font, defined below: 
+
+```c
+MUDEF void mu_truetype_get_table(muttInfo* info, uint16_m table, muttTable* table_info, char* name);
+```
+
+
+`table` must be a valid index referring to a table, less than `info->table_count`.
+
+`table_info`, if not 0, will be dereferenced and filled in with information about the table.
+
+`name`, if not 0, will be filled with the 4-byte identifier for the table.
 
 # Platform-specific encoding
 
@@ -805,6 +846,17 @@ MUDEF uint16_m mu_truetype_get_name_ids(muttInfo* info, muttNameID* ids);
 
 
 This function returns the amount of name IDs specified by the font. If `ids` is not 0, `ids` is expected to be a pointer to an array of `uint16_m`s at least the length of the amount of name IDs specified by the font, and will be written to as such.
+
+### Get particular name ID
+
+The function `mu_truetype_get_name_id` returns the name ID of a specific name, defined below: 
+
+```c
+MUDEF uint16_m mu_truetype_get_name_id(muttInfo* info, uint16_m index);
+```
+
+
+`index` is the index of the name ID being requested.
 
 ### Get name
 
@@ -1251,3 +1303,11 @@ MUDEF uint16_m mu_truetype_get_contour_end_pt(muttSimpleGlyph* glyph, uint16_m c
 # Version macro
 
 mutt defines three macros to define the version of mutt: `MUTT_VERSION_MAJOR`, `MUTT_VERSION_MINOR`, and `MUTT_VERSION_PATCH`, following the format of `vMAJOR.MINOR.PATCH`.
+
+# C standard library dependencies
+
+mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
+
+## `string.h` dependencies
+
+`mu_memcpy`: equivalent to `memcpy`.
