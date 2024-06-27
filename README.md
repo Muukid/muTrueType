@@ -190,7 +190,7 @@ muttTable cmap;
 ```
 
 
-* `gylf`: the "glyf" table, defined below: 
+* `glyf`: the "glyf" table, defined below: 
 
 ```c
 muttTable glyf;
@@ -1225,54 +1225,19 @@ The interpretation for `x_coordinates` and `y_coordinates` are different than ho
 
 The following macros are defined to make bit-masking the flag values of a glyph easier:
 
-* `MUTT_ON_CURVE_POINT`: equivalent to "ON_CURVE_POINT", defined below: 
+* [0x01] `MUTT_ON_CURVE_POINT`: equivalent to "ON_CURVE_POINT".
 
-```c
-#define MUTT_ON_CURVE_POINT 0x01
-```
+* [0x02] `MUTT_X_SHORT_VECTOR`: equivalent to "X_SHORT_VECTOR".
 
+* [0x04] `MUTT_Y_SHORT_VECTOR`: equivalent to "Y_SHORT_VECTOR".
 
-* `MUTT_X_SHORT_VECTOR`: equivalent to "X_SHORT_VECTOR", defined below: 
+* [0x08] `MUTT_REPEAT_FLAG`: equivalent to "REPEAT_FLAG".
 
-```c
-#define MUTT_X_SHORT_VECTOR 0x02
-```
+* [0x10] `MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR`: equivalent to "X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR".
 
+* [0x20] `MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR`: equivalent to "Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR".
 
-* `MUTT_Y_SHORT_VECTOR`: equivalent to "Y_SHORT_VECTOR", defined below: 
-
-```c
-#define MUTT_Y_SHORT_VECTOR 0x04
-```
-
-
-* `MUTT_REPEAT_FLAG`: equivalent to "REPEAT_FLAG", defined below: 
-
-```c
-#define MUTT_REPEAT_FLAG 0x08
-```
-
-
-* `MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR`: equivalent to "X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR", defined below: 
-
-```c
-#define MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR 0x10
-```
-
-
-* `MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR`: equivalent to "Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR", defined below: 
-
-```c
-#define MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR 0x20
-```
-
-
-* `MUTT_OVERLAP_SIMPLE`: equivalent to "OVERLAP_SIMPLE", defined below: 
-
-```c
-#define MUTT_OVERLAP_SIMPLE 0x40
-```
-
+* [0x40] `MUTT_OVERLAP_SIMPLE`: equivalent to "OVERLAP_SIMPLE".
 
 ### Get simple glyph data
 
@@ -1299,6 +1264,163 @@ MUDEF uint16_m mu_truetype_get_contour_end_pt(muttSimpleGlyph* glyph, uint16_m c
 
 
 `contour` must be below the number of contours for the respective glyph.
+
+## Composite glyph data
+
+mutt can be used to extract composite glyph data.
+
+### Composite record struct
+
+The struct `muttCompositeRecord` represents a record in a composite glyph. It has the following members:
+
+* `flags`: equivalent to "flags" in the "Component Glyph record", defined below: 
+
+```c
+uint16_m flags;
+```
+
+
+* `glyph_index`: equivalent to "glyphIndex" in the "Component Glyph record", defined below: 
+
+```c
+uint16_m glyph_index;
+```
+
+
+* `argument1`: the x-offset (see clarifications below), defined below: 
+
+```c
+muByte argument1[2];
+```
+
+
+* `argument2`: the y-offset (see clarifications below), defined below: 
+
+```c
+muByte argument2[2];
+```
+
+
+* `scales`: the possible scales of the record (see clarifications below), defined below: 
+
+```c
+float scales[4];
+```
+
+
+* `next`: address to the next byte after the last byte of the composite record; used for retrieving the next composite record, defined below: 
+
+```c
+muByte* next;
+```
+
+
+The contents of `argument1` and `argument2` are dependent on the value of `flags` (see TrueType documentation), and, in order to be read, the contents of `argument1` and `argument2` are to be casted to a pointer of the indicated type and then dereferenced.
+
+
+For example, if bits ARG_1_AND_2_ARE_WORDS and ARGS_ARE_XY_VALUES are set, then the contents of `argument1` and `argument2` are read as:
+
+```c
+int16_m arg1 = *(int16_m*)record.argument1;
+int16_m arg2 = *(int16_m*)record.argument2;
+```
+
+`scales` can also depend on the flags given the following circumstances:
+
+* If WE_HAVE_A_SCALE is set, `scales[0]` is the scale for the component, and the contents of `scales[1]`, `scales[2]`, and `scales[3]` are undefined.
+
+* If WE_HAVE_AN_X_AND_Y_SCALE is set, `scales[0]` is the x-scale for the component, `scales[1]` is the y-scale for the component, and the contents of `scales[2]` and `scales[3]` are undefined.
+
+* If WE_HAVE_A_TWO_BY_TWO is set, all four values of the scales are used, with the following example C pseudocode determining the position transformations based on the values:
+
+```c
+x_new = scales[0]*x + scales[2]*y;
+y_new = scales[1]*x + scales[3]*y;
+```
+
+
+#### Composite record flag macros
+
+The following macros are defined for bit-masking `muttCompositeRecord->flags`:
+
+* [0x0001] `MUTT_ARG_1_AND_2_ARE_WORDS`: equivalent to "ARG_1_AND_2_ARE_WORDS".
+
+* [0x0002] `MUTT_ARGS_ARE_XY_VALUES`: equivalent to "ARGS_ARE_XY_VALUES".
+
+* [0x0004] `MUTT_ROUND_XY_TO_GRID`: equivalent to "ROUND_XY_TO_GRID".
+
+* [0x0008] `MUTT_WE_HAVE_A_SCALE`: equivalent to "WE_HAVE_A_SCALE".
+
+* [0x0020] `MUTT_MORE_COMPONENTS`: equivalent to "MORE_COMPONENTS".
+
+* [0x0040] `MUTT_WE_HAVE_AN_X_AND_Y_SCALE`: equivalent to "WE_HAVE_AN_X_AND_Y_SCALE".
+
+* [0x0080] `MUTT_WE_HAVE_A_TWO_BY_TWO`: equivalent to "WE_HAVE_A_TWO_BY_TWO".
+
+* [0x0100] `MUTT_WE_HAVE_INSTRUCTIONS`: equivalent to "WE_HAVE_INSTRUCTIONS".
+
+* [0x0200] `MUTT_USE_MY_METRICS`: equivalent to "USE_MY_METRICS".
+
+* [0x0400] `MUTT_OVERLAP_COMPOUND`: equivalent to "OVERLAP_COMPOUND".
+
+* [0x0800] `MUTT_SCALED_COMPONENT_OFFSET`: equivalent to "SCALED_COMPONENT_OFFSET".
+
+* [0x1000] `MUTT_UNSCALED_COMPONENT_OFFSET`: equivalent to "UNSCALED_COMPONENT_OFFSET".
+
+#### Composite instructions struct
+
+The struct `muttCompositeInstructions` represents the optional instructions that may come after the last composite record in a composite glyph. It has the following members:
+
+* `num_instr`: the number of instructions, defined below: 
+
+```c
+uint16_m num_instr;
+```
+
+
+* `instr`: a pointer to data within the TrueType font for the instructions, defined below: 
+
+```c
+uint8_m* instr;
+```
+
+
+### Get composite record
+
+The function `mu_truetype_get_composite_record` retrieves a composite record from a glyph, defined below: 
+
+```c
+MUDEF void mu_truetype_get_composite_record(muttGlyphHeader* header, muttCompositeRecord* record, muttCompositeRecord* prev_record);
+```
+
+
+`record` is the record struct to be filled in.
+
+`prev_record` is the previous composite record; if this function is getting called on the first composite record, this should be set to 0 to indicate as such.
+
+### Get composite instructions
+
+The function `mu_truetype_get_composite_instructions` retrieves the instructions of a composite glyph, defined below: 
+
+```c
+MUDEF void mu_truetype_get_composite_instructions(muttCompositeRecord* last_record, muttCompositeInstructions* instructions);
+```
+
+
+`last_record` is the last composite record specified in the entire glyph. It must be the last record because the data for the instructions is only stored after the last composite record.
+
+# Miscellaneous macro functions
+
+The following macro functions are miscellaneous macro functions used for reading values from a TrueType file:
+
+## F2DOT14 reading
+
+The macro function "MUTT_F2DOT14" creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: 
+
+```c
+#define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
+```
+
 
 # Version macro
 
