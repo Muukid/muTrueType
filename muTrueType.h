@@ -10,8 +10,6 @@ More explicit license information at the end of file.
 @TODO Support for more formats.
 @TODO Format conversion functions (?).
 @TODO Optimize searches.
-@TODO Add safety checks.
-@TODO Add manual error checker.
 @TODO Add information (quite needed) for: hmtx (horizontal metrics), OS/2 (metrics required in OpenType), BASE (for when multiple scripts are being used next to each other), GDEF (used for further classification and information about glyphs, like highlighting boxes, ligatures, variations, etc.; GSUB, GPOS, and JSTF may depend on data from this table), GPOS (used for proper position in languages like Urdu, which can make dealing with these things not a nightmare), GSUB (substitution data for positional glyphs, such as in Arabic), avar (used for customizing axis variations for variable fonts), fvar (used to define different font variations under different weights), gvar (used to define specific glyph variations under different weights), HVAR (for glyph-specific variations for hmtx stuff), STAT (for the definition of particular font variations), various other tables not mentioned, and instruction-related tables when that is figured out.
 @TODO Add information (not quite needed but still helpful) for: gasp (suggested grid-fitting techniques and such), JSTF (helpful when fitting text to a certain boundary and making it look good), MVAR (glyph-specific metric data, like a lot of the stuff provided in OS/2), VVAR (vertical metric variations for font variations), and MATH (used for the layout of maths formulas).
 @TODO Figure out support for instructions.
@@ -130,10 +128,6 @@ For other tables, their contents are extremely variable (such as when they have 
 # Licensing
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
-
-# Library safety
-
-This library, as of right now, performs very few checks against threats such as attack vectors; use at your own risk.
 
 # TrueType documentation
 
@@ -527,6 +521,24 @@ mutt is developed primarily off of these sources of documentation:
 		MU_ENUM(muttResult,
 			// @DOCLINE * `@NLFT`: the task succeeded.
 			MUTT_SUCCESS,
+			// @DOCLINE * `@NLFT`: the file unexpectedly ended; this means that rather the file is corrupt, or an out-of-range index or length was given by it.
+			MUTT_UNEXPECTED_EOF,
+			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in "TableDirectory" was invalid; because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data.
+			MUTT_INVALID_SFNT_VERSION,
+			// @DOCLINE * `@NLFT`: the "numTables" value specified in "TableDirectory" was invalid.
+			MUTT_INVALID_NUM_TABLES,
+			// @DOCLINE * `@NLFT`: the "searchRange" value specified in "TableDirectory" was invalid.
+			MUTT_INVALID_SEARCH_RANGE,
+			// @DOCLINE * `@NLFT`: the "entrySelector" value specified in "TableDirectory" was invalid.
+			MUTT_INVALID_ENTRY_SELECTOR,
+			// @DOCLINE * `@NLFT`: the "rangeShift" value specified in "TableDirectory" was invalid.
+			MUTT_INVALID_RANGE_SHIFT,
+			// @DOCLINE * `@NLFT`: the "offset" value specified in a table record was out of range.
+			MUTT_INVALID_OFFSET,
+			// @DOCLINE * `@NLFT`: the "length" value specified in a table record was out of range.
+			MUTT_INVALID_LENGTH,
+			// @DOCLINE * `@NLFT`: the "checksum" value specified in a table record was invalid.
+			MUTT_INVALID_CHECKSUM,
 		)
 
 		// @DOCLINE ## Result name function
@@ -541,6 +553,22 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE This function returns `"MUTT_UNKNOWN"` if a respective name could not be found.
 
 			#endif
+
+	// @DOCLINE # Check
+
+		// @DOCLINE mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`'; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
+
+		// @DOCLINE Note that checks are not performed on tables that mutt does not have support for in its API.
+
+		// @DOCLINE ## Table directory check
+
+			// @DOCLINE The function `mu_truetype_check_table_directory` checks if the table directory of given TrueType data is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_table_directory(muByte* data, size_m data_size);
+
+		// @DOCLINE ## Checksum table check
+
+			// @DOCLINE The function `mu_truetype_check_table_checksum` checks if a given table's checksum value is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum);
 
 	// @DOCLINE # Direct table information
 
@@ -737,7 +765,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE The function `mu_truetype_get_info` retrieves information about TrueType data and stores it in a `muttInfo` struct, defined below: @NLNT
 			MUDEF muttInfo mu_truetype_get_info(muttResult* result, muByte* data, size_m size);
 
-			// @DOCLINE Every successful call to `mutt_true_type_get_info` must be matched with a call to `mutt_true_type_let_info`.
+			// @DOCLINE Every successful call to `mu_truetype_get_info` must be matched with a call to `mutt_true_type_let_info`.
 
 			// @DOCLINE The pointer `data` is assumed to be valid and unchanged throughout the returned `muttInfo` struct's lifetime.
 
@@ -747,6 +775,13 @@ mutt is developed primarily off of these sources of documentation:
 			MUDEF void mu_truetype_let_info(muttInfo* info);
 
 			// @DOCLINE This function must be called on every successfully created `muttInfo` struct.
+
+		// @DOCLINE ## Retrieve TrueType information with no checks
+
+			// @DOCLINE The function `mu_truetype_get_info_no_checks` retrieves information about TrueType data and doesn't perform checks on it, defined below: @NLNT
+			MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size);
+
+			// @DOCLINE This function performs identically to `mu_truetype_get_info`, except no checks are performed on the data.
 
 	// @DOCLINE # Table retrieval
 
@@ -1289,6 +1324,18 @@ mutt is developed primarily off of these sources of documentation:
 
 		#endif
 
+		#if !defined(mu_pow)
+
+			// @DOCLINE ## `math.h` dependencies
+			#include <math.h>
+
+			// @DOCLINE `mu_pow`: equivalent to `pow`.
+			#ifndef mu_pow
+				#define mu_pow pow
+			#endif
+
+		#endif
+
 	#ifdef __cplusplus
 	}
 	#endif
@@ -1309,6 +1356,15 @@ mutt is developed primarily off of these sources of documentation:
 			switch (result) {
 				default: return "MUTT_UNKNOWN"; break;
 				case MUTT_SUCCESS: return "MUTT_SUCCESS"; break;
+				case MUTT_UNEXPECTED_EOF: return "MUTT_UNEXPECTED_EOF"; break;
+				case MUTT_INVALID_SFNT_VERSION: return "MUTT_INVALID_SFNT_VERSION"; break;
+				case MUTT_INVALID_NUM_TABLES: return "MUTT_INVALID_NUM_TABLES"; break;
+				case MUTT_INVALID_SEARCH_RANGE: return "MUTT_INVALID_SEARCH_RANGE"; break;
+				case MUTT_INVALID_ENTRY_SELECTOR: return "MUTT_INVALID_ENTRY_SELECTOR"; break;
+				case MUTT_INVALID_RANGE_SHIFT: return "MUTT_INVALID_RANGE_SHIFT"; break;
+				case MUTT_INVALID_OFFSET: return "MUTT_INVALID_OFFSET"; break;
+				case MUTT_INVALID_LENGTH: return "MUTT_INVALID_LENGTH"; break;
+				case MUTT_INVALID_CHECKSUM: return "MUTT_INVALID_CHECKSUM"; break;
 			}
 		}
 
@@ -1356,9 +1412,178 @@ mutt is developed primarily off of these sources of documentation:
 
 		#endif
 
+	/* Checks */
+
+		MUDEF muttResult mu_truetype_check_table_directory(muByte* data, size_m data_size) {
+			uint16_m num_tables;
+			muByte* orig_data = data;
+
+			/* Table directory */
+			{
+				uint32_m u32;
+				uint16_m u16;
+
+				if (data_size < 12) {
+					return MUTT_UNEXPECTED_EOF;
+				}
+
+				// sfntVersion
+				u32 = mu_rbe_uint32(data);
+				data += 4;
+				if (u32 != 0x00010000 && u32 != 0x4F54544F) {
+					return MUTT_INVALID_SFNT_VERSION;
+				}
+
+				// numTables
+				num_tables = mu_rbe_uint16(data);
+				data += 2;
+				if (num_tables < 9) {
+					return MUTT_INVALID_NUM_TABLES;
+				}
+
+				// searchRange
+				uint16_m search_range = mu_rbe_uint16(data);
+				u16 = search_range;
+				data += 2;
+				
+				if (u16%16 != 0) {
+					return MUTT_INVALID_SEARCH_RANGE;
+				}
+				u16 /= 16;
+
+				// https://stackoverflow.com/a/600306
+				// (check if not power of 2)
+				if (!((u16 != 0) && ((u16 & (u16-1)) == 0))) {
+					return MUTT_INVALID_SEARCH_RANGE;
+				}
+
+				if (u16 > num_tables || u16*2 < num_tables) {
+					return MUTT_INVALID_SEARCH_RANGE;
+				}
+
+				// entrySelector
+				u16 = mu_rbe_uint16(data);
+				data += 2;
+
+				// (undo log2)
+				u16 = mu_pow(2, u16);
+
+				if (!((u16 != 0) && ((u16 & (u16-1)) == 0))) {
+					return MUTT_INVALID_ENTRY_SELECTOR;
+				}
+				if (u16 > num_tables || u16*2 < num_tables) {
+					return MUTT_INVALID_ENTRY_SELECTOR;
+				}
+
+				// rangeShift
+				u16 = mu_rbe_uint16(data);
+				data += 2;
+
+				u16 += search_range;
+
+				if (u16%16 != 0) {
+					return MUTT_INVALID_RANGE_SHIFT;
+				}
+				if (u16/16 != num_tables) {
+					return MUTT_INVALID_RANGE_SHIFT;
+				}
+
+				// tableRecords
+				if (data_size < (12 + ((uint32_m)num_tables*16))) {
+					return MUTT_UNEXPECTED_EOF;
+				}
+			}
+
+			/* Table records */
+			{
+				while (num_tables != 0) {
+					num_tables -= 1;
+
+					// tableTag
+					uint32_m table_tag = mu_rbe_uint32(data);
+					data += 4;
+
+					// checksum
+					uint32_m checksum = mu_rbe_uint32(data);
+					data += 4;
+
+					// offset
+					uint32_m offset = mu_rbe_uint32(data);
+					data += 4;
+					if (offset >= data_size) {
+						return MUTT_INVALID_OFFSET;
+					}
+
+					// length
+					uint32_m length = mu_rbe_uint32(data);
+					data += 4;
+					if (((size_m)offset + (size_m)length) >= data_size) {
+						return MUTT_INVALID_LENGTH;
+					}
+
+					// (Don't check head because its checksum is weird)
+					if (table_tag != 0x68656164) {
+						if (mu_truetype_check_table_checksum(&orig_data[offset], length, checksum) != MUTT_SUCCESS) {
+							return MUTT_INVALID_CHECKSUM;
+						}
+					}
+				}
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+		#ifndef mu_rle_uint24
+			#define mu_rle_uint24(b) ((uint32_m)b[0] << 0 | (uint32_m)b[1] << 8 | (uint32_m)b[2] << 16)
+		#endif
+
+		#ifndef mu_rbe_uint24
+			#define mu_rbe_uint24(b) ((uint32_m)b[2] << 0 | (uint32_m)b[1] << 8 | (uint32_m)b[0] << 16)
+		#endif
+
+		MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum) {
+			muByte* end = &table[length];
+			uint32_m current_checksum = 0;
+
+			uint32_m off = length % 4;
+
+			while (table < end) {
+				if ((table+4) >= end && off != 0) {
+					if (off == 2) {
+						current_checksum += mu_rbe_uint16(table) << 16;
+					} else if (off == 3) {
+						current_checksum += mu_rbe_uint24(table) << 8;
+					} else {
+						current_checksum += table[0] << 24;
+					}
+				} else {
+					current_checksum += mu_rbe_uint32(table);
+				}
+				table += 4;
+			}
+
+			if (checksum != current_checksum) {
+				return MUTT_INVALID_CHECKSUM;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
 	/* Get/Let info */
 
 		MUDEF muttInfo mu_truetype_get_info(muttResult* result, muByte* data, size_m size) {
+			muttResult res;
+
+			res = mu_truetype_check_table_directory(data, size);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			return mu_truetype_get_info_no_checks(data, size);
+		}
+
+		MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size) {
 			muttInfo info = MU_ZERO_STRUCT(muttInfo);
 
 			info.data = data;
@@ -1547,7 +1772,7 @@ mutt is developed primarily off of these sources of documentation:
 				info.hhea_info.number_of_hmetrics = mu_rbe_uint16((&hhea[34]));
 			}
 
-			return info; if (result) {}
+			return info;
 		}
 
 		MUDEF void mu_truetype_let_info(muttInfo* info) {

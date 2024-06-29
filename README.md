@@ -112,10 +112,6 @@ For other tables, their contents are extremely variable (such as when they have 
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
 
-# Library safety
-
-This library, as of right now, performs very few checks against threats such as attack vectors; use at your own risk.
-
 # TrueType documentation
 
 mutt has the ability to work fairly low-level in the details of TrueType, meaning that more deep usage of mutt's API (beyond just fetching glyph IDs and rendering them to a bitmap) necessitates an understanding of the TrueType documentation. Terms from the TrueType documentation will be used with the assumption that the user has read it and understands these terms.
@@ -142,6 +138,24 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_SUCCESS`: the task succeeded.
 
+* `MUTT_UNEXPECTED_EOF`: the file unexpectedly ended; this means that rather the file is corrupt, or an out-of-range index or length was given by it.
+
+* `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid; because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data.
+
+* `MUTT_INVALID_NUM_TABLES`: the "numTables" value specified in "TableDirectory" was invalid.
+
+* `MUTT_INVALID_SEARCH_RANGE`: the "searchRange" value specified in "TableDirectory" was invalid.
+
+* `MUTT_INVALID_ENTRY_SELECTOR`: the "entrySelector" value specified in "TableDirectory" was invalid.
+
+* `MUTT_INVALID_RANGE_SHIFT`: the "rangeShift" value specified in "TableDirectory" was invalid.
+
+* `MUTT_INVALID_OFFSET`: the "offset" value specified in a table record was out of range.
+
+* `MUTT_INVALID_LENGTH`: the "length" value specified in a table record was out of range.
+
+* `MUTT_INVALID_CHECKSUM`: the "checksum" value specified in a table record was invalid.
+
 ## Result name function
 
 The function `mutt_result_get_name` converts a `muttResult` value into a `const char*` representation, defined below: 
@@ -154,6 +168,30 @@ MUDEF const char* mutt_result_get_name(muttResult result);
 Note that this function is only defined if `MUTT_NAMES` is defined before the inclusion of the header file.
 
 This function returns `"MUTT_UNKNOWN"` if a respective name could not be found.
+
+# Check
+
+mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`'; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
+
+Note that checks are not performed on tables that mutt does not have support for in its API.
+
+## Table directory check
+
+The function `mu_truetype_check_table_directory` checks if the table directory of given TrueType data is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_table_directory(muByte* data, size_m data_size);
+```
+
+
+## Checksum table check
+
+The function `mu_truetype_check_table_checksum` checks if a given table's checksum value is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum);
+```
+
 
 # Direct table information
 
@@ -665,7 +703,7 @@ MUDEF muttInfo mu_truetype_get_info(muttResult* result, muByte* data, size_m siz
 ```
 
 
-Every successful call to `mutt_true_type_get_info` must be matched with a call to `mutt_true_type_let_info`.
+Every successful call to `mu_truetype_get_info` must be matched with a call to `mutt_true_type_let_info`.
 
 The pointer `data` is assumed to be valid and unchanged throughout the returned `muttInfo` struct's lifetime.
 
@@ -679,6 +717,17 @@ MUDEF void mu_truetype_let_info(muttInfo* info);
 
 
 This function must be called on every successfully created `muttInfo` struct.
+
+## Retrieve TrueType information with no checks
+
+The function `mu_truetype_get_info_no_checks` retrieves information about TrueType data and doesn't perform checks on it, defined below: 
+
+```c
+MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size);
+```
+
+
+This function performs identically to `mu_truetype_get_info`, except no checks are performed on the data.
 
 # Table retrieval
 
@@ -1433,3 +1482,7 @@ mutt has several C standard library dependencies not provided by its other libra
 ## `string.h` dependencies
 
 `mu_memcpy`: equivalent to `memcpy`.
+
+## `math.h` dependencies
+
+`mu_pow`: equivalent to `pow`.
