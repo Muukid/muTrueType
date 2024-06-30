@@ -140,7 +140,9 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_UNEXPECTED_EOF`: the file unexpectedly ended; this means that rather the file is corrupt, or an out-of-range index or length was given by it.
 
-* `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid; because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data.
+* `MUTT_UNEXPECTED_END_OF_TABLE`: the table unexpectedly ended; this means that rather the file is corrupt (unlikely if a checksum check has been performed), or an invalid value has been written to a table.
+
+* `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 
 * `MUTT_INVALID_NUM_TABLES`: the "numTables" value specified in "TableDirectory" was invalid.
 
@@ -155,6 +157,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_INVALID_LENGTH`: the "length" value specified in a table record was out of range.
 
 * `MUTT_INVALID_CHECKSUM`: the "checksum" value specified in a table record was invalid.
+
+* `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
 
 ## Result name function
 
@@ -171,7 +175,7 @@ This function returns `"MUTT_UNKNOWN"` if a respective name could not be found.
 
 # Check
 
-mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`'; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
+mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
 
 Note that checks are not performed on tables that mutt does not have support for in its API.
 
@@ -190,6 +194,15 @@ The function `mu_truetype_check_table_checksum` checks if a given table's checks
 
 ```c
 MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum);
+```
+
+
+## Name table check
+
+The function `mu_truetype_check_names` checks if the name table provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length);
 ```
 
 
