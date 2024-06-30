@@ -158,6 +158,20 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_CHECKSUM`: the "checksum" value specified in a table record was invalid.
 
+* `MUTT_INVALID_MAGIC_NUMBER`: an invalid value for a magic number was provided.
+
+* `MUTT_INVALID_UNITS_PER_EM`: the "unitsPerEm" value specified in the head table was invalid.
+
+* `MUTT_INVALID_X_MIN_MAX`: the "xMin" and "xMax" values specified in the head table were invalid.
+
+* `MUTT_INVALID_Y_MIN_MAX`: the "yMin" and "yMax" values specified in the head table were invalid.
+
+* `MUTT_INVALID_LOWEST_REC_PPEM`: the "lowestRecPPEM" value specified in the head table was invalid.
+
+* `MUTT_INVALID_INDEX_TO_LOC_FORMAT`: the "indexToLocFormat" value specified in the head table was invalid.
+
+* `MUTT_INVALID_GLYPH_DATA_FORMAT`: the "glyphDataFormat" value specified in the head table was invalid.
+
 * `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
 
 ## Result name function
@@ -194,6 +208,15 @@ The function `mu_truetype_check_table_checksum` checks if a given table's checks
 
 ```c
 MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum);
+```
+
+
+## Head table check
+
+The function `mu_truetype_check_head` checks if the head table provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length);
 ```
 
 

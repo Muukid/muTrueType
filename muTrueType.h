@@ -541,6 +541,20 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_LENGTH,
 			// @DOCLINE * `@NLFT`: the "checksum" value specified in a table record was invalid.
 			MUTT_INVALID_CHECKSUM,
+			// @DOCLINE * `@NLFT`: an invalid value for a magic number was provided.
+			MUTT_INVALID_MAGIC_NUMBER,
+			// @DOCLINE * `@NLFT`: the "unitsPerEm" value specified in the head table was invalid.
+			MUTT_INVALID_UNITS_PER_EM,
+			// @DOCLINE * `@NLFT`: the "xMin" and "xMax" values specified in the head table were invalid.
+			MUTT_INVALID_X_MIN_MAX,
+			// @DOCLINE * `@NLFT`: the "yMin" and "yMax" values specified in the head table were invalid.
+			MUTT_INVALID_Y_MIN_MAX,
+			// @DOCLINE * `@NLFT`: the "lowestRecPPEM" value specified in the head table was invalid.
+			MUTT_INVALID_LOWEST_REC_PPEM,
+			// @DOCLINE * `@NLFT`: the "indexToLocFormat" value specified in the head table was invalid.
+			MUTT_INVALID_INDEX_TO_LOC_FORMAT,
+			// @DOCLINE * `@NLFT`: the "glyphDataFormat" value specified in the head table was invalid.
+			MUTT_INVALID_GLYPH_DATA_FORMAT,
 			// @DOCLINE * `@NLFT`: a required table could not be located.
 			MUTT_MISSING_REQUIRED_TABLE,
 		)
@@ -573,6 +587,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The function `mu_truetype_check_table_checksum` checks if a given table's checksum value is valid, defined below: @NLNT
 			MUDEF muttResult mu_truetype_check_table_checksum(muByte* table, uint32_m length, uint32_m checksum);
+
+		// @DOCLINE ## Head table check
+
+			// @DOCLINE The function `mu_truetype_check_head` checks if the head table provided by a TrueType font is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length);
 
 		// @DOCLINE ## Name table check
 
@@ -1375,6 +1394,13 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_OFFSET: return "MUTT_INVALID_OFFSET"; break;
 				case MUTT_INVALID_LENGTH: return "MUTT_INVALID_LENGTH"; break;
 				case MUTT_INVALID_CHECKSUM: return "MUTT_INVALID_CHECKSUM"; break;
+				case MUTT_INVALID_MAGIC_NUMBER: return "MUTT_INVALID_MAGIC_NUMBER"; break;
+				case MUTT_INVALID_UNITS_PER_EM: return "MUTT_INVALID_UNITS_PER_EM"; break;
+				case MUTT_INVALID_X_MIN_MAX: return "MUTT_INVALID_X_MIN_MAX"; break;
+				case MUTT_INVALID_Y_MIN_MAX: return "MUTT_INVALID_Y_MIN_MAX"; break;
+				case MUTT_INVALID_LOWEST_REC_PPEM: return "MUTT_INVALID_LOWEST_REC_PPEM"; break;
+				case MUTT_INVALID_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_INDEX_TO_LOC_FORMAT"; break;
+				case MUTT_INVALID_GLYPH_DATA_FORMAT: return "MUTT_INVALID_GLYPH_DATA_FORMAT"; break;
 				case MUTT_MISSING_REQUIRED_TABLE: return "MUTT_MISSING_REQUIRED_TABLE"; break;
 			}
 		}
@@ -1580,6 +1606,84 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+		MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length) {
+			if (table_length != 54) {
+				return MUTT_UNEXPECTED_END_OF_TABLE;
+			}
+
+			// We're not checking the checksum adjustment because of font collection files.
+			uint16_m u16;
+
+			// magicNumber
+			table += 12;
+			if (mu_rbe_uint32(table) != 0x5F0F3CF5) {
+				return MUTT_INVALID_MAGIC_NUMBER;
+			}
+
+			// unitsPerEm
+			table += 6;
+			u16 = mu_rbe_uint16(table);
+			if (u16 < 16 || u16 > 16384) {
+				return MUTT_INVALID_UNITS_PER_EM;
+			}
+
+			// xMin / xMax
+			int16_m min, max;
+
+			// xMin
+			table += 18;
+			u16 = mu_rbe_uint16(table);
+			min = *(int16_m*)&u16;
+
+			// xMax
+			table += 4;
+			u16 = mu_rbe_uint16(table);
+			max = *(int16_m*)&u16;
+
+			// Comparison
+			if (max < min) { 
+				return MUTT_INVALID_X_MIN_MAX;
+			}
+
+			// yMin / yMax
+			
+			// yMin
+			table -= 2;
+			u16 = mu_rbe_uint16(table);
+			min = *(int16_m*)&u16;
+
+			// yMax
+			table += 4;
+			u16 = mu_rbe_uint16(table);
+			max = *(int16_m*)&u16;
+
+			// Comparison
+			if (max < min) { 
+				return MUTT_INVALID_Y_MIN_MAX;
+			}
+
+			// lowestRecPPEM
+			table += 4;
+			if (mu_rbe_uint16(table) == 0) {
+				return MUTT_INVALID_LOWEST_REC_PPEM;
+			}
+
+			// indexToLocFormat
+			table += 4;
+			// (This check also rules out negative values :P)
+			if (mu_rbe_uint16(table) > 1) {
+				return MUTT_INVALID_INDEX_TO_LOC_FORMAT;
+			}
+
+			// glyphDataFormat
+			table += 2;
+			if (mu_rbe_uint16(table) != 0) {
+				return MUTT_INVALID_GLYPH_DATA_FORMAT;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
 		MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length) {
 			if (table_length < 6) {
 				return MUTT_UNEXPECTED_END_OF_TABLE;
@@ -1688,6 +1792,13 @@ mutt is developed primarily off of these sources of documentation:
 				info.req.post.offset == 0
 			) {
 				MU_SET_RESULT(result, MUTT_MISSING_REQUIRED_TABLE)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_head(&data[info.req.head.offset], info.req.head.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
 				mu_truetype_let_info(&info);
 				return MU_ZERO_STRUCT(muttInfo);
 			}
