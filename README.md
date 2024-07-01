@@ -108,6 +108,34 @@ For other tables, their contents are extremely variable (such as when they have 
 
 * "glyf" (see "Glyf table" section)
 
+## Safety and checks
+
+mutt performs checks on all data that it offers an API to process.\* This means that accessing data in tables that mutt doesn't provide an abstracted API to process is inherently unsafe; this logic also applies to subtables, such as cmap formats without API support.
+
+For the data that mutt does perform checks on, checks are performed on all values to ensure that they're a possibly correct value according to the specification. Checks are also performed to ensure that data that are interpreted as offsets in the data (such as offsets to a subtable) are within allowed ranges to provide safety against attack vectors.
+
+If a check finds something wrong, it will return what was wrong in the form of a `muttResult` enumerator value, usually specifying exactly what value caused an error.
+
+\* - mutt is currently being programmed with the intent of this being the goal by release v1.0.0, and is still in an experimental state that doesn't offer full safety checks.
+
+## Limitations
+
+### Data processing
+
+mutt is primarily built around processing the 9 required tables in TrueType, having an API designed for extracting data from them. Support for other optional tables, and tables that are given via extensions such as TrueType, may be added later, but for now, TrueType supports very little other than that.
+
+See the "Tables" section for more explicit information about what tables are supported and where they're used in the API.
+
+### Format support
+
+mutt, as of right now, only supports conversion of codepoints to glyph ids under format 4, which is usually provided by TrueType fonts. Support for other formats is planned.
+
+### Support for extensions such as OpenType
+
+mutt generally sticks to TrueType specifications, meaning that it won't be able to parse files built purely on extensions such as OpenType, with "purely" in this context meaning that it's built in such a way that it's incompatible with TrueType specifications, such as an OpenType file that doesn't define glyph data under the common "glyf" table and instead uses CFF or CFF2 formats.
+
+However, this doesn't mean that mutt will never be expanded to parse tables not explicitly outlined in the TrueType specification, but outlined in extensions; the file only needs to be in a TrueType wrapper and specify all of the tables required by TrueType.
+
 # Licensing
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
@@ -144,43 +172,65 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_MAXP_TABLE_LENGTH`: the recorded length of the maxp table was invalid.
 
-* `MUTT_INVALID_NAME_TABLE_LENGTH`: the recorded length of the name table was invalid.
-
 * `MUTT_INVALID_HHEA_TABLE_LENGTH`: the recorded length of the hhea table was invalid.
 
-* `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
+* `MUTT_INVALID_NAME_TABLE_LENGTH`: the recorded length of the name table was invalid.
 
-* `MUTT_INVALID_NUM_TABLES`: the "numTables" value specified in "TableDirectory" was invalid.
+* `MUTT_INVALID_CMAP_TABLE_LENGTH`: the recorded length of the cmap table was invalid.
 
-* `MUTT_INVALID_SEARCH_RANGE`: the "searchRange" value specified in "TableDirectory" was invalid.
+* `MUTT_INVALID_CMAP_F0_TABLE_LENGTH`: the recorded length of a format 0-cmap subtable was invalid.
 
-* `MUTT_INVALID_ENTRY_SELECTOR`: the "entrySelector" value specified in "TableDirectory" was invalid.
+* `MUTT_INVALID_CMAP_F4_TABLE_LENGTH`: the recorded length of a format 4-cmap subtable was invalid.
 
-* `MUTT_INVALID_RANGE_SHIFT`: the "rangeShift" value specified in "TableDirectory" was invalid.
+* `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION`: the "sfntVersion" value specified in the table directory was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 
-* `MUTT_INVALID_OFFSET`: the "offset" value specified in a table record was out of range.
+* `MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES`: the "numTables" value specified in the table directory was invalid.
 
-* `MUTT_INVALID_LENGTH`: the "length" value specified in a table record was out of range.
+* `MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE`: the "searchRange" value specified in the table directory was invalid.
 
-* `MUTT_INVALID_CHECKSUM`: the "checksum" value specified in a table record was invalid.
+* `MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR`: the "entrySelector" value specified in the table directory was invalid.
 
-* `MUTT_INVALID_MAGIC_NUMBER`: an invalid value for a magic number was provided.
+* `MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT`: the "rangeShift" value specified in the table directory was invalid.
 
-* `MUTT_INVALID_UNITS_PER_EM`: the "unitsPerEm" value specified in the head table was invalid.
+* `MUTT_INVALID_TABLE_RECORD_OFFSET`: the "offset" value specified in a table record was out of range.
 
-* `MUTT_INVALID_X_MIN_MAX`: the "xMin" and "xMax" values specified in the head table were invalid.
+* `MUTT_INVALID_TABLE_RECORD_LENGTH`: the "length" value specified in a table record was out of range.
 
-* `MUTT_INVALID_Y_MIN_MAX`: the "yMin" and "yMax" values specified in the head table were invalid.
+* `MUTT_INVALID_TABLE_RECORD_CHECKSUM`: the "checksum" value specified in a table record was invalid.
 
-* `MUTT_INVALID_LOWEST_REC_PPEM`: the "lowestRecPPEM" value specified in the head table was invalid.
+* `MUTT_INVALID_HEAD_MAGIC_NUMBER`: the "magicNumber" value specified in the head table was invalid.
 
-* `MUTT_INVALID_INDEX_TO_LOC_FORMAT`: the "indexToLocFormat" value specified in the head table was invalid.
+* `MUTT_INVALID_HEAD_UNITS_PER_EM`: the "unitsPerEm" value specified in the head table was invalid.
 
-* `MUTT_INVALID_GLYPH_DATA_FORMAT`: the "glyphDataFormat" value specified in the head table was invalid.
+* `MUTT_INVALID_HEAD_X_MIN_MAX`: the "xMin" and "xMax" values specified in the head table were invalid.
 
-* `MUTT_INVALID_MAX_ZONES`: the "maxZones" value specified in the maxp table was invalid.
+* `MUTT_INVALID_HEAD_Y_MIN_MAX`: the "yMin" and "yMax" values specified in the head table were invalid.
 
-* `MUTT_INVALID_METRIC_DATA_FORMAT`: the "metricDataFormat" value specified in the hhea table was invalid.
+* `MUTT_INVALID_HEAD_LOWEST_REC_PPEM`: the "lowestRecPPEM" value specified in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT`: the "indexToLocFormat" value specified in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT`: the "glyphDataFormat" value specified in the head table was invalid.
+
+* `MUTT_INVALID_MAXP_MAX_ZONES`: the "maxZones" value specified in the maxp table was invalid.
+
+* `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT`: the "metricDataFormat" value specified in the hhea table was invalid.
+
+* `MUTT_INVALID_CMAP_F0_GLYPH_ID`: a value in the "glyphIdArray" within a format 0-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_SEG_COUNT`: the "segCountX2" value specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_SEARCH_RANGE`: the "searchRange" value specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_ENTRY_SELECTOR`: the "entrySelector" value specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_RANGE_SHIFT`: the "rangeShift" value specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_END_CODE`: a value in the "endCode" array specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_START_CODE`: a value in the "startCode" array specified in a format 4-cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET`: a value in the "idRangeOffset" array specified in a format 4-cmap subtable was invalid, AKA gave a value outside of the array "glyphIdArray".
 
 * `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
 
@@ -256,6 +306,41 @@ The function `mu_truetype_check_names` checks if the name table provided by a Tr
 
 ```c
 MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length);
+```
+
+
+## Cmap table check
+
+The function `mu_truetype_check_cmap` checks if the cmap table provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_cmap(muttInfo* info);
+```
+
+
+This function only checks table formats 0. All other formats go ignored.
+
+## Cmap format table checks
+
+There are several functions defined to check certain format subtables within a cmap table. They are defined below.
+
+Note that each of these functions take in a parameter "`muByte* table`", which is expected to be a pointer to the first value in the subtable that isn't 'format', 'length', or a reserved value, but `length` is expected to include these values.
+
+### Cmap format 0 subtable check
+
+The function `mu_truetype_check_format0` checks if the format 0-cmap subtable provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_format0(muttInfo* info, muByte* table, uint16_m length);
+```
+
+
+### Cmap format 4 subtable check
+
+The function `mu_truetype_check_format4` checks if the format 4-cmap subtable provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_format4(muttInfo* info, muByte* table, uint16_m length);
 ```
 
 

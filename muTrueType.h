@@ -10,7 +10,7 @@ More explicit license information at the end of file.
 @TODO Support for more formats.
 @TODO Format conversion functions (?).
 @TODO Optimize searches.
-@TODO Add information (quite needed) for: hmtx (horizontal metrics), OS/2 (metrics required in OpenType), BASE (for when multiple scripts are being used next to each other), GDEF (used for further classification and information about glyphs, like highlighting boxes, ligatures, variations, etc.; GSUB, GPOS, and JSTF may depend on data from this table), GPOS (used for proper position in languages like Urdu, which can make dealing with these things not a nightmare), GSUB (substitution data for positional glyphs, such as in Arabic), avar (used for customizing axis variations for variable fonts), fvar (used to define different font variations under different weights), gvar (used to define specific glyph variations under different weights), HVAR (for glyph-specific variations for hmtx stuff), STAT (for the definition of particular font variations), various other tables not mentioned, and instruction-related tables when that is figured out.
+@TODO Add information (quite needed) for: post, hmtx (horizontal metrics), OS/2 (metrics required in OpenType), BASE (for when multiple scripts are being used next to each other), GDEF (used for further classification and information about glyphs, like highlighting boxes, ligatures, variations, etc.; GSUB, GPOS, and JSTF may depend on data from this table), GPOS (used for proper position in languages like Urdu, which can make dealing with these things not a nightmare), GSUB (substitution data for positional glyphs, such as in Arabic), avar (used for customizing axis variations for variable fonts), fvar (used to define different font variations under different weights), gvar (used to define specific glyph variations under different weights), HVAR (for glyph-specific variations for hmtx stuff), STAT (for the definition of particular font variations), various other tables not mentioned, and instruction-related tables when that is figured out.
 @TODO Add information (not quite needed but still helpful) for: gasp (suggested grid-fitting techniques and such), JSTF (helpful when fitting text to a certain boundary and making it look good), MVAR (glyph-specific metric data, like a lot of the stuff provided in OS/2), VVAR (vertical metric variations for font variations), and MATH (used for the layout of maths formulas).
 @TODO Figure out support for instructions.
 */
@@ -124,6 +124,34 @@ For other tables, their contents are extremely variable (such as when they have 
 * "cmap" (see "Cmap table" section)
 
 * "glyf" (see "Glyf table" section)
+
+## Safety and checks
+
+mutt performs checks on all data that it offers an API to process.\* This means that accessing data in tables that mutt doesn't provide an abstracted API to process is inherently unsafe; this logic also applies to subtables, such as cmap formats without API support.
+
+For the data that mutt does perform checks on, checks are performed on all values to ensure that they're a possibly correct value according to the specification. Checks are also performed to ensure that data that are interpreted as offsets in the data (such as offsets to a subtable) are within allowed ranges to provide safety against attack vectors.
+
+If a check finds something wrong, it will return what was wrong in the form of a `muttResult` enumerator value, usually specifying exactly what value caused an error.
+
+\* - mutt is currently being programmed with the intent of this being the goal by release v1.0.0, and is still in an experimental state that doesn't offer full safety checks.
+
+## Limitations
+
+### Data processing
+
+mutt is primarily built around processing the 9 required tables in TrueType, having an API designed for extracting data from them. Support for other optional tables, and tables that are given via extensions such as TrueType, may be added later, but for now, TrueType supports very little other than that.
+
+See the "Tables" section for more explicit information about what tables are supported and where they're used in the API.
+
+### Format support
+
+mutt, as of right now, only supports conversion of codepoints to glyph ids under format 4, which is usually provided by TrueType fonts. Support for other formats is planned.
+
+### Support for extensions such as OpenType
+
+mutt generally sticks to TrueType specifications, meaning that it won't be able to parse files built purely on extensions such as OpenType, with "purely" in this context meaning that it's built in such a way that it's incompatible with TrueType specifications, such as an OpenType file that doesn't define glyph data under the common "glyf" table and instead uses CFF or CFF2 formats.
+
+However, this doesn't mean that mutt will never be expanded to parse tables not explicitly outlined in the TrueType specification, but outlined in extensions; the file only needs to be in a TrueType wrapper and specify all of the tables required by TrueType.
 
 # Licensing
 
@@ -527,44 +555,66 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_HEAD_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the recorded length of the maxp table was invalid.
 			MUTT_INVALID_MAXP_TABLE_LENGTH,
-			// @DOCLINE * `@NLFT`: the recorded length of the name table was invalid.
-			MUTT_INVALID_NAME_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the recorded length of the hhea table was invalid.
 			MUTT_INVALID_HHEA_TABLE_LENGTH,
-			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
-			MUTT_INVALID_SFNT_VERSION,
-			// @DOCLINE * `@NLFT`: the "numTables" value specified in "TableDirectory" was invalid.
-			MUTT_INVALID_NUM_TABLES,
-			// @DOCLINE * `@NLFT`: the "searchRange" value specified in "TableDirectory" was invalid.
-			MUTT_INVALID_SEARCH_RANGE,
-			// @DOCLINE * `@NLFT`: the "entrySelector" value specified in "TableDirectory" was invalid.
-			MUTT_INVALID_ENTRY_SELECTOR,
-			// @DOCLINE * `@NLFT`: the "rangeShift" value specified in "TableDirectory" was invalid.
-			MUTT_INVALID_RANGE_SHIFT,
+			// @DOCLINE * `@NLFT`: the recorded length of the name table was invalid.
+			MUTT_INVALID_NAME_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of the cmap table was invalid.
+			MUTT_INVALID_CMAP_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of a format 0-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F0_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in the table directory was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
+			MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION,
+			// @DOCLINE * `@NLFT`: the "numTables" value specified in the table directory was invalid.
+			MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES,
+			// @DOCLINE * `@NLFT`: the "searchRange" value specified in the table directory was invalid.
+			MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE,
+			// @DOCLINE * `@NLFT`: the "entrySelector" value specified in the table directory was invalid.
+			MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR,
+			// @DOCLINE * `@NLFT`: the "rangeShift" value specified in the table directory was invalid.
+			MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT,
 			// @DOCLINE * `@NLFT`: the "offset" value specified in a table record was out of range.
-			MUTT_INVALID_OFFSET,
+			MUTT_INVALID_TABLE_RECORD_OFFSET,
 			// @DOCLINE * `@NLFT`: the "length" value specified in a table record was out of range.
-			MUTT_INVALID_LENGTH,
+			MUTT_INVALID_TABLE_RECORD_LENGTH,
 			// @DOCLINE * `@NLFT`: the "checksum" value specified in a table record was invalid.
-			MUTT_INVALID_CHECKSUM,
-			// @DOCLINE * `@NLFT`: an invalid value for a magic number was provided.
-			MUTT_INVALID_MAGIC_NUMBER,
+			MUTT_INVALID_TABLE_RECORD_CHECKSUM,
+			// @DOCLINE * `@NLFT`: the "magicNumber" value specified in the head table was invalid.
+			MUTT_INVALID_HEAD_MAGIC_NUMBER,
 			// @DOCLINE * `@NLFT`: the "unitsPerEm" value specified in the head table was invalid.
-			MUTT_INVALID_UNITS_PER_EM,
+			MUTT_INVALID_HEAD_UNITS_PER_EM,
 			// @DOCLINE * `@NLFT`: the "xMin" and "xMax" values specified in the head table were invalid.
-			MUTT_INVALID_X_MIN_MAX,
+			MUTT_INVALID_HEAD_X_MIN_MAX,
 			// @DOCLINE * `@NLFT`: the "yMin" and "yMax" values specified in the head table were invalid.
-			MUTT_INVALID_Y_MIN_MAX,
+			MUTT_INVALID_HEAD_Y_MIN_MAX,
 			// @DOCLINE * `@NLFT`: the "lowestRecPPEM" value specified in the head table was invalid.
-			MUTT_INVALID_LOWEST_REC_PPEM,
+			MUTT_INVALID_HEAD_LOWEST_REC_PPEM,
 			// @DOCLINE * `@NLFT`: the "indexToLocFormat" value specified in the head table was invalid.
-			MUTT_INVALID_INDEX_TO_LOC_FORMAT,
+			MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT,
 			// @DOCLINE * `@NLFT`: the "glyphDataFormat" value specified in the head table was invalid.
-			MUTT_INVALID_GLYPH_DATA_FORMAT,
+			MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT,
 			// @DOCLINE * `@NLFT`: the "maxZones" value specified in the maxp table was invalid.
-			MUTT_INVALID_MAX_ZONES,
+			MUTT_INVALID_MAXP_MAX_ZONES,
 			// @DOCLINE * `@NLFT`: the "metricDataFormat" value specified in the hhea table was invalid.
-			MUTT_INVALID_METRIC_DATA_FORMAT,
+			MUTT_INVALID_HHEA_METRIC_DATA_FORMAT,
+			// @DOCLINE * `@NLFT`: a value in the "glyphIdArray" within a format 0-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F0_GLYPH_ID,
+			// @DOCLINE * `@NLFT`: the "segCountX2" value specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_SEG_COUNT,
+			// @DOCLINE * `@NLFT`: the "searchRange" value specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_SEARCH_RANGE,
+			// @DOCLINE * `@NLFT`: the "entrySelector" value specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_ENTRY_SELECTOR,
+			// @DOCLINE * `@NLFT`: the "rangeShift" value specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_RANGE_SHIFT,
+			// @DOCLINE * `@NLFT`: a value in the "endCode" array specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_END_CODE,
+			// @DOCLINE * `@NLFT`: a value in the "startCode" array specified in a format 4-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F4_START_CODE,
+			// @DOCLINE * `@NLFT`: a value in the "idRangeOffset" array specified in a format 4-cmap subtable was invalid, AKA gave a value outside of the array "glyphIdArray".
+			MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET,
 			// @DOCLINE * `@NLFT`: a required table could not be located.
 			MUTT_MISSING_REQUIRED_TABLE,
 		)
@@ -589,6 +639,8 @@ mutt is developed primarily off of these sources of documentation:
 		// @DOCLINE mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`.
 
 		// @DOCLINE Note that checks are not performed on tables that mutt does not have support for in its API.
+
+		typedef struct muttInfo muttInfo;
 
 		// @DOCLINE ## Table directory check
 
@@ -619,6 +671,29 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The function `mu_truetype_check_names` checks if the name table provided by a TrueType font is valid, defined below: @NLNT
 			MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length);
+
+		// @DOCLINE ## Cmap table check
+
+			// @DOCLINE The function `mu_truetype_check_cmap` checks if the cmap table provided by a TrueType font is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_cmap(muttInfo* info);
+
+			// @DOCLINE This function only checks table formats 0. All other formats go ignored.
+
+		// @DOCLINE ## Cmap format table checks
+
+			// @DOCLINE There are several functions defined to check certain format subtables within a cmap table. They are defined below.
+
+			// @DOCLINE Note that each of these functions take in a parameter "`muByte* table`", which is expected to be a pointer to the first value in the subtable that isn't 'format', 'length', or a reserved value, but `length` is expected to include these values.
+
+			// @DOCLINE ### Cmap format 0 subtable check
+
+				// @DOCLINE The function `mu_truetype_check_format0` checks if the format 0-cmap subtable provided by a TrueType font is valid, defined below: @NLNT
+				MUDEF muttResult mu_truetype_check_format0(muttInfo* info, muByte* table, uint16_m length);
+
+			// @DOCLINE ### Cmap format 4 subtable check
+
+				// @DOCLINE The function `mu_truetype_check_format4` checks if the format 4-cmap subtable provided by a TrueType font is valid, defined below: @NLNT
+				MUDEF muttResult mu_truetype_check_format4(muttInfo* info, muByte* table, uint16_m length);
 
 	// @DOCLINE # Direct table information
 
@@ -806,7 +881,7 @@ mutt is developed primarily off of these sources of documentation:
 			muttMaxpInfo maxp_info;
 			// @DOCLINE `hhea_info`: information retrieved from the required "hhea" table, defined below: @NLNT
 			muttHheaInfo hhea_info;
-		}; typedef struct muttInfo muttInfo;
+		};
 
 		// @DOCLINE All of the members, including those regarding the raw data of the TrueType font, are automatically generated upon a successful call to `mu_truetype_get_info`, and are invalid upon its respective call to `mu_truetype_let_info`. The members are meant to be read, not written.
 
@@ -1402,25 +1477,36 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_UNEXPECTED_EOF: return "MUTT_UNEXPECTED_EOF"; break;
 				case MUTT_INVALID_HEAD_TABLE_LENGTH: return "MUTT_INVALID_HEAD_TABLE_LENGTH"; break;
 				case MUTT_INVALID_MAXP_TABLE_LENGTH: return "MUTT_INVALID_MAXP_TABLE_LENGTH"; break;
-				case MUTT_INVALID_NAME_TABLE_LENGTH: return "MUTT_INVALID_NAME_TABLE_LENGTH"; break;
 				case MUTT_INVALID_HHEA_TABLE_LENGTH: return "MUTT_INVALID_HHEA_TABLE_LENGTH"; break;
-				case MUTT_INVALID_SFNT_VERSION: return "MUTT_INVALID_SFNT_VERSION"; break;
-				case MUTT_INVALID_NUM_TABLES: return "MUTT_INVALID_NUM_TABLES"; break;
-				case MUTT_INVALID_SEARCH_RANGE: return "MUTT_INVALID_SEARCH_RANGE"; break;
-				case MUTT_INVALID_ENTRY_SELECTOR: return "MUTT_INVALID_ENTRY_SELECTOR"; break;
-				case MUTT_INVALID_RANGE_SHIFT: return "MUTT_INVALID_RANGE_SHIFT"; break;
-				case MUTT_INVALID_OFFSET: return "MUTT_INVALID_OFFSET"; break;
-				case MUTT_INVALID_LENGTH: return "MUTT_INVALID_LENGTH"; break;
-				case MUTT_INVALID_CHECKSUM: return "MUTT_INVALID_CHECKSUM"; break;
-				case MUTT_INVALID_MAGIC_NUMBER: return "MUTT_INVALID_MAGIC_NUMBER"; break;
-				case MUTT_INVALID_UNITS_PER_EM: return "MUTT_INVALID_UNITS_PER_EM"; break;
-				case MUTT_INVALID_X_MIN_MAX: return "MUTT_INVALID_X_MIN_MAX"; break;
-				case MUTT_INVALID_Y_MIN_MAX: return "MUTT_INVALID_Y_MIN_MAX"; break;
-				case MUTT_INVALID_LOWEST_REC_PPEM: return "MUTT_INVALID_LOWEST_REC_PPEM"; break;
-				case MUTT_INVALID_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_INDEX_TO_LOC_FORMAT"; break;
-				case MUTT_INVALID_GLYPH_DATA_FORMAT: return "MUTT_INVALID_GLYPH_DATA_FORMAT"; break;
-				case MUTT_INVALID_MAX_ZONES: return "MUTT_INVALID_MAX_ZONES"; break;
-				case MUTT_INVALID_METRIC_DATA_FORMAT: return "MUTT_INVALID_METRIC_DATA_FORMAT"; break;
+				case MUTT_INVALID_NAME_TABLE_LENGTH: return "MUTT_INVALID_NAME_TABLE_LENGTH"; break;
+				case MUTT_INVALID_CMAP_TABLE_LENGTH: return "MUTT_INVALID_CMAP_TABLE_LENGTH"; break;
+				case MUTT_INVALID_CMAP_F0_TABLE_LENGTH: return "MUTT_INVALID_CMAP_F0_TABLE_LENGTH"; break;
+				case MUTT_INVALID_CMAP_F4_TABLE_LENGTH: return "MUTT_INVALID_CMAP_F4_TABLE_LENGTH"; break;
+				case MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION: return "MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION"; break;
+				case MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES: return "MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES"; break;
+				case MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE: return "MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE"; break;
+				case MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR: return "MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR"; break;
+				case MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT: return "MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT"; break;
+				case MUTT_INVALID_TABLE_RECORD_OFFSET: return "MUTT_INVALID_TABLE_RECORD_OFFSET"; break;
+				case MUTT_INVALID_TABLE_RECORD_LENGTH: return "MUTT_INVALID_TABLE_RECORD_LENGTH"; break;
+				case MUTT_INVALID_TABLE_RECORD_CHECKSUM: return "MUTT_INVALID_TABLE_RECORD_CHECKSUM"; break;
+				case MUTT_INVALID_HEAD_MAGIC_NUMBER: return "MUTT_INVALID_HEAD_MAGIC_NUMBER"; break;
+				case MUTT_INVALID_HEAD_UNITS_PER_EM: return "MUTT_INVALID_HEAD_UNITS_PER_EM"; break;
+				case MUTT_INVALID_HEAD_X_MIN_MAX: return "MUTT_INVALID_HEAD_X_MIN_MAX"; break;
+				case MUTT_INVALID_HEAD_Y_MIN_MAX: return "MUTT_INVALID_HEAD_Y_MIN_MAX"; break;
+				case MUTT_INVALID_HEAD_LOWEST_REC_PPEM: return "MUTT_INVALID_HEAD_LOWEST_REC_PPEM"; break;
+				case MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT"; break;
+				case MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT: return "MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT"; break;
+				case MUTT_INVALID_MAXP_MAX_ZONES: return "MUTT_INVALID_MAXP_MAX_ZONES"; break;
+				case MUTT_INVALID_HHEA_METRIC_DATA_FORMAT: return "MUTT_INVALID_HHEA_METRIC_DATA_FORMAT"; break;
+				case MUTT_INVALID_CMAP_F0_GLYPH_ID: return "MUTT_INVALID_CMAP_F0_GLYPH_ID"; break;
+				case MUTT_INVALID_CMAP_F4_SEG_COUNT: return "MUTT_INVALID_CMAP_F4_SEG_COUNT"; break;
+				case MUTT_INVALID_CMAP_F4_SEARCH_RANGE: return "MUTT_INVALID_CMAP_F4_SEARCH_RANGE"; break;
+				case MUTT_INVALID_CMAP_F4_ENTRY_SELECTOR: return "MUTT_INVALID_CMAP_F4_ENTRY_SELECTOR"; break;
+				case MUTT_INVALID_CMAP_F4_RANGE_SHIFT: return "MUTT_INVALID_CMAP_F4_RANGE_SHIFT"; break;
+				case MUTT_INVALID_CMAP_F4_END_CODE: return "MUTT_INVALID_CMAP_F4_END_CODE"; break;
+				case MUTT_INVALID_CMAP_F4_START_CODE: return "MUTT_INVALID_CMAP_F4_START_CODE"; break;
+				case MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET: return "MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET"; break;
 				case MUTT_MISSING_REQUIRED_TABLE: return "MUTT_MISSING_REQUIRED_TABLE"; break;
 			}
 		}
@@ -1471,6 +1557,9 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Checks */
 
+		// https://stackoverflow.com/a/600306
+		#define MUTT_IS_POW_OF_2(v) ((v != 0) && ((v & (v-1)) == 0))
+
 		MUDEF muttResult mu_truetype_check_table_directory(muByte* data, size_m data_size) {
 			uint16_m num_tables;
 			muByte* orig_data = data;
@@ -1488,14 +1577,14 @@ mutt is developed primarily off of these sources of documentation:
 				u32 = mu_rbe_uint32(data);
 				data += 4;
 				if (u32 != 0x00010000/* && u32 != 0x4F54544F*/) {
-					return MUTT_INVALID_SFNT_VERSION;
+					return MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION;
 				}
 
 				// numTables
 				num_tables = mu_rbe_uint16(data);
 				data += 2;
 				if (num_tables < 9) {
-					return MUTT_INVALID_NUM_TABLES;
+					return MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES;
 				}
 
 				// searchRange
@@ -1504,18 +1593,16 @@ mutt is developed primarily off of these sources of documentation:
 				data += 2;
 				
 				if (u16%16 != 0) {
-					return MUTT_INVALID_SEARCH_RANGE;
+					return MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE;
 				}
 				u16 /= 16;
 
-				// https://stackoverflow.com/a/600306
-				// (check if not power of 2)
-				if (!((u16 != 0) && ((u16 & (u16-1)) == 0))) {
-					return MUTT_INVALID_SEARCH_RANGE;
+				if (!MUTT_IS_POW_OF_2(u16)) {
+					return MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE;
 				}
 
 				if (u16 > num_tables || u16*2 < num_tables) {
-					return MUTT_INVALID_SEARCH_RANGE;
+					return MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE;
 				}
 
 				// entrySelector
@@ -1526,10 +1613,10 @@ mutt is developed primarily off of these sources of documentation:
 				u16 = mu_pow(2, u16);
 
 				if (!((u16 != 0) && ((u16 & (u16-1)) == 0))) {
-					return MUTT_INVALID_ENTRY_SELECTOR;
+					return MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR;
 				}
 				if (u16 > num_tables || u16*2 < num_tables) {
-					return MUTT_INVALID_ENTRY_SELECTOR;
+					return MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR;
 				}
 
 				// rangeShift
@@ -1539,10 +1626,10 @@ mutt is developed primarily off of these sources of documentation:
 				u16 += search_range;
 
 				if (u16%16 != 0) {
-					return MUTT_INVALID_RANGE_SHIFT;
+					return MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT;
 				}
 				if (u16/16 != num_tables) {
-					return MUTT_INVALID_RANGE_SHIFT;
+					return MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT;
 				}
 
 				// tableRecords
@@ -1568,20 +1655,20 @@ mutt is developed primarily off of these sources of documentation:
 					uint32_m offset = mu_rbe_uint32(data);
 					data += 4;
 					if (offset >= data_size) {
-						return MUTT_INVALID_OFFSET;
+						return MUTT_INVALID_TABLE_RECORD_OFFSET;
 					}
 
 					// length
 					uint32_m length = mu_rbe_uint32(data);
 					data += 4;
 					if (((size_m)offset + (size_m)length) >= data_size) {
-						return MUTT_INVALID_LENGTH;
+						return MUTT_INVALID_TABLE_RECORD_LENGTH;
 					}
 
 					// (Don't check head because its checksum is weird)
 					if (table_tag != 0x68656164) {
 						if (mu_truetype_check_table_checksum(&orig_data[offset], length, checksum) != MUTT_SUCCESS) {
-							return MUTT_INVALID_CHECKSUM;
+							return MUTT_INVALID_TABLE_RECORD_CHECKSUM;
 						}
 					}
 				}
@@ -1620,7 +1707,7 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			if (checksum != current_checksum) {
-				return MUTT_INVALID_CHECKSUM;
+				return MUTT_INVALID_TABLE_RECORD_CHECKSUM;
 			}
 
 			return MUTT_SUCCESS;
@@ -1637,14 +1724,14 @@ mutt is developed primarily off of these sources of documentation:
 			// magicNumber
 			table += 12;
 			if (mu_rbe_uint32(table) != 0x5F0F3CF5) {
-				return MUTT_INVALID_MAGIC_NUMBER;
+				return MUTT_INVALID_HEAD_MAGIC_NUMBER;
 			}
 
 			// unitsPerEm
 			table += 6;
 			u16 = mu_rbe_uint16(table);
 			if (u16 < 16 || u16 > 16384) {
-				return MUTT_INVALID_UNITS_PER_EM;
+				return MUTT_INVALID_HEAD_UNITS_PER_EM;
 			}
 
 			// xMin / xMax
@@ -1662,7 +1749,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Comparison
 			if (max < min) { 
-				return MUTT_INVALID_X_MIN_MAX;
+				return MUTT_INVALID_HEAD_X_MIN_MAX;
 			}
 
 			// yMin / yMax
@@ -1679,26 +1766,26 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Comparison
 			if (max < min) { 
-				return MUTT_INVALID_Y_MIN_MAX;
+				return MUTT_INVALID_HEAD_Y_MIN_MAX;
 			}
 
 			// lowestRecPPEM
 			table += 4;
 			if (mu_rbe_uint16(table) == 0) {
-				return MUTT_INVALID_LOWEST_REC_PPEM;
+				return MUTT_INVALID_HEAD_LOWEST_REC_PPEM;
 			}
 
 			// indexToLocFormat
 			table += 4;
 			// (This check also rules out negative values :P)
 			if (mu_rbe_uint16(table) > 1) {
-				return MUTT_INVALID_INDEX_TO_LOC_FORMAT;
+				return MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT;
 			}
 
 			// glyphDataFormat
 			table += 2;
 			if (mu_rbe_uint16(table) != 0) {
-				return MUTT_INVALID_GLYPH_DATA_FORMAT;
+				return MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT;
 			}
 
 			return MUTT_SUCCESS;
@@ -1714,7 +1801,7 @@ mutt is developed primarily off of these sources of documentation:
 			table += 14;
 			u16 = mu_rbe_uint16(table);
 			if (u16 != 1 && u16 != 2) {
-				return MUTT_INVALID_MAX_ZONES;
+				return MUTT_INVALID_MAXP_MAX_ZONES;
 			}
 
 			return MUTT_SUCCESS;
@@ -1728,7 +1815,7 @@ mutt is developed primarily off of these sources of documentation:
 			// metricDataFormat
 			table += 32;
 			if (mu_rbe_uint16(table) != 0) {
-				return MUTT_INVALID_METRIC_DATA_FORMAT;
+				return MUTT_INVALID_HHEA_METRIC_DATA_FORMAT;
 			}
 
 			return MUTT_SUCCESS;
@@ -1815,6 +1902,212 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			return MUTT_SUCCESS;
+		}
+
+		MUDEF muttResult mu_truetype_check_cmap(muttInfo* info) {
+			muByte* table = &info->data[info->req.cmap.offset];
+			muByte* orig_table = table;
+			uint32_m table_length = info->req.cmap.length;
+
+			// numTables
+			if (table_length < 4) {
+				return MUTT_INVALID_CMAP_TABLE_LENGTH;
+			}
+
+			table += 2;
+			uint16_m num_tables = mu_rbe_uint16(table);
+			if (table_length < 4 + ((uint32_m)num_tables * 8)) {
+				return MUTT_INVALID_CMAP_TABLE_LENGTH;
+			}
+
+			// Loop through each encoding record
+			table += 2;
+			for (uint16_m t = 0; t < num_tables; t++) {
+				// subtableOffset
+				table += 4;
+				uint32_m subtable_offset = mu_rbe_uint32(table);
+				if (subtable_offset+8 >= table_length) {
+					return MUTT_INVALID_CMAP_TABLE_LENGTH;
+				}
+
+				// Get to the subtable
+				muByte* subtable = orig_table + subtable_offset;
+
+				// format
+				uint16_m format = mu_rbe_uint16(subtable);
+
+				// Skip formats we don't know about
+				switch (format) {
+					default: table += 4; continue; break;
+					case 0: case 2: case 4: case 6: case 8:
+					case 10: case 12: case 13: case 14: break;
+				}
+
+				// Length
+
+				uint32_m length;
+				if (format < 8) {
+					subtable += 2;
+					length = (uint32_m)mu_rbe_uint16(subtable);
+					subtable += 2;
+				} else if (format < 14) {
+					subtable += 4;
+					length = mu_rbe_uint32(subtable);
+					subtable += 4;
+				} else {
+					subtable += 2;
+					length = mu_rbe_uint32(subtable);
+					subtable += 4;
+				}
+
+				if (subtable_offset + length > table_length) {
+					return MUTT_INVALID_CMAP_TABLE_LENGTH;
+				}
+
+				// Verify table
+
+				muttResult res = MUTT_SUCCESS;
+				switch (format) {
+					case 0: res = mu_truetype_check_format0(info, subtable, length); break;
+					case 4: res = mu_truetype_check_format4(info, subtable, length); break;
+				}
+
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				table += 4;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+		MUDEF muttResult mu_truetype_check_format0(muttInfo* info, muByte* table, uint16_m length) {
+			if (length != 262) {
+				return MUTT_INVALID_CMAP_F0_TABLE_LENGTH;
+			}
+
+			// Loop through each element in glyphIdArray
+			table += 2;
+			for (uint16_m i = 0; i < 256; i++) {
+				// Make sure it's within the valid glyph value range
+				if (table[0] >= info->maxp_info.num_glyphs) {
+					return MUTT_INVALID_CMAP_F0_GLYPH_ID;
+				}
+
+				table += 1;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+		MUDEF muttResult mu_truetype_check_format4(muttInfo* info, muByte* table, uint16_m length) {
+			if (length < 16) {
+				return MUTT_INVALID_CMAP_F4_TABLE_LENGTH;
+			}
+			uint16_m u16;
+
+			// segCountX2
+			table += 2;
+			uint16_m seg_count_x2 = mu_rbe_uint16(table);
+			if (seg_count_x2 % 2 != 0) {
+				return MUTT_INVALID_CMAP_F4_SEG_COUNT;
+			}
+			uint16_m seg_count = seg_count_x2 / 2;
+
+			// glyphIdArray length calculations
+
+			uint16_m non_id_length = 16 + ((uint32_m)seg_count * 8);
+			if (length < non_id_length) {
+				return MUTT_INVALID_CMAP_F4_TABLE_LENGTH;
+			}
+
+			uint16_m glyph_id_array_len = length - non_id_length;
+			if (glyph_id_array_len % 2 != 0) {
+				return MUTT_INVALID_CMAP_F4_TABLE_LENGTH;
+			}
+			glyph_id_array_len /= 2;
+
+			// searchRange
+			table += 2;
+			uint16_m search_range = mu_rbe_uint16(table);
+			if (search_range % 2 != 0) {
+				return MUTT_INVALID_CMAP_F4_SEARCH_RANGE;
+			}
+			search_range /= 2;
+
+			if (!MUTT_IS_POW_OF_2(search_range) || search_range > seg_count || search_range*2 < seg_count) {
+				return MUTT_INVALID_CMAP_F4_SEARCH_RANGE;
+			}
+
+			// entrySelector
+			table += 2;
+			u16 = mu_rbe_uint16(table);
+
+			if (mu_pow(2, u16) != search_range) {
+				return MUTT_INVALID_CMAP_F4_ENTRY_SELECTOR;
+			}
+
+			// rangeShift
+			table += 2;
+			u16 = mu_rbe_uint16(table);
+
+			if (u16 != seg_count_x2-(search_range*2)) {
+				return MUTT_INVALID_CMAP_F4_RANGE_SHIFT;
+			}
+
+			// Segments
+			table += 2;
+
+			uint16_m prev_end_code;
+			for (uint16_m i = 0; i < seg_count; i++) {
+
+				// End code
+				uint16_m end_code = mu_rbe_uint16(table);
+
+				// Check for incremental end code
+				if (i != 0) {
+					if (end_code <= prev_end_code) {
+						return MUTT_INVALID_CMAP_F4_END_CODE;
+					}
+				}
+
+				// Start code
+				uint16_m start_code = mu_rbe_uint16((table+seg_count_x2+2));
+
+				// Check for valid startCode and endCode range
+				if (end_code < start_code) {
+					return MUTT_INVALID_CMAP_F4_START_CODE;
+				}
+
+				// Check for last 0xFFFF startCode and endCode value
+				if (i+1 >= seg_count && (start_code != 0xFFFF || end_code != 0xFFFF)) {
+					return MUTT_INVALID_CMAP_F4_END_CODE;
+				}
+
+				// idRangeOffset
+				uint16_m id_range_offset = mu_rbe_uint16((table+((uint32_m)seg_count*6)+2));
+				if (id_range_offset%2 != 0) {
+					// This technically isn't INVALID, but like... ???
+					return MUTT_INVALID_CMAP_F4_END_CODE;
+				}
+				id_range_offset /= 2;
+
+				if (id_range_offset != 0 && i+1 >= seg_count) {
+					// Make sure the offset will result in an index within glyphIdArray
+					if (id_range_offset < (seg_count-i)) {
+						return MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET;
+					}
+					if (id_range_offset - (seg_count-i) + (end_code-start_code) >= glyph_id_array_len) {
+						return MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET;
+					}
+				}
+
+				table += 2;
+				prev_end_code = end_code;
+			}
+
+			return MUTT_SUCCESS; if (info) {}
 		}
 
 	/* Get/Let info */
@@ -1932,6 +2225,13 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			res = mu_truetype_check_names(&data[info.req.name.offset], info.req.name.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_cmap(&info);
 			if (res != MUTT_SUCCESS) {
 				MU_SET_RESULT(result, res)
 				mu_truetype_let_info(&info);
@@ -2262,9 +2562,10 @@ mutt is developed primarily off of these sources of documentation:
 
 				if (id_range_offset != 0) {
 					uint16_m glyph_index = (segment/2) - format->seg_count + id_range_offset/2 + (character_code - start_code);
-					if (glyph_index >= format->glyph_id_length) {
+					// (Should already be checked for)
+					/*if (glyph_index >= format->glyph_id_length) {
 						return 0;
-					}
+					}*/
 
 					glyph_id = mu_rbe_uint16((&format->glyph_id_array[glyph_index*2]));
 					if (glyph_id == 0) {
