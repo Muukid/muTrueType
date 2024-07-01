@@ -146,6 +146,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_NAME_TABLE_LENGTH`: the recorded length of the name table was invalid.
 
+* `MUTT_INVALID_HHEA_TABLE_LENGTH`: the recorded length of the hhea table was invalid.
+
 * `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 
 * `MUTT_INVALID_NUM_TABLES`: the "numTables" value specified in "TableDirectory" was invalid.
@@ -178,7 +180,11 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_MAX_ZONES`: the "maxZones" value specified in the maxp table was invalid.
 
+* `MUTT_INVALID_METRIC_DATA_FORMAT`: the "metricDataFormat" value specified in the hhea table was invalid.
+
 * `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
+
+Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
 ## Result name function
 
@@ -232,6 +238,15 @@ The function `mu_truetype_check_maxp` checks if the maxp table provided by a Tru
 
 ```c
 MUDEF muttResult mu_truetype_check_maxp(muByte* table, uint32_m table_length);
+```
+
+
+## Hhea table check
+
+The function `mu_truetype_check_hhea` checks if the hhea table provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_hhea(muByte* table, uint32_m table_length);
 ```
 
 
@@ -881,7 +896,7 @@ The type `muttNameID` (`uint16_m`) is used to represent a name ID in TrueType. A
 
 * `MUTT_NAME_FULL_FONT_NAME`: ID 4 based on TrueType standards; "Full font name".
 
-* `MUTT_NAME_VERSION_STRING`: ID 5 based on TrueType standards; "Version string."
+* `MUTT_NAME_VERSION`: ID 5 based on TrueType standards; "Version string."
 
 * `MUTT_NAME_TRADEMARK`: ID 7 based on TrueType standards; "Trademark."
 

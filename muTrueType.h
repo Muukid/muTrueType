@@ -529,6 +529,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_MAXP_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the recorded length of the name table was invalid.
 			MUTT_INVALID_NAME_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of the hhea table was invalid.
+			MUTT_INVALID_HHEA_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 			MUTT_INVALID_SFNT_VERSION,
 			// @DOCLINE * `@NLFT`: the "numTables" value specified in "TableDirectory" was invalid.
@@ -561,9 +563,13 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_GLYPH_DATA_FORMAT,
 			// @DOCLINE * `@NLFT`: the "maxZones" value specified in the maxp table was invalid.
 			MUTT_INVALID_MAX_ZONES,
+			// @DOCLINE * `@NLFT`: the "metricDataFormat" value specified in the hhea table was invalid.
+			MUTT_INVALID_METRIC_DATA_FORMAT,
 			// @DOCLINE * `@NLFT`: a required table could not be located.
 			MUTT_MISSING_REQUIRED_TABLE,
 		)
+
+		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
 		// @DOCLINE ## Result name function
 
@@ -603,6 +609,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The function `mu_truetype_check_maxp` checks if the maxp table provided by a TrueType font is valid, defined below: @NLNT
 			MUDEF muttResult mu_truetype_check_maxp(muByte* table, uint32_m table_length);
+
+		// @DOCLINE ## Hhea table check
+
+			// @DOCLINE The function `mu_truetype_check_hhea` checks if the hhea table provided by a TrueType font is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_hhea(muByte* table, uint32_m table_length);
 
 		// @DOCLINE ## Name table check
 
@@ -920,8 +931,8 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_NAME_FONT_SUBFAMILY 2
 			// @DOCLINE * `MUTT_NAME_FULL_FONT_NAME`: ID 4 based on TrueType standards; "Full font name".
 			#define MUTT_NAME_FULL_FONT_NAME 4
-			// @DOCLINE * `MUTT_NAME_VERSION_STRING`: ID 5 based on TrueType standards; "Version string."
-			#define MUTT_NAME_VERSION_STRING 5
+			// @DOCLINE * `MUTT_NAME_VERSION`: ID 5 based on TrueType standards; "Version string."
+			#define MUTT_NAME_VERSION 5
 			// @DOCLINE * `MUTT_NAME_TRADEMARK`: ID 7 based on TrueType standards; "Trademark."
 			#define MUTT_NAME_TRADEMARK 7
 			// @DOCLINE * `MUTT_NAME_MANUFACTURER`: ID 8 based on TrueType standards; "Manufacturer Name."
@@ -1392,6 +1403,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_HEAD_TABLE_LENGTH: return "MUTT_INVALID_HEAD_TABLE_LENGTH"; break;
 				case MUTT_INVALID_MAXP_TABLE_LENGTH: return "MUTT_INVALID_MAXP_TABLE_LENGTH"; break;
 				case MUTT_INVALID_NAME_TABLE_LENGTH: return "MUTT_INVALID_NAME_TABLE_LENGTH"; break;
+				case MUTT_INVALID_HHEA_TABLE_LENGTH: return "MUTT_INVALID_HHEA_TABLE_LENGTH"; break;
 				case MUTT_INVALID_SFNT_VERSION: return "MUTT_INVALID_SFNT_VERSION"; break;
 				case MUTT_INVALID_NUM_TABLES: return "MUTT_INVALID_NUM_TABLES"; break;
 				case MUTT_INVALID_SEARCH_RANGE: return "MUTT_INVALID_SEARCH_RANGE"; break;
@@ -1408,6 +1420,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_INDEX_TO_LOC_FORMAT"; break;
 				case MUTT_INVALID_GLYPH_DATA_FORMAT: return "MUTT_INVALID_GLYPH_DATA_FORMAT"; break;
 				case MUTT_INVALID_MAX_ZONES: return "MUTT_INVALID_MAX_ZONES"; break;
+				case MUTT_INVALID_METRIC_DATA_FORMAT: return "MUTT_INVALID_METRIC_DATA_FORMAT"; break;
 				case MUTT_MISSING_REQUIRED_TABLE: return "MUTT_MISSING_REQUIRED_TABLE"; break;
 			}
 		}
@@ -1419,7 +1432,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_NAME_FONT_FAMILY: return "MUTT_NAME_FONT_FAMILY"; break;
 				case MUTT_NAME_FONT_SUBFAMILY: return "MUTT_NAME_FONT_SUBFAMILY"; break;
 				case MUTT_NAME_FULL_FONT_NAME: return "MUTT_NAME_FULL_FONT_NAME"; break;
-				case MUTT_NAME_VERSION_STRING: return "MUTT_NAME_VERSION_STRING"; break;
+				case MUTT_NAME_VERSION: return "MUTT_NAME_VERSION"; break;
 				case MUTT_NAME_TRADEMARK: return "MUTT_NAME_TRADEMARK"; break;
 				case MUTT_NAME_MANUFACTURER: return "MUTT_NAME_MANUFACTURER"; break;
 				case MUTT_NAME_DESIGNER: return "MUTT_NAME_DESIGNER"; break;
@@ -1440,7 +1453,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_NAME_FONT_FAMILY: return "Font family name"; break;
 				case MUTT_NAME_FONT_SUBFAMILY: return "Font subfamily name"; break;
 				case MUTT_NAME_FULL_FONT_NAME: return "Full font name"; break;
-				case MUTT_NAME_VERSION_STRING: return "Version string"; break;
+				case MUTT_NAME_VERSION: return "Version"; break;
 				case MUTT_NAME_TRADEMARK: return "Trademark"; break;
 				case MUTT_NAME_MANUFACTURER: return "Manufacturer name"; break;
 				case MUTT_NAME_DESIGNER: return "Designer"; break;
@@ -1707,6 +1720,20 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+		MUDEF muttResult mu_truetype_check_hhea(muByte* table, uint32_m table_length) {
+			if (table_length != 36) {
+				return MUTT_INVALID_HHEA_TABLE_LENGTH;
+			}
+
+			// metricDataFormat
+			table += 32;
+			if (mu_rbe_uint16(table) != 0) {
+				return MUTT_INVALID_METRIC_DATA_FORMAT;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
 		MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length) {
 			if (table_length < 6) {
 				return MUTT_INVALID_NAME_TABLE_LENGTH;
@@ -1891,6 +1918,13 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			res = mu_truetype_check_maxp(&data[info.req.maxp.offset], info.req.maxp.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_hhea(&data[info.req.hhea.offset], info.req.hhea.length);
 			if (res != MUTT_SUCCESS) {
 				MU_SET_RESULT(result, res)
 				mu_truetype_let_info(&info);
