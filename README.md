@@ -140,7 +140,11 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_UNEXPECTED_EOF`: the file unexpectedly ended; this means that rather the file is corrupt, or an out-of-range index or length was given by it.
 
-* `MUTT_UNEXPECTED_END_OF_TABLE`: the table unexpectedly ended; this means that rather the file is corrupt (unlikely if a checksum check has been performed), or an invalid value has been written to a table.
+* `MUTT_INVALID_HEAD_TABLE_LENGTH`: the recorded length of the head table was invalid.
+
+* `MUTT_INVALID_MAXP_TABLE_LENGTH`: the recorded length of the maxp table was invalid.
+
+* `MUTT_INVALID_NAME_TABLE_LENGTH`: the recorded length of the name table was invalid.
 
 * `MUTT_INVALID_SFNT_VERSION`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 
@@ -172,6 +176,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_GLYPH_DATA_FORMAT`: the "glyphDataFormat" value specified in the head table was invalid.
 
+* `MUTT_INVALID_MAX_ZONES`: the "maxZones" value specified in the maxp table was invalid.
+
 * `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
 
 ## Result name function
@@ -189,7 +195,7 @@ This function returns `"MUTT_UNKNOWN"` if a respective name could not be found.
 
 # Check
 
-mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
+mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`.
 
 Note that checks are not performed on tables that mutt does not have support for in its API.
 
@@ -217,6 +223,15 @@ The function `mu_truetype_check_head` checks if the head table provided by a Tru
 
 ```c
 MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length);
+```
+
+
+## Maxp table check
+
+The function `mu_truetype_check_maxp` checks if the maxp table provided by a TrueType font is valid, defined below: 
+
+```c
+MUDEF muttResult mu_truetype_check_maxp(muByte* table, uint32_m table_length);
 ```
 
 
@@ -753,17 +768,6 @@ MUDEF void mu_truetype_let_info(muttInfo* info);
 
 
 This function must be called on every successfully created `muttInfo` struct.
-
-## Retrieve TrueType information with no checks
-
-The function `mu_truetype_get_info_no_checks` retrieves information about TrueType data and doesn't perform checks on it, defined below: 
-
-```c
-MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size);
-```
-
-
-This function performs identically to `mu_truetype_get_info`, except no checks are performed on the data.
 
 # Table retrieval
 

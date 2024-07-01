@@ -523,8 +523,12 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_SUCCESS,
 			// @DOCLINE * `@NLFT`: the file unexpectedly ended; this means that rather the file is corrupt, or an out-of-range index or length was given by it.
 			MUTT_UNEXPECTED_EOF,
-			// @DOCLINE * `@NLFT`: the table unexpectedly ended; this means that rather the file is corrupt (unlikely if a checksum check has been performed), or an invalid value has been written to a table.
-			MUTT_UNEXPECTED_END_OF_TABLE,
+			// @DOCLINE * `@NLFT`: the recorded length of the head table was invalid.
+			MUTT_INVALID_HEAD_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of the maxp table was invalid.
+			MUTT_INVALID_MAXP_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of the name table was invalid.
+			MUTT_INVALID_NAME_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in "TableDirectory" was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 			MUTT_INVALID_SFNT_VERSION,
 			// @DOCLINE * `@NLFT`: the "numTables" value specified in "TableDirectory" was invalid.
@@ -555,6 +559,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_INDEX_TO_LOC_FORMAT,
 			// @DOCLINE * `@NLFT`: the "glyphDataFormat" value specified in the head table was invalid.
 			MUTT_INVALID_GLYPH_DATA_FORMAT,
+			// @DOCLINE * `@NLFT`: the "maxZones" value specified in the maxp table was invalid.
+			MUTT_INVALID_MAX_ZONES,
 			// @DOCLINE * `@NLFT`: a required table could not be located.
 			MUTT_MISSING_REQUIRED_TABLE,
 		)
@@ -574,7 +580,7 @@ mutt is developed primarily off of these sources of documentation:
 
 	// @DOCLINE # Check
 
-		// @DOCLINE mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`; the unsafe equivalent that doesn't perform these checks is '`mu_truetype_get_info_no_checks`'.
+		// @DOCLINE mutt has a section of its API dedicated to checking if given TrueType data is not only valid but safe. This API is, on default, used by the loading function '`mu_truetype_get_info`', meaning that all of these functions are called by `mu_truetype_get_info`.
 
 		// @DOCLINE Note that checks are not performed on tables that mutt does not have support for in its API.
 
@@ -592,6 +598,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The function `mu_truetype_check_head` checks if the head table provided by a TrueType font is valid, defined below: @NLNT
 			MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length);
+
+		// @DOCLINE ## Maxp table check
+
+			// @DOCLINE The function `mu_truetype_check_maxp` checks if the maxp table provided by a TrueType font is valid, defined below: @NLNT
+			MUDEF muttResult mu_truetype_check_maxp(muByte* table, uint32_m table_length);
 
 		// @DOCLINE ## Name table check
 
@@ -803,13 +814,6 @@ mutt is developed primarily off of these sources of documentation:
 			MUDEF void mu_truetype_let_info(muttInfo* info);
 
 			// @DOCLINE This function must be called on every successfully created `muttInfo` struct.
-
-		// @DOCLINE ## Retrieve TrueType information with no checks
-
-			// @DOCLINE The function `mu_truetype_get_info_no_checks` retrieves information about TrueType data and doesn't perform checks on it, defined below: @NLNT
-			MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size);
-
-			// @DOCLINE This function performs identically to `mu_truetype_get_info`, except no checks are performed on the data.
 
 	// @DOCLINE # Table retrieval
 
@@ -1385,7 +1389,9 @@ mutt is developed primarily off of these sources of documentation:
 				default: return "MUTT_UNKNOWN"; break;
 				case MUTT_SUCCESS: return "MUTT_SUCCESS"; break;
 				case MUTT_UNEXPECTED_EOF: return "MUTT_UNEXPECTED_EOF"; break;
-				case MUTT_UNEXPECTED_END_OF_TABLE: return "MUTT_UNEXPECTED_END_OF_TABLE"; break;
+				case MUTT_INVALID_HEAD_TABLE_LENGTH: return "MUTT_INVALID_HEAD_TABLE_LENGTH"; break;
+				case MUTT_INVALID_MAXP_TABLE_LENGTH: return "MUTT_INVALID_MAXP_TABLE_LENGTH"; break;
+				case MUTT_INVALID_NAME_TABLE_LENGTH: return "MUTT_INVALID_NAME_TABLE_LENGTH"; break;
 				case MUTT_INVALID_SFNT_VERSION: return "MUTT_INVALID_SFNT_VERSION"; break;
 				case MUTT_INVALID_NUM_TABLES: return "MUTT_INVALID_NUM_TABLES"; break;
 				case MUTT_INVALID_SEARCH_RANGE: return "MUTT_INVALID_SEARCH_RANGE"; break;
@@ -1401,6 +1407,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_LOWEST_REC_PPEM: return "MUTT_INVALID_LOWEST_REC_PPEM"; break;
 				case MUTT_INVALID_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_INDEX_TO_LOC_FORMAT"; break;
 				case MUTT_INVALID_GLYPH_DATA_FORMAT: return "MUTT_INVALID_GLYPH_DATA_FORMAT"; break;
+				case MUTT_INVALID_MAX_ZONES: return "MUTT_INVALID_MAX_ZONES"; break;
 				case MUTT_MISSING_REQUIRED_TABLE: return "MUTT_MISSING_REQUIRED_TABLE"; break;
 			}
 		}
@@ -1608,7 +1615,7 @@ mutt is developed primarily off of these sources of documentation:
 
 		MUDEF muttResult mu_truetype_check_head(muByte* table, uint32_m table_length) {
 			if (table_length != 54) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_HEAD_TABLE_LENGTH;
 			}
 
 			// We're not checking the checksum adjustment because of font collection files.
@@ -1684,9 +1691,25 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+		MUDEF muttResult mu_truetype_check_maxp(muByte* table, uint32_m table_length) {
+			if (table_length != 32) {
+				return MUTT_INVALID_MAXP_TABLE_LENGTH;
+			}
+			uint16_m u16;
+
+			// maxZones
+			table += 14;
+			u16 = mu_rbe_uint16(table);
+			if (u16 != 1 && u16 != 2) {
+				return MUTT_INVALID_MAX_ZONES;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
 		MUDEF muttResult mu_truetype_check_names(muByte* table, uint32_m table_length) {
 			if (table_length < 6) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_NAME_TABLE_LENGTH;
 			}
 
 			muByte* orig_name = table;
@@ -1703,14 +1726,14 @@ mutt is developed primarily off of these sources of documentation:
 			uint16_m storage_offset = mu_rbe_uint16(table);
 			table += 2;
 			if (storage_offset >= table_length) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_NAME_TABLE_LENGTH;
 			}
 
 			/* Name records */
 
 			// Check table record length
 			if ((table+(12*(uint32_m)count))-orig_name > table_length) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_NAME_TABLE_LENGTH;
 			}
 
 			// Loop through each record
@@ -1727,7 +1750,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Check if the values given are in range
 				if ((uint32_m)storage_offset+(uint32_m)string_offset+(uint32_m)length > table_length) {
-					return MUTT_UNEXPECTED_END_OF_TABLE;
+					return MUTT_INVALID_NAME_TABLE_LENGTH;
 				}
 			}
 
@@ -1736,7 +1759,7 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			if ((table-orig_name)+2 > table_length) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_NAME_TABLE_LENGTH;
 			}
 
 			// Lang tag count
@@ -1745,7 +1768,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Make sure lang tags are in range
 			if ((table+(4*(uint32_m)lang_tag_count))-orig_name > table_length) {
-				return MUTT_UNEXPECTED_END_OF_TABLE;
+				return MUTT_INVALID_NAME_TABLE_LENGTH;
 			}
 
 			// Loop through each lang tag
@@ -1760,7 +1783,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Check if the values given are in range
 				if ((uint32_m)storage_offset+(uint32_m)lang_tag_offset+(uint32_m)length > table_length) {
-					return MUTT_UNEXPECTED_END_OF_TABLE;
+					return MUTT_INVALID_NAME_TABLE_LENGTH;
 				}
 			}
 
@@ -1778,42 +1801,6 @@ mutt is developed primarily off of these sources of documentation:
 				return MU_ZERO_STRUCT(muttInfo);
 			}
 
-			muttInfo info = mu_truetype_get_info_no_checks(data, size);
-
-			// (Check if all required tables have been found)
-			if (info.req.cmap.offset == 0 ||
-				info.req.glyf.offset == 0 ||
-				info.req.head.offset == 0 ||
-				info.req.hhea.offset == 0 ||
-				info.req.hmtx.offset == 0 ||
-				info.req.loca.offset == 0 ||
-				info.req.maxp.offset == 0 ||
-				info.req.name.offset == 0 ||
-				info.req.post.offset == 0
-			) {
-				MU_SET_RESULT(result, MUTT_MISSING_REQUIRED_TABLE)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			res = mu_truetype_check_head(&data[info.req.head.offset], info.req.head.length);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			res = mu_truetype_check_names(&data[info.req.name.offset], info.req.name.length);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			return info;
-		}
-
-		MUDEF muttInfo mu_truetype_get_info_no_checks(muByte* data, size_m size) {
 			muttInfo info = MU_ZERO_STRUCT(muttInfo);
 
 			info.data = data;
@@ -1876,6 +1863,45 @@ mutt is developed primarily off of these sources of documentation:
 
 					p += 16;
 				}
+			}
+
+			// (Check if all required tables have been found)
+			if (info.req.cmap.offset == 0 ||
+				info.req.glyf.offset == 0 ||
+				info.req.head.offset == 0 ||
+				info.req.hhea.offset == 0 ||
+				info.req.hmtx.offset == 0 ||
+				info.req.loca.offset == 0 ||
+				info.req.maxp.offset == 0 ||
+				info.req.name.offset == 0 ||
+				info.req.post.offset == 0
+			) {
+				MU_SET_RESULT(result, MUTT_MISSING_REQUIRED_TABLE)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			/* Checks */
+
+			res = mu_truetype_check_head(&data[info.req.head.offset], info.req.head.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_maxp(&data[info.req.maxp.offset], info.req.maxp.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_names(&data[info.req.name.offset], info.req.name.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
 			}
 
 			/* Head info */
