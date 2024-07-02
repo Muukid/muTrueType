@@ -182,6 +182,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_CMAP_F4_TABLE_LENGTH`: the recorded length of a format 4-cmap subtable was invalid.
 
+* `MUTT_INVALID_CMAP_F12_TABLE_LENGTH`: the recorded length of a format 12-cmap subtable was invalid.
+
 * `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION`: the "sfntVersion" value specified in the table directory was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 
 * `MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES`: the "numTables" value specified in the table directory was invalid.
@@ -231,6 +233,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_INVALID_CMAP_F4_START_CODE`: a value in the "startCode" array specified in a format 4-cmap subtable was invalid.
 
 * `MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET`: a value in the "idRangeOffset" array specified in a format 4-cmap subtable was invalid, AKA gave a value outside of the array "glyphIdArray".
+
+* `MUTT_INVALID_CMAP_F4_ID_DELTA`: a value in the "idDelta" array specified in a format 4-cmap subtable was invalid, AKA resulted in a non-existent glyph id.
 
 * `MUTT_MISSING_REQUIRED_TABLE`: a required table could not be located.
 
@@ -1257,6 +1261,8 @@ uint16_m glyph_id_length;
 ```
 
 
+Note that `id_delta` is incorrectly defined in Apple's TrueType reference manual as being an unsigned 16-bit array; it is a signed 16-bit array.
+
 #### Get format 4 information
 
 The function `mu_truetype_get_format_4` is used to get information about a format 4 cmap subtable, defined below: 
@@ -1273,7 +1279,7 @@ MUDEF void mu_truetype_get_format_4(muByte* subtable, muttFormat4* format);
 The function `mu_truetype_get_glyph_format_4` returns a glyph ID from a format 4 cmap subtable, defined below: 
 
 ```c
-MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint32_m character_code);
+MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint16_m character_code);
 ```
 
 
@@ -1598,9 +1604,9 @@ MUDEF void mu_truetype_get_composite_instructions(muttCompositeRecord* last_reco
 
 `last_record` is the last composite record specified in the entire glyph. It must be the last record because the data for the instructions is only stored after the last composite record.
 
-# Miscellaneous macro functions
+# Miscellaneous inner utility functions
 
-The following macro functions are miscellaneous macro functions used for reading values from a TrueType file:
+The following functions are miscellaneous functions used for reading values from a TrueType file.
 
 ## F2DOT14 reading
 
@@ -1608,6 +1614,15 @@ The macro function "MUTT_F2DOT14" creates an expression for a float equivalent o
 
 ```c
 #define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
+```
+
+
+## idDelta logic
+
+The logic behind adding an idDelta value to a glyph id retrieved in certain cmap formats can be confusing; the function `mu_truetype_id_delta` calculates this, defined below: 
+
+```c
+MUDEF uint16_m mu_truetype_id_delta(uint16_m character_code, int16_m delta);
 ```
 
 

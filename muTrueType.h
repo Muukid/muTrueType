@@ -565,6 +565,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_CMAP_F0_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the recorded length of a format 4-cmap subtable was invalid.
 			MUTT_INVALID_CMAP_F4_TABLE_LENGTH,
+			// @DOCLINE * `@NLFT`: the recorded length of a format 12-cmap subtable was invalid.
+			MUTT_INVALID_CMAP_F12_TABLE_LENGTH,
 			// @DOCLINE * `@NLFT`: the "sfntVersion" value specified in the table directory was invalid. Because this is the first value read, if this error occurs, it is likely that the data given is not TrueType data (this error gets triggered if the file is OpenType as well).
 			MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION,
 			// @DOCLINE * `@NLFT`: the "numTables" value specified in the table directory was invalid.
@@ -615,6 +617,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_CMAP_F4_START_CODE,
 			// @DOCLINE * `@NLFT`: a value in the "idRangeOffset" array specified in a format 4-cmap subtable was invalid, AKA gave a value outside of the array "glyphIdArray".
 			MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET,
+			// @DOCLINE * `@NLFT`: a value in the "idDelta" array specified in a format 4-cmap subtable was invalid, AKA resulted in a non-existent glyph id.
+			MUTT_INVALID_CMAP_F4_ID_DELTA,
 			// @DOCLINE * `@NLFT`: a required table could not be located.
 			MUTT_MISSING_REQUIRED_TABLE,
 		)
@@ -1175,6 +1179,8 @@ mutt is developed primarily off of these sources of documentation:
 				};
 				typedef struct muttFormat4 muttFormat4;
 
+				// @DOCLINE Note that `id_delta` is incorrectly defined in Apple's TrueType reference manual as being an unsigned 16-bit array; it is a signed 16-bit array.
+
 				// @DOCLINE #### Get format 4 information
 
 				// @DOCLINE The function `mu_truetype_get_format_4` is used to get information about a format 4 cmap subtable, defined below: @NLNT
@@ -1185,7 +1191,7 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE #### Get glyph from format 4
 
 				// @DOCLINE The function `mu_truetype_get_glyph_format_4` returns a glyph ID from a format 4 cmap subtable, defined below: @NLNT
-				MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint32_m character_code);
+				MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint16_m character_code);
 
 				// @DOCLINE `character_code` is a valid character code in regards to the respective encoding record's platform & encoding ID.
 
@@ -1408,15 +1414,20 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE `last_record` is the last composite record specified in the entire glyph. It must be the last record because the data for the instructions is only stored after the last composite record.
 
-	// @DOCLINE # Miscellaneous macro functions
+	// @DOCLINE # Miscellaneous inner utility functions
 
-		// @DOCLINE The following macro functions are miscellaneous macro functions used for reading values from a TrueType file:
+		// @DOCLINE The following functions are miscellaneous functions used for reading values from a TrueType file.
 
 		// @DOCLINE ## F2DOT14 reading
 
 			// @DOCLINE The macro function "MUTT_F2DOT14" creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: @NLNT
 			#define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
 			//                                            ^ 0 or 1?
+
+		// @DOCLINE ## idDelta logic
+
+			// @DOCLINE The logic behind adding an idDelta value to a glyph id retrieved in certain cmap formats can be confusing; the function `mu_truetype_id_delta` calculates this, defined below: @NLNT
+			MUDEF uint16_m mu_truetype_id_delta(uint16_m character_code, int16_m delta);
 
 	// @DOCLINE # Version macro
 
@@ -1482,6 +1493,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_CMAP_TABLE_LENGTH: return "MUTT_INVALID_CMAP_TABLE_LENGTH"; break;
 				case MUTT_INVALID_CMAP_F0_TABLE_LENGTH: return "MUTT_INVALID_CMAP_F0_TABLE_LENGTH"; break;
 				case MUTT_INVALID_CMAP_F4_TABLE_LENGTH: return "MUTT_INVALID_CMAP_F4_TABLE_LENGTH"; break;
+				case MUTT_INVALID_CMAP_F12_TABLE_LENGTH: return "MUTT_INVALID_CMAP_F12_TABLE_LENGTH"; break;
 				case MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION: return "MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION"; break;
 				case MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES: return "MUTT_INVALID_TABLE_DIRECTORY_NUM_TABLES"; break;
 				case MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE: return "MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE"; break;
@@ -1507,6 +1519,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_CMAP_F4_END_CODE: return "MUTT_INVALID_CMAP_F4_END_CODE"; break;
 				case MUTT_INVALID_CMAP_F4_START_CODE: return "MUTT_INVALID_CMAP_F4_START_CODE"; break;
 				case MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET: return "MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET"; break;
+				case MUTT_INVALID_CMAP_F4_ID_DELTA: return "MUTT_INVALID_CMAP_F4_ID_DELTA"; break;
 				case MUTT_MISSING_REQUIRED_TABLE: return "MUTT_MISSING_REQUIRED_TABLE"; break;
 			}
 		}
@@ -1936,7 +1949,7 @@ mutt is developed primarily off of these sources of documentation:
 				// format
 				uint16_m format = mu_rbe_uint16(subtable);
 
-				// Skip formats we don't know about
+				// Skip unspecified formats
 				switch (format) {
 					default: table += 4; continue; break;
 					case 0: case 2: case 4: case 6: case 8:
@@ -2085,15 +2098,20 @@ mutt is developed primarily off of these sources of documentation:
 					return MUTT_INVALID_CMAP_F4_END_CODE;
 				}
 
+				// idDelta (tested later)
+				u16 = mu_rbe_uint16((table+(seg_count*4)+2));
+				int16_m id_delta = *(int16_m*)&u16;
+
 				// idRangeOffset
-				uint16_m id_range_offset = mu_rbe_uint16((table+((uint32_m)seg_count*6)+2));
+				muByte* pid_range_offset = table+(seg_count*6)+2;
+				uint16_m id_range_offset = mu_rbe_uint16(pid_range_offset);
 				if (id_range_offset%2 != 0) {
 					// This technically isn't INVALID, but like... ???
 					return MUTT_INVALID_CMAP_F4_END_CODE;
 				}
 				id_range_offset /= 2;
 
-				if (id_range_offset != 0 && i+1 >= seg_count) {
+				if (id_range_offset != 0 && i+1 < seg_count) {
 					// Make sure the offset will result in an index within glyphIdArray
 					if (id_range_offset < (seg_count-i)) {
 						return MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET;
@@ -2101,14 +2119,47 @@ mutt is developed primarily off of these sources of documentation:
 					if (id_range_offset - (seg_count-i) + (end_code-start_code) >= glyph_id_array_len) {
 						return MUTT_INVALID_CMAP_F4_ID_RANGE_OFFSET;
 					}
+
+					// Verify possible glyph IDs
+
+					muByte* pstart_c = pid_range_offset + (id_range_offset*2);
+					uint16_m code_count = (end_code-start_code)+1;
+					
+					for (uint16_m c = 0; c < code_count; c++) {
+						uint16_m glyph_id = mu_rbe_uint16(pstart_c);
+
+						if (glyph_id != 0) {
+							glyph_id = mu_truetype_id_delta(glyph_id, id_delta);
+							if (glyph_id >= info->maxp_info.num_glyphs) {
+								return MUTT_INVALID_CMAP_F4_ID_DELTA;
+							}
+						}
+
+						pstart_c += 2;
+					}
+				} else {
+					// Verify max possible glyph ID
+
+					uint16_m max_glyph_id = mu_truetype_id_delta(end_code, id_delta);
+					if (max_glyph_id >= info->maxp_info.num_glyphs) {
+						return MUTT_INVALID_CMAP_F4_ID_DELTA;
+					}
 				}
 
 				table += 2;
 				prev_end_code = end_code;
 			}
 
-			return MUTT_SUCCESS; if (info) {}
+			return MUTT_SUCCESS;
 		}
+
+		/*MUDEF muttResult mu_truetype_check_format12(muttInfo* info, muByte* table, uint16_m length) {
+			if (length < 16) {
+				return MUTT_INVALID_CMAP_F12_TABLE_LENGTH;
+			}
+
+			return MUTT_SUCCESS;
+		}*/
 
 	/* Get/Let info */
 
@@ -2210,34 +2261,6 @@ mutt is developed primarily off of these sources of documentation:
 				return MU_ZERO_STRUCT(muttInfo);
 			}
 
-			res = mu_truetype_check_maxp(&data[info.req.maxp.offset], info.req.maxp.length);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			res = mu_truetype_check_hhea(&data[info.req.hhea.offset], info.req.hhea.length);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			res = mu_truetype_check_names(&data[info.req.name.offset], info.req.name.length);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
-			res = mu_truetype_check_cmap(&info);
-			if (res != MUTT_SUCCESS) {
-				MU_SET_RESULT(result, res)
-				mu_truetype_let_info(&info);
-				return MU_ZERO_STRUCT(muttInfo);
-			}
-
 			/* Head info */
 			{
 				muByte* head = &data[info.req.head.offset];
@@ -2286,6 +2309,13 @@ mutt is developed primarily off of these sources of documentation:
 				u16 = mu_rbe_uint16((&head[52])); info.head_info.glyph_data_format = *(int16_m*)&u16;
 			}
 
+			res = mu_truetype_check_maxp(&data[info.req.maxp.offset], info.req.maxp.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
 			/* Maxp info */
 			{
 				muByte* maxp = &data[info.req.maxp.offset];
@@ -2325,6 +2355,13 @@ mutt is developed primarily off of these sources of documentation:
 				info.maxp_info.max_component_depth = mu_rbe_uint16((&maxp[30]));
 			}
 
+			res = mu_truetype_check_hhea(&data[info.req.hhea.offset], info.req.hhea.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
 			/* Hhea info */
 			{
 				muByte* hhea = &data[info.req.hhea.offset];
@@ -2360,6 +2397,20 @@ mutt is developed primarily off of these sources of documentation:
 				u16 = mu_rbe_uint16((&hhea[22])); info.hhea_info.caret_offset = *(int16_m*)&u16;
 				u16 = mu_rbe_uint16((&hhea[32])); info.hhea_info.metric_data_format = *(int16_m*)&u16;
 				info.hhea_info.number_of_hmetrics = mu_rbe_uint16((&hhea[34]));
+			}
+
+			res = mu_truetype_check_names(&data[info.req.name.offset], info.req.name.length);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
+			}
+
+			res = mu_truetype_check_cmap(&info);
+			if (res != MUTT_SUCCESS) {
+				MU_SET_RESULT(result, res)
+				mu_truetype_let_info(&info);
+				return MU_ZERO_STRUCT(muttInfo);
 			}
 
 			return info;
@@ -2536,54 +2587,51 @@ mutt is developed primarily off of these sources of documentation:
 				format->glyph_id_length = format->length - (16+(4*format->seg_count_x2));
 			}
 
-			MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint32_m character_code) {
-				// Find segment ID which "character_code" is located in
-				// Note: segment is always x2
-				uint16_m segment = 0;
-				uint16_m start_code;
-				muBool found = MU_FALSE;
-				for (; segment < format->seg_count; segment += 2) {
-					start_code = mu_rbe_uint16((&format->start_code[segment]));
-					uint16_m end_code = mu_rbe_uint16((&format->end_code[segment]));
-					if (character_code >= start_code && character_code <= end_code) {
-						found = MU_TRUE;
-						break;
+			MUDEF muttGlyphID mu_truetype_get_glyph_format_4(muttFormat4* format, uint16_m character_code) {
+				// Go through each segment:
+				for (uint16_m seg = 0; seg < format->seg_count; seg++) {
+					// Calculate start and end values
+					uint16_m seg_offset = (uint16_m)(seg*2);
+					uint16_m start = mu_rbe_uint16((format->start_code+seg_offset));
+					uint16_m end = mu_rbe_uint16((format->end_code+seg_offset));
+
+					// I thought that we could exit early, but although endCode is defined as being
+					// incremental, startCode isn't. :L
+
+					// See if the code lies within the range
+					if (character_code >= start && character_code <= end) {
+						// Get idRangeOffset and delta
+						uint16_m range_offset = mu_rbe_uint16((format->id_range_offset+seg_offset));
+						uint16_m u16 = mu_rbe_uint16((format->id_delta+seg_offset));
+						int16_m delta = *(int16_m*)&u16;
+
+						// If range offset is 0, delta logic and we're done
+						if (range_offset == 0) {
+							return mu_truetype_id_delta(character_code, delta);
+						}
+
+						// Offset into glyphIdArray, in bytes (in effect by the *2 at the end;
+						// inside parentheses is calculated like glyphIdArray[...])
+						uint16_m id = mu_rbe_uint16((&format->glyph_id_array[(uint16_m)(
+							// Range offset (divided by 2 to compensate for glyphIdArray[...])
+							(range_offset/2)
+							// Compensate for range offset being relative to &rangeOffset[i]:
+							- (format->seg_count-seg)
+							// Offset character index relative to range
+							+ (character_code - start)
+						)*2]));
+
+						// Return 0 if it's 0; no delta logic
+						if (id == 0) {
+							return 0;
+						}
+
+						// Return delta logic
+						return mu_truetype_id_delta(id, delta);
 					}
 				}
 
-				if (!found) {
-					return 0;
-				}
-
-				uint16_m id_range_offset = mu_rbe_uint16((&format->id_range_offset[segment]));
-				uint16_m u16 = mu_rbe_uint16((&format->id_delta[segment]));
-				int16_m delta_id = *(int16_m*)&u16;
-				uint16_m glyph_id;
-
-				if (id_range_offset != 0) {
-					uint16_m glyph_index = (segment/2) - format->seg_count + id_range_offset/2 + (character_code - start_code);
-					// (Should already be checked for)
-					/*if (glyph_index >= format->glyph_id_length) {
-						return 0;
-					}*/
-
-					glyph_id = mu_rbe_uint16((&format->glyph_id_array[glyph_index*2]));
-					if (glyph_id == 0) {
-						return 0;
-					}
-
-					// ? (confirm that this works and is good)
-					if (delta_id < 0 && -delta_id > glyph_id) {
-						glyph_id = glyph_id - delta_id;
-					} else {
-						glyph_id += delta_id;
-					}
-				} else {
-					// ? (confirm that this works and is good)
-					glyph_id = (uint16_m)((int32_m)delta_id + (int32_m)character_code);
-				}
-
-				return glyph_id;
+				return 0;
 			}
 
 	/* Glyf table */
@@ -2827,6 +2875,20 @@ mutt is developed primarily off of these sources of documentation:
 		MUDEF void mu_truetype_get_composite_instructions(muttCompositeRecord* last_record, muttCompositeInstructions* instructions) {
 			instructions->num_instr = mu_rbe_uint16(last_record->next);
 			instructions->instr = &last_record->next[2];
+		}
+
+	/* Misc. */
+
+		MUDEF uint16_m mu_truetype_id_delta(uint16_m character_code, int16_m delta) {
+			if (delta == 0) {
+				return character_code;
+			}
+
+			int32_m big_id = (int32_m)(character_code + delta) % 65536;
+			if (big_id < 0) {
+				big_id += 65536;
+			}
+			return (uint16_m)big_id;
 		}
 
 	#ifdef __cplusplus
