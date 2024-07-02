@@ -55,6 +55,7 @@ int main(void) {
 
 /* Load font */
 
+{
 	// Open file in binary
 
 	FILE* fptr = fopen("font.ttf", "rb");
@@ -95,44 +96,76 @@ int main(void) {
 		printf("mutt_load returned %s\n", mutt_result_get_name(result));
 		return -1;
 	}
+}
 
 /* Print table directory info */
 
-	{
-		printf("== Table directory ==\n");
+{
+	printf("== Table directory ==\n");
 
-		// Print fixed variables
+	// Print fixed variables
 
-		printf("numTables: %" PRIu16 "\n", font.directory->num_tables);
-		printf("searchRange: %" PRIu16 "\n", font.directory->search_range);
-		printf("entrySelector: %" PRIu16 "\n", font.directory->entry_selector);
-		printf("range_shift: %" PRIu16 "\n", font.directory->range_shift);
+	printf("numTables: %" PRIu16 "\n",     font.directory->num_tables);
+	printf("searchRange: %" PRIu16 "\n",   font.directory->search_range);
+	printf("entrySelector: %" PRIu16 "\n", font.directory->entry_selector);
+	printf("range_shift: %" PRIu16 "\n",   font.directory->range_shift);
 
-		// Print all table records
+	// Print all table records
 
-		for (uint16_m i = 0; i < font.directory->num_tables; i++) {
-			muttTableRecord* record = &font.directory->table_records[i];
+	for (uint16_m i = 0; i < font.directory->num_tables; i++) {
+		muttTableRecord* record = &font.directory->table_records[i];
 
-			// (tableTag)
-			printf("[%c%c%c%c] - ", 
-				record->table_tag[0], record->table_tag[1], record->table_tag[2], record->table_tag[3]
-			);
+		// (tableTag)
+		printf("[%c%c%c%c] - ", 
+			record->table_tag[0], record->table_tag[1], record->table_tag[2], record->table_tag[3]
+		);
 
-			printf("checksum=%" PRIu32 ", ", record->checksum);
-			printf("offset=%" PRIu32 " bytes, ", record->offset);
-			printf("length=%" PRIu32 " bytes\n", record->length);
-		}
-
-		printf("\n");
+		printf("checksum=%" PRIu32 ", ",     record->checksum);
+		printf("offset=%" PRIu32 " bytes, ", record->offset);
+		printf("length=%" PRIu32 " bytes\n", record->length);
 	}
+
+	printf("\n");
+}
+
+/* Print maxp info */
+
+printf("== Maxp ==\n");
+
+if (font.maxp)
+{
+	printf("version: %" PRIu16 ".%" PRIu16 "\n",   font.maxp->version_high, font.maxp->version_low);
+	printf("numGlyphs: %" PRIu16 "\n",             font.maxp->num_glyphs);
+	printf("maxPoints: %" PRIu16 "\n",             font.maxp->max_points);
+	printf("maxContours: %" PRIu16 "\n",           font.maxp->max_contours);
+	printf("maxCompositePoints: %" PRIu16 "\n",    font.maxp->max_composite_points);
+	printf("maxCompositeContours: %" PRIu16 "\n",  font.maxp->max_composite_contours);
+	printf("maxZones: %" PRIu16 "\n",              font.maxp->max_zones);
+	printf("maxTwilightPoints: %" PRIu16 "\n",     font.maxp->max_twilight_points);
+	printf("maxStorage: %" PRIu16 "\n",            font.maxp->max_storage);
+	printf("maxFunctionDefs: %" PRIu16 "\n",       font.maxp->max_function_defs);
+	printf("maxInstructionDefs: %" PRIu16 "\n",    font.maxp->max_instruction_defs);
+	printf("maxStackElements: %" PRIu16 "\n",      font.maxp->max_stack_elements);
+	printf("maxSizeOfInstructions: %" PRIu16 "\n", font.maxp->max_size_of_instructions);
+	printf("maxComponentElements: %" PRIu16 "\n",  font.maxp->max_component_elements);
+	printf("maxComponentDepth: %" PRIu16 "\n",     font.maxp->max_component_depth);
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.maxp_res));
+}
+
+printf("\n");
 
 /* Deload */
 
+{
 	// Deload font
 	mutt_deload(&font);
 
 	// Print success
 	printf("Successful\n");
+}
 
 	return 0;
 }

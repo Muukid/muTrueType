@@ -6,6 +6,8 @@ No warranty implied; use at your own risk.
 Licensed under MIT License or public domain, whichever you prefer.
 More explicit license information at the end of file.
 
+@TODO Throw errors for duplicate tags.
+
 @DOCBEGIN
 
 # muTrueType v1.0.0
@@ -429,6 +431,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_FAILED_MALLOC,
 			// @DOCLINE * `@NLFT`: a call to realloc failled; memory was insufficient to perform the operation.
 			MUTT_FAILED_REALLOC,
+			// @DOCLINE * `@NLFT`: the table could not be located within the data.
+			MUTT_UNFOUND_TABLE,
 			// @DOCLINE * `@NLFT`: the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
 			MUTT_INVALID_TABLE_DIRECTORY_LENGTH,
 			// @DOCLINE * `@NLFT`: the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
@@ -445,6 +449,12 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_TABLE_RECORD_LENGTH,
 			// @DOCLINE * `@NLFT`: the value for "checksum" in a table record was invalid.
 			MUTT_INVALID_TABLE_RECORD_CHECKSUM,
+			// @DOCLINE * `@NLFT`: the value for the table length of maxp was invalid.
+			MUTT_INVALID_MAXP_LENGTH,
+			// @DOCLINE * `@NLFT`: the value for "version" in the maxp table was invalid.
+			MUTT_INVALID_MAXP_VERSION,
+			// @DOCLINE * `@NLFT`: the value for "maxZones" in the maxp table was invalid.
+			MUTT_INVALID_MAX_ZONES,
 		)
 
 		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
@@ -467,6 +477,8 @@ mutt is developed primarily off of these sources of documentation:
 		typedef struct muttFont muttFont;
 
 		typedef struct muttDirectory muttDirectory;
+
+		typedef struct muttMaxp muttMaxp;
 
 		// @DOCLINE ## Loading and deloading functions
 
@@ -493,6 +505,9 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE * [0x00000001] `MUTT_LOAD_DIRECTORY` - load the directory and permanently store the results. The directory is loaded no matter what, but this bit ensures that the directory data isn't wiped after loading.
 				#define MUTT_LOAD_DIRECTORY 0x00000001
 
+				// @DOCLINE * [0x00000002] `MUTT_LOAD_MAXP` - load the maxp table.
+				#define MUTT_LOAD_MAXP 0x00000002
+
 			// @DOCLINE ### Group bit values
 
 				// @DOCLINE The following macros are defined for loading groups of tables:
@@ -514,8 +529,11 @@ mutt is developed primarily off of these sources of documentation:
 			struct muttFont {
 				// @DOCLINE * `directory`: a pointer to a directory listing all of the tables provided by the given font, defined below: @NLNT
 				muttDirectory* directory;
-				// @DOCLINE * `directory_res`: the result of loading the member `directory`, defined below: @NLNT
-				muttResult directory_res;
+
+				// @DOCLINE * `maxp`: a pointer to the maxp table, defined below: @NLNT
+				muttMaxp* maxp;
+				// @DOCLINE * `maxp_res`: the result of loading the member `maxp`, defined below: @NLNT
+				muttResult maxp_res;
 
 				// @DOCLINE * `mem`: the inner allocated memory used for holding necessary data, defined below: @NLNT
 				muByte* mem;
@@ -529,9 +547,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The contents of a pointer and result pair for information not included in the load flags are undefined.
 
-		// @DOCLINE ## The `muttDirectory` struct
+			// @DOCLINE Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
 
-			// @DOCLINE The struct `muttDirectory` is used to list all of the tables provided by a TrueType font. It is stored in the struct `muttFont`, and is similar to TrueType's table directory.
+		// @DOCLINE ## Directory information
+
+			// @DOCLINE The struct `muttDirectory` is used to list all of the tables provided by a TrueType font. It is stored in the struct `muttFont` as `muttFont->directory`, and is similar to TrueType's table directory. It is loaded permanently with the flag `MUTT_LOAD_DIRECTORY`.
 
 			typedef struct muttTableRecord muttTableRecord;
 
@@ -560,6 +580,46 @@ mutt is developed primarily off of these sources of documentation:
 				uint32_m offset;
 				// @DOCLINE * `length`: equivalent to "length" in the table record, defined below: @NLNT
 				uint32_m length;
+			};
+
+		// @DOCLINE ## Maxp information
+
+			// @DOCLINE The struct `muttMaxp` is used to represent the maxp table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->maxp`, and loaded with the flag `MUTT_LOAD_MAXP`.
+
+			// @DOCLINE Its members are:
+			struct muttMaxp {
+				// @DOCLINE * `version_high`: equivalent to the high bytes of "version" in the maxp table, defined below: @NLNT
+				uint16_m version_high;
+				// @DOCLINE * `version_low`: equivalent to the low bytes "version" in the maxp table, defined below: @NLNT
+				uint16_m version_low;
+				// @DOCLINE * `num_glyphs`: equivalent to "numGlyphs" in the maxp table, defined below: @NLNT
+				uint16_m num_glyphs;
+				// @DOCLINE * `max_points`: equivalent to "maxPoints" in the maxp table, defined below: @NLNT
+				uint16_m max_points;
+				// @DOCLINE * `max_contours`: equivalent to "maxContours" in the maxp table, defined below: @NLNT
+				uint16_m max_contours;
+				// @DOCLINE * max_composite_points`: equivalent to "maxCompositePoints" in the maxp table, defined below: @NLNT
+				uint16_m max_composite_points;
+				// @DOCLINE * `max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table, defined below: @NLNT
+				uint16_m max_composite_contours;
+				// @DOCLINE * `max_zones`: equivalent to "maxZones" in the maxp table, defined below: @NLNT
+				uint16_m max_zones;
+				// @DOCLINE * `max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table, defined below: @NLNT
+				uint16_m max_twilight_points;
+				// @DOCLINE * `max_storage`: equivalent to "maxStorage" in the maxp table, defined below: @NLNT
+				uint16_m max_storage;
+				// @DOCLINE * `max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table, defined below: @NLNT
+				uint16_m max_function_defs;
+				// @DOCLINE * `max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table, defined below: @NLNT
+				uint16_m max_instruction_defs;
+				// @DOCLINE * `max_stack_elements`: equivalent to "maxStackElements" in the maxp table, defined below: @NLNT
+				uint16_m max_stack_elements;
+				// @DOCLINE * `max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table, defined below: @NLNT
+				uint16_m max_size_of_instructions;
+				// @DOCLINE * `max_component_elements`: equivalent to "maxComponentElements" in the maxp table, defined below: @NLNT
+				uint16_m max_component_elements;
+				// @DOCLINE * `max_component_depth`: equivalent to "maxComponentDepth" in the maxp table, defined below: @NLNT
+				uint16_m max_component_depth;
 			};
 
 	// @DOCLINE ## C standard library dependencies
@@ -628,6 +688,7 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_SUCCESS: return "MUTT_SUCCESS"; break;
 			case MUTT_FAILED_MALLOC: return "MUTT_FAILED_MALLOC"; break;
 			case MUTT_FAILED_REALLOC: return "MUTT_FAILED_REALLOC"; break;
+			case MUTT_UNFOUND_TABLE: return "MUTT_UNFOUND_TABLE"; break;
 			case MUTT_INVALID_TABLE_DIRECTORY_LENGTH: return "MUTT_INVALID_TABLE_DIRECTORY_LENGTH"; break;
 			case MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION: return "MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION"; break;
 			case MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE: return "MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE"; break;
@@ -636,6 +697,9 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_TABLE_RECORD_OFFSET: return "MUTT_INVALID_TABLE_RECORD_OFFSET"; break;
 			case MUTT_INVALID_TABLE_RECORD_LENGTH: return "MUTT_INVALID_TABLE_RECORD_LENGTH"; break;
 			case MUTT_INVALID_TABLE_RECORD_CHECKSUM: return "MUTT_INVALID_TABLE_RECORD_CHECKSUM"; break;
+			case MUTT_INVALID_MAXP_LENGTH: return "MUTT_INVALID_MAXP_LENGTH"; break;
+			case MUTT_INVALID_MAXP_VERSION: return "MUTT_INVALID_MAXP_VERSION"; break;
+			case MUTT_INVALID_MAX_ZONES: return "MUTT_INVALID_MAX_ZONES"; break;
 		}
 	}
 
@@ -843,6 +907,89 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+	/* Maxp */
+
+		muttResult mutt_load_maxp(muttMaxp* maxp, muByte* data, uint32_m length) {
+			// Ensure length
+			if (length < 32) {
+				return MUTT_INVALID_MAXP_LENGTH;
+			}
+
+			// Version high
+			maxp->version_high = mu_rbe_uint16(data);
+			if (maxp->version_high != 0x0001) {
+				return MUTT_INVALID_MAXP_VERSION;
+			}
+
+			// Version low
+			data += 2;
+			maxp->version_low = mu_rbe_uint16(data);
+			if (maxp->version_low != 0x0000) {
+				return MUTT_INVALID_MAXP_VERSION;
+			}
+
+			// numGlyphs
+			data += 2;
+			maxp->num_glyphs = mu_rbe_uint16(data);
+
+			// maxPoints
+			data += 2;
+			maxp->max_points = mu_rbe_uint16(data);
+
+			// maxContours
+			data += 2;
+			maxp->max_contours = mu_rbe_uint16(data);
+
+			// maxCompositePoints
+			data += 2;
+			maxp->max_composite_points = mu_rbe_uint16(data);
+
+			// maxCompositeContours
+			data += 2;
+			maxp->max_composite_contours = mu_rbe_uint16(data);
+
+			// maxZones
+			data += 2;
+			maxp->max_zones = mu_rbe_uint16(data);
+			if (maxp->max_zones != 1 && maxp->max_zones != 2) {
+				return MUTT_INVALID_MAX_ZONES;
+			}
+
+			// maxTwilightPoints
+			data += 2;
+			maxp->max_twilight_points = mu_rbe_uint16(data);
+
+			// maxStorage
+			maxp->max_storage = mu_rbe_uint16(data);
+			data += 2;
+
+			// maxFunctionDefs
+			data += 2;
+			maxp->max_function_defs = mu_rbe_uint16(data);
+
+			// maxInstructionDefs
+			data += 2;
+			maxp->max_instruction_defs = mu_rbe_uint16(data);
+
+			// maxStackElements
+			data += 2;
+			maxp->max_stack_elements = mu_rbe_uint16(data);
+
+			// maxSizeOfInstructions
+			data += 2;
+			maxp->max_size_of_instructions = mu_rbe_uint16(data);
+
+			// maxComponentElements
+			data += 2;
+			maxp->max_component_elements = mu_rbe_uint16(data);
+
+			// maxComponentDepth
+			data += 2;
+			maxp->max_component_depth = mu_rbe_uint16(data);
+
+			return MUTT_SUCCESS;
+		}
+
 	/* Full loading */
 
 		MUDEF muttResult mutt_load(muByte* data, size_m datalen, muttFont* font, uint32_m load_flags) {
@@ -875,15 +1022,58 @@ mutt is developed primarily off of these sources of documentation:
 				// If it didn't:
 				} else {
 					// : Load it
-					font->directory_res = mutt_load_directory(font, data, datalen, font->directory);
+					res = mutt_load_directory(font, data, datalen, font->directory);
 					// : Return if failed (we need the directory)
-					if (font->directory_res != MUTT_SUCCESS) {
+					if (res != MUTT_SUCCESS) {
 						mu_free(font->mem);
-						return font->directory_res;
+						return res;
 					}
 				}
 
-			return MUTT_SUCCESS; if (load_flags) {}
+			/* Set all requested tables to automatically unfound */
+
+				if (load_flags & MUTT_LOAD_MAXP) {
+					font->maxp = 0;
+					font->maxp_res = MUTT_UNFOUND_TABLE;
+				}
+
+			/* Find tables */
+
+				// Loop through each table
+
+				for (uint16_m i = 0; i < font->directory->num_tables; i++) {
+					// Get tag as a number
+
+					muttTableRecord* record = &font->directory->table_records[i];
+					uint32_m tag = mu_rbe_uint32(((muByte*)&record->table_tag));
+
+					switch (tag) {
+						default: break;
+
+						// maxp
+						case 0x6D617870: {
+							// Allocate
+							font->maxp = (muttMaxp*)&font->mem[font->memcur];
+							font->maxp_res = mutt_get_mem(font, sizeof(font->maxp));
+
+							// If allocation failed:
+							if (font->maxp_res != MUTT_SUCCESS) {
+								// The table is 0
+								font->maxp = 0;
+							// If we have allocated:
+							} else {
+								// Try loading the table
+								font->maxp_res = mutt_load_maxp(font->maxp, &data[record->offset], record->length);
+								// If it failed, it's 0
+								if (font->maxp_res != MUTT_SUCCESS) {
+									font->maxp = 0;
+								}
+							}
+						} break;
+					}
+				}
+
+			return MUTT_SUCCESS;
 		}
 
 		MUDEF void mutt_deload(muttFont* font) {

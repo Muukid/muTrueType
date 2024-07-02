@@ -54,6 +54,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_FAILED_REALLOC`: a call to realloc failled; memory was insufficient to perform the operation.
 
+* `MUTT_UNFOUND_TABLE`: the table could not be located within the data.
+
 * `MUTT_INVALID_TABLE_DIRECTORY_LENGTH`: the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
 
 * `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION`: the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
@@ -69,6 +71,12 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_INVALID_TABLE_RECORD_LENGTH`: the value for "length" in a table record was out of range.
 
 * `MUTT_INVALID_TABLE_RECORD_CHECKSUM`: the value for "checksum" in a table record was invalid.
+
+* `MUTT_INVALID_MAXP_LENGTH`: the value for the table length of maxp was invalid.
+
+* `MUTT_INVALID_MAXP_VERSION`: the value for "version" in the maxp table was invalid.
+
+* `MUTT_INVALID_MAX_ZONES`: the value for "maxZones" in the maxp table was invalid.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -119,6 +127,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000001] `MUTT_LOAD_DIRECTORY` - load the directory and permanently store the results. The directory is loaded no matter what, but this bit ensures that the directory data isn't wiped after loading.
 
+* [0x00000002] `MUTT_LOAD_MAXP` - load the maxp table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -142,10 +152,17 @@ muttDirectory* directory;
 ```
 
 
-* `directory_res`: the result of loading the member `directory`, defined below: 
+* `maxp`: a pointer to the maxp table, defined below: 
 
 ```c
-muttResult directory_res;
+muttMaxp* maxp;
+```
+
+
+* `maxp_res`: the result of loading the member `maxp`, defined below: 
+
+```c
+muttResult maxp_res;
 ```
 
 
@@ -174,9 +191,11 @@ Most of the members are in pairs of pointers and result values. If a requested p
 
 The contents of a pointer and result pair for information not included in the load flags are undefined.
 
-## The `muttDirectory` struct
+Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
 
-The struct `muttDirectory` is used to list all of the tables provided by a TrueType font. It is stored in the struct `muttFont`, and is similar to TrueType's table directory.
+## Directory information
+
+The struct `muttDirectory` is used to list all of the tables provided by a TrueType font. It is stored in the struct `muttFont` as `muttFont->directory`, and is similar to TrueType's table directory. It is loaded permanently with the flag `MUTT_LOAD_DIRECTORY`.
 
 Its members are:
 
@@ -242,6 +261,124 @@ uint32_m offset;
 
 ```c
 uint32_m length;
+```
+
+
+## Maxp information
+
+The struct `muttMaxp` is used to represent the maxp table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->maxp`, and loaded with the flag `MUTT_LOAD_MAXP`.
+
+Its members are:
+
+* `version_high`: equivalent to the high bytes of "version" in the maxp table, defined below: 
+
+```c
+uint16_m version_high;
+```
+
+
+* `version_low`: equivalent to the low bytes "version" in the maxp table, defined below: 
+
+```c
+uint16_m version_low;
+```
+
+
+* `num_glyphs`: equivalent to "numGlyphs" in the maxp table, defined below: 
+
+```c
+uint16_m num_glyphs;
+```
+
+
+* `max_points`: equivalent to "maxPoints" in the maxp table, defined below: 
+
+```c
+uint16_m max_points;
+```
+
+
+* `max_contours`: equivalent to "maxContours" in the maxp table, defined below: 
+
+```c
+uint16_m max_contours;
+```
+
+
+* max_composite_points`: equivalent to "maxCompositePoints" in the maxp table, defined below: 
+
+```c
+uint16_m max_composite_points;
+```
+
+
+* `max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table, defined below: 
+
+```c
+uint16_m max_composite_contours;
+```
+
+
+* `max_zones`: equivalent to "maxZones" in the maxp table, defined below: 
+
+```c
+uint16_m max_zones;
+```
+
+
+* `max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table, defined below: 
+
+```c
+uint16_m max_twilight_points;
+```
+
+
+* `max_storage`: equivalent to "maxStorage" in the maxp table, defined below: 
+
+```c
+uint16_m max_storage;
+```
+
+
+* `max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table, defined below: 
+
+```c
+uint16_m max_function_defs;
+```
+
+
+* `max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table, defined below: 
+
+```c
+uint16_m max_instruction_defs;
+```
+
+
+* `max_stack_elements`: equivalent to "maxStackElements" in the maxp table, defined below: 
+
+```c
+uint16_m max_stack_elements;
+```
+
+
+* `max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table, defined below: 
+
+```c
+uint16_m max_size_of_instructions;
+```
+
+
+* `max_component_elements`: equivalent to "maxComponentElements" in the maxp table, defined below: 
+
+```c
+uint16_m max_component_elements;
+```
+
+
+* `max_component_depth`: equivalent to "maxComponentDepth" in the maxp table, defined below: 
+
+```c
+uint16_m max_component_depth;
 ```
 
 
