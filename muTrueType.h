@@ -451,15 +451,15 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_TABLE_RECORD_LENGTH,
 			// @DOCLINE * `@NLFT`: the value for "checksum" in a table record was invalid.
 			MUTT_INVALID_TABLE_RECORD_CHECKSUM,
-			// @DOCLINE * `@NLFT`: the value for the table length of maxp was invalid.
+			// @DOCLINE * `@NLFT`: the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
 			MUTT_INVALID_MAXP_LENGTH,
-			// @DOCLINE * `@NLFT`: the version value in the maxp table was invalid.
+			// @DOCLINE * `@NLFT`: the version value in the maxp table was invalid/unsupported.
 			MUTT_INVALID_MAXP_VERSION,
 			// @DOCLINE * `@NLFT`: the value for "maxZones" in the maxp table was invalid.
 			MUTT_INVALID_MAXP_MAX_ZONES,
-			// @DOCLINE * `@NLFT`: the value for the table length of head was invalid.
+			// @DOCLINE * `@NLFT`: the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
 			MUTT_INVALID_HEAD_LENGTH,
-			// @DOCLINE * `@NLFT`: the version value in the head table was invalid.
+			// @DOCLINE * `@NLFT`: the version value in the head table was invalid/unsupported.
 			MUTT_INVALID_HEAD_VERSION,
 			// @DOCLINE * `@NLFT`: the value for "magicNumber" in the head table was invalid.
 			MUTT_INVALID_HEAD_MAGIC_NUMBER,
@@ -471,8 +471,14 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_HEAD_Y_MIN_MAX,
 			// @DOCLINE * `@NLFT`: the value for "indexToLocFormat" in the head table was invalid.
 			MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT,
-			// @DOCLINE * `@NLFT`: the value for "glyphDataFormat" in the head table was invalid.
+			// @DOCLINE * `@NLFT`: the value for "glyphDataFormat" in the head table was invalid/unsupported.
 			MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT,
+			// @DOCLINE * `@NLFT`: the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
+			MUTT_INVALID_HHEA_LENGTH,
+			// @DOCLINE * `@NLFT`: the version value in the hhea table was invalid/unsupported.
+			MUTT_INVALID_HHEA_VERSION,
+			// @DOCLINE * `@NLFT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
+			MUTT_INVALID_HHEA_METRIC_DATA_FORMAT,
 		)
 
 		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
@@ -498,6 +504,7 @@ mutt is developed primarily off of these sources of documentation:
 
 		typedef struct muttMaxp muttMaxp;
 		typedef struct muttHead muttHead;
+		typedef struct muttHhea muttHhea;
 
 		// @DOCLINE ## Loading and deloading functions
 
@@ -529,6 +536,9 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE * [0x00000004] `MUTT_LOAD_HEAD` - load the head table.
 				#define MUTT_LOAD_HEAD 0x00000004
+
+				// @DOCLINE * [0x00000008] `MUTT_LOAD_HHEA` - load the hhea table.
+				#define MUTT_LOAD_HHEA 0x00000008
 
 			// @DOCLINE ### Group bit values
 
@@ -564,6 +574,11 @@ mutt is developed primarily off of these sources of documentation:
 				muttHead* head;
 				// @DOCLINE * `@NLFT head_res`: the result of loading the member `head`.
 				muttResult head_res;
+
+				// @DOCLINE * `@NLFT* hhea`: a pointer to the hhea table.
+				muttHhea* hhea;
+				// @DOCLINE * `@NLFT hhea_res`: the result of loading the member `hhea`.
+				muttResult hhea_res;
 
 				// @DOCLINE * `@NLFT* mem`: the inner allocated memory used for holding necessary data.
 				muByte* mem;
@@ -711,6 +726,38 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE * [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
 				#define MUTT_MAC_STYLE_EXTENDED 0x0040
 
+		// @DOCLINE ## Hhea information
+
+			// @DOCLINE The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hhea`, and loaded with the flag `MUTT_LOAD_HHEA`.
+
+			// @DOCLINE Its members are:
+			struct muttHhea {
+				// @DOCLINE * `@NLFT ascender` - equivalent to "ascender" in the hhea table.
+				int16_m ascender;
+				// @DOCLINE * `@NLFT descender` - equivalent to "descender" in the hhea table.
+				int16_m descender;
+				// @DOCLINE * `@NLFT line_gap` - equivalent to "lineGap" in the hhea table.
+				int16_m line_gap;
+				// @DOCLINE * `@NLFT advance_width_max` - equivalent to "advanceWidthMax" in the hhea table.
+				uint16_m advance_width_max;
+				// @DOCLINE * `@NLFT min_left_side_bearing` - equivalent to "minLeftSideBearing" in the hhea table.
+				int16_m min_left_side_bearing;
+				// @DOCLINE * `@NLFT min_right_side_bearing` - equivalent to "minRightSideBearing" in the hhea table.
+				int16_m min_right_side_bearing;
+				// @DOCLINE * `@NLFT x_max_extent` - equivalent to "xMaxExtent" in the hhea table.
+				int16_m x_max_extent;
+				// @DOCLINE * `@NLFT caret_slope_rise` - equivalent to "caretSlopeRise" in the hhea table.
+				int16_m caret_slope_rise;
+				// @DOCLINE * `@NLFT caret_slope_run` - equivalent to "caretSlopeRun" in the hhea table.
+				int16_m caret_slope_run;
+				// @DOCLINE * `@NLFT caret_offset` - equivalent to "caretOffset" in the hhea table.
+				int16_m caret_offset;
+				// @DOCLINE * `@NLFT metric_data_format` - equivalent to "metricDataFormat" in the hhea table.
+				int16_m metric_data_format;
+				// @DOCLINE * `@NLFT number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
+				uint16_m number_of_hmetrics;
+			};
+
 	// @DOCLINE # C standard library dependencies
 
 		// @DOCLINE mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
@@ -798,6 +845,9 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_HEAD_Y_MIN_MAX: return "MUTT_INVALID_HEAD_Y_MIN_MAX"; break;
 			case MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT"; break;
 			case MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT: return "MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT"; break;
+			case MUTT_INVALID_HHEA_LENGTH: return "MUTT_INVALID_HHEA_LENGTH"; break;
+			case MUTT_INVALID_HHEA_VERSION: return "MUTT_INVALID_HHEA_VERSION"; break;
+			case MUTT_INVALID_HHEA_METRIC_DATA_FORMAT: return "MUTT_INVALID_HHEA_METRIC_DATA_FORMAT"; break;
 		}
 	}
 
@@ -1207,6 +1257,90 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+	/* Hhea */
+
+		muttResult mutt_load_hhea(muttHhea* hhea, muByte* data, uint32_m length) {
+			uint16_m u16;
+
+			// Ensure length
+			if (length < 36) {
+				return MUTT_INVALID_HHEA_LENGTH;
+			}
+
+			// Verify major version
+			if (mu_rbe_uint16(data) != 1) {
+				return MUTT_INVALID_HHEA_VERSION;
+			}
+			data += 2;
+			// + minor version
+			if (mu_rbe_uint16(data) != 0) {
+				return MUTT_INVALID_HHEA_VERSION;
+			}
+			data += 2;
+
+			// ascender
+			u16 = mu_rbe_uint16(data);
+			hhea->ascender = *(int16_m*)&u16;
+			data += 2;
+
+			// descender
+			u16 = mu_rbe_uint16(data);
+			hhea->descender = *(int16_m*)&u16;
+			data += 2;
+
+			// lineGap
+			u16 = mu_rbe_uint16(data);
+			hhea->line_gap = *(int16_m*)&u16;
+			data += 2;
+
+			// advanceWidthMax
+			hhea->advance_width_max = mu_rbe_uint16(data);
+			data += 2;
+
+			// minLeftSideBearing
+			u16 = mu_rbe_uint16(data);
+			hhea->min_left_side_bearing = *(int16_m*)&u16;
+			data += 2;
+
+			// minRightSideBearing
+			u16 = mu_rbe_uint16(data);
+			hhea->min_right_side_bearing = *(int16_m*)&u16;
+			data += 2;
+
+			// xMaxExtent
+			u16 = mu_rbe_uint16(data);
+			hhea->x_max_extent = *(int16_m*)&u16;
+			data += 2;
+
+			// caretSlopeRise
+			u16 = mu_rbe_uint16(data);
+			hhea->caret_slope_rise = *(int16_m*)&u16;
+			data += 2;
+
+			// caretSlopeRun
+			u16 = mu_rbe_uint16(data);
+			hhea->caret_slope_run = *(int16_m*)&u16;
+			data += 2;
+
+			// caretOffset
+			u16 = mu_rbe_uint16(data);
+			hhea->caret_offset = *(int16_m*)&u16;
+			data += 2;
+
+			// metricDataFormat
+			u16 = mu_rbe_uint16(data);
+			if (u16 != 0) {
+				return MUTT_INVALID_HHEA_METRIC_DATA_FORMAT;
+			}
+			hhea->metric_data_format = *(int16_m*)&u16;
+			data += 2;
+
+			// numberOfHMetrics
+			hhea->number_of_hmetrics = mu_rbe_uint16(data);
+
+			return MUTT_SUCCESS;
+		}
+
 	/* Full loading */
 
 		#define MUTT_LOAD_IT_TYPE muttResult (*)(void*, uint8_t*, uint32_t)
@@ -1258,6 +1392,13 @@ mutt is developed primarily off of these sources of documentation:
 					case 0x68656164: {
 						if (font->load_flags & MUTT_LOAD_HEAD && font->head_res != MUTT_DUPLICATE_TABLE) {
 							mutt_load_individual_table(font, (void**)&font->head, &font->head_res, (MUTT_LOAD_IT_TYPE)mutt_load_head, &data[record->offset], record->length, sizeof(muttHead));
+						}
+					} break;
+
+					// hhea
+					case 0x68686561: {
+						if (font->load_flags & MUTT_LOAD_HHEA && font->hhea_res != MUTT_DUPLICATE_TABLE) {
+							mutt_load_individual_table(font, (void**)&font->hhea, &font->hhea_res, (MUTT_LOAD_IT_TYPE)mutt_load_hhea, &data[record->offset], record->length, sizeof(muttHhea));
 						}
 					} break;
 				}
@@ -1312,6 +1453,10 @@ mutt is developed primarily off of these sources of documentation:
 				if (load_flags & MUTT_LOAD_HEAD) {
 					font->head = 0;
 					font->head_res = MUTT_UNFOUND_TABLE;
+				}
+				if (load_flags & MUTT_LOAD_HHEA) {
+					font->hhea = 0;
+					font->hhea_res = MUTT_UNFOUND_TABLE;
 				}
 
 			/* Find tables */

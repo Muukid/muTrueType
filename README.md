@@ -74,15 +74,15 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_TABLE_RECORD_CHECKSUM`: the value for "checksum" in a table record was invalid.
 
-* `MUTT_INVALID_MAXP_LENGTH`: the value for the table length of maxp was invalid.
+* `MUTT_INVALID_MAXP_LENGTH`: the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
 
-* `MUTT_INVALID_MAXP_VERSION`: the version value in the maxp table was invalid.
+* `MUTT_INVALID_MAXP_VERSION`: the version value in the maxp table was invalid/unsupported.
 
 * `MUTT_INVALID_MAXP_MAX_ZONES`: the value for "maxZones" in the maxp table was invalid.
 
-* `MUTT_INVALID_HEAD_LENGTH`: the value for the table length of head was invalid.
+* `MUTT_INVALID_HEAD_LENGTH`: the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
 
-* `MUTT_INVALID_HEAD_VERSION`: the version value in the head table was invalid.
+* `MUTT_INVALID_HEAD_VERSION`: the version value in the head table was invalid/unsupported.
 
 * `MUTT_INVALID_HEAD_MAGIC_NUMBER`: the value for "magicNumber" in the head table was invalid.
 
@@ -94,7 +94,13 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT`: the value for "indexToLocFormat" in the head table was invalid.
 
-* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT`: the value for "glyphDataFormat" in the head table was invalid.
+* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT`: the value for "glyphDataFormat" in the head table was invalid/unsupported.
+
+* `MUTT_INVALID_HHEA_LENGTH`: the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
+
+* `MUTT_INVALID_HHEA_VERSION`: the version value in the hhea table was invalid/unsupported.
+
+* `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -149,6 +155,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000004] `MUTT_LOAD_HEAD` - load the head table.
 
+* [0x00000008] `MUTT_LOAD_HHEA` - load the hhea table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -176,6 +184,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 * `muttHead* head`: a pointer to the head table.
 
 * `muttResult head_res`: the result of loading the member `head`.
+
+* `muttHhea* hhea`: a pointer to the hhea table.
+
+* `muttResult hhea_res`: the result of loading the member `hhea`.
 
 * `muByte* mem`: the inner allocated memory used for holding necessary data.
 
@@ -308,6 +320,36 @@ The following macros are defined to make bit-masking the `mac_style` member of t
 * [0x0020] `MUTT_MAC_STYLE_CONDENSED`: condensed.
 
 * [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
+
+## Hhea information
+
+The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hhea`, and loaded with the flag `MUTT_LOAD_HHEA`.
+
+Its members are:
+
+* `int16_m ascender` - equivalent to "ascender" in the hhea table.
+
+* `int16_m descender` - equivalent to "descender" in the hhea table.
+
+* `int16_m line_gap` - equivalent to "lineGap" in the hhea table.
+
+* `uint16_m advance_width_max` - equivalent to "advanceWidthMax" in the hhea table.
+
+* `int16_m min_left_side_bearing` - equivalent to "minLeftSideBearing" in the hhea table.
+
+* `int16_m min_right_side_bearing` - equivalent to "minRightSideBearing" in the hhea table.
+
+* `int16_m x_max_extent` - equivalent to "xMaxExtent" in the hhea table.
+
+* `int16_m caret_slope_rise` - equivalent to "caretSlopeRise" in the hhea table.
+
+* `int16_m caret_slope_run` - equivalent to "caretSlopeRun" in the hhea table.
+
+* `int16_m caret_offset` - equivalent to "caretOffset" in the hhea table.
+
+* `int16_m metric_data_format` - equivalent to "metricDataFormat" in the hhea table.
+
+* `uint16_m number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
 
 # C standard library dependencies
 

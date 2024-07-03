@@ -206,6 +206,32 @@ else
 
 printf("\n");
 
+/* Print hhea info */
+
+printf("== Hhea ==\n");
+
+if (font.hhea)
+{
+	printf("ascender: %"            PRIi16 "\n", font.hhea->ascender);
+	printf("descender: %"           PRIi16 "\n", font.hhea->descender);
+	printf("lineGap: %"             PRIi16 "\n", font.hhea->line_gap);
+	printf("advanceWidthMax: %"     PRIu16 "\n", font.hhea->advance_width_max);
+	printf("minLeftSideBearing: %"  PRIi16 "\n", font.hhea->min_left_side_bearing);
+	printf("minRightSideBearing: %" PRIi16 "\n", font.hhea->min_right_side_bearing);
+	printf("xMaxExtent: %"          PRIi16 "\n", font.hhea->x_max_extent);
+	printf("caretSlopeRise: %"      PRIi16 "\n", font.hhea->caret_slope_rise);
+	printf("caretSlopeRun: %"       PRIi16 "\n", font.hhea->caret_slope_run);
+	printf("caretOffset: %"         PRIi16 "\n", font.hhea->caret_offset);
+	printf("metricDataFormat: %"    PRIi16 "\n", font.hhea->metric_data_format);
+	printf("numberOfHMetrics: %"    PRIu16 "\n", font.hhea->number_of_hmetrics);
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.hhea_res));
+}
+
+printf("\n");
+
 /* Deload */
 
 {
