@@ -56,6 +56,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_UNFOUND_TABLE`: the table could not be located within the data.
 
+* `MUTT_DUPLICATE_TABLE`: another table with the same tag was found.
+
 * `MUTT_INVALID_TABLE_DIRECTORY_LENGTH`: the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
 
 * `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION`: the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
@@ -74,9 +76,25 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_MAXP_LENGTH`: the value for the table length of maxp was invalid.
 
-* `MUTT_INVALID_MAXP_VERSION`: the value for "version" in the maxp table was invalid.
+* `MUTT_INVALID_MAXP_VERSION`: the version value in the maxp table was invalid.
 
-* `MUTT_INVALID_MAX_ZONES`: the value for "maxZones" in the maxp table was invalid.
+* `MUTT_INVALID_MAXP_MAX_ZONES`: the value for "maxZones" in the maxp table was invalid.
+
+* `MUTT_INVALID_HEAD_LENGTH`: the value for the table length of head was invalid.
+
+* `MUTT_INVALID_HEAD_VERSION`: the version value in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_MAGIC_NUMBER`: the value for "magicNumber" in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_UNITS_PER_EM`: the value for "unitsPerEm" in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_X_MIN_MAX`: the values for "xMin" and "xMax" in the head table were invalid.
+
+* `MUTT_INVALID_HEAD_Y_MIN_MAX`: the values for "yMin" and "yMax" in the head table were invalid.
+
+* `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT`: the value for "indexToLocFormat" in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT`: the value for "glyphDataFormat" in the head table was invalid.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -129,6 +147,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000002] `MUTT_LOAD_MAXP` - load the maxp table.
 
+* [0x00000004] `MUTT_LOAD_HEAD` - load the head table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -145,47 +165,23 @@ A TrueType font is represented by the struct `muttFont`. Once successfully loade
 
 Inside the `muttFont` struct is all of the loaded information from when it was loaded. The actual full list of members is:
 
-* `directory`: a pointer to a directory listing all of the tables provided by the given font, defined below: 
+* `uint32_m load_flags`: the load flags that were provided to the load function.
 
-```c
-muttDirectory* directory;
-```
+* `muttDirectory* directory`: a pointer to a directory listing all of the tables provided by the given font.
 
+* `muttMaxp* maxp`: a pointer to the maxp table.
 
-* `maxp`: a pointer to the maxp table, defined below: 
+* `muttResult maxp_res`: the result of loading the member `maxp`.
 
-```c
-muttMaxp* maxp;
-```
+* `muttHead* head`: a pointer to the head table.
 
+* `muttResult head_res`: the result of loading the member `head`.
 
-* `maxp_res`: the result of loading the member `maxp`, defined below: 
+* `muByte* mem`: the inner allocated memory used for holding necessary data.
 
-```c
-muttResult maxp_res;
-```
+* `size_m memlen`: the length of the allocated memory, in bytes.
 
-
-* `mem`: the inner allocated memory used for holding necessary data, defined below: 
-
-```c
-muByte* mem;
-```
-
-
-* `memlen`: the length of the allocated memory, in bytes, defined below: 
-
-```c
-size_m memlen;
-```
-
-
-* `memcur`: offset to the latest unused memory in `mem`, in bytes, defined below: 
-
-```c
-size_m memcur;
-```
-
+* `size_m memcur`: offset to the latest unused memory in `mem`, in bytes.
 
 Most of the members are in pairs of pointers and result values. If a requested pointer is 0, it could not be loaded, and its corresponding result value will indicate the result enumerator indicating what went wrong.
 
@@ -199,70 +195,25 @@ The struct `muttDirectory` is used to list all of the tables provided by a TrueT
 
 Its members are:
 
-* `num_tables`: equivalent to "numTables" in the table directory, defined below: 
+* `uint16_m num_tables`: equivalent to "numTables" in the table directory.
 
-```c
-uint16_m num_tables;
-```
+* `uint16_m search_range`: equivalent to "searchRange" in the table directory.
 
+* `uint16_m entry_selector`: equivalent to "entrySelector" in the table directory.
 
-* `search_range`: equivalent to "searchRange" in the table directory, defined below: 
+* `uint16_m range_shift`: equivalent to "rangeShift" in the table directory.
 
-```c
-uint16_m search_range;
-```
-
-
-* `entry_selector`: equivalent to "entrySelector" in the table directory, defined below: 
-
-```c
-uint16_m entry_selector;
-```
-
-
-* `range_shift`: equivalent to "rangeShift" in the table directory, defined below: 
-
-```c
-uint16_m range_shift;
-```
-
-
-* `table_records`: equivalent to "tableRecords" in the table directory, defined below: 
-
-```c
-muttTableRecord* table_records;
-```
-
+* `muttTableRecord* table_records`: equivalent to "tableRecords" in the table directory.
 
 The struct `muttTableRecord` is similar to TrueType's table record, and has the following members:
 
-* `table_tag`: equivalent to "tableTag" in the table record, defined below: 
+* `uint8_m table_tag[4]`: equivalent to "tableTag" in the table record.
 
-```c
-uint8_m table_tag[4];
-```
+* `uint32_m checksum`: equivalent to "checksum" in the table record.
 
+* `uint32_m offset`: equivalent to "offset" in the table record.
 
-* `checksum`: equivalent to "checksum" in the table record, defined below: 
-
-```c
-uint32_m checksum;
-```
-
-
-* `offset`: equivalent to "offset" in the table record, defined below: 
-
-```c
-uint32_m offset;
-```
-
-
-* `length`: equivalent to "length" in the table record, defined below: 
-
-```c
-uint32_m length;
-```
-
+* `uint32_m length`: equivalent to "length" in the table record.
 
 ## Maxp information
 
@@ -270,119 +221,95 @@ The struct `muttMaxp` is used to represent the maxp table provided by a TrueType
 
 Its members are:
 
-* `version_high`: equivalent to the high bytes of "version" in the maxp table, defined below: 
+* `uint16_m version_high`: equivalent to the high bytes of "version" in the maxp table.
 
-```c
-uint16_m version_high;
-```
+* `uint16_m version_low`: equivalent to the low bytes "version" in the maxp table.
 
+* `uint16_m num_glyphs`: equivalent to "numGlyphs" in the maxp table.
 
-* `version_low`: equivalent to the low bytes "version" in the maxp table, defined below: 
+* `uint16_m max_points`: equivalent to "maxPoints" in the maxp table.
 
-```c
-uint16_m version_low;
-```
+* `uint16_m max_contours`: equivalent to "maxContours" in the maxp table.
 
+* `uint16_m max_composite_points`: equivalent to "maxCompositePoints" in the maxp table.
 
-* `num_glyphs`: equivalent to "numGlyphs" in the maxp table, defined below: 
+* `uint16_m max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table.
 
-```c
-uint16_m num_glyphs;
-```
+* `uint16_m max_zones`: equivalent to "maxZones" in the maxp table.
 
+* `uint16_m max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table.
 
-* `max_points`: equivalent to "maxPoints" in the maxp table, defined below: 
+* `uint16_m max_storage`: equivalent to "maxStorage" in the maxp table.
 
-```c
-uint16_m max_points;
-```
+* `uint16_m max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table.
 
+* `uint16_m max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table.
 
-* `max_contours`: equivalent to "maxContours" in the maxp table, defined below: 
+* `uint16_m max_stack_elements`: equivalent to "maxStackElements" in the maxp table.
 
-```c
-uint16_m max_contours;
-```
+* `uint16_m max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table.
 
+* `uint16_m max_component_elements`: equivalent to "maxComponentElements" in the maxp table.
 
-* max_composite_points`: equivalent to "maxCompositePoints" in the maxp table, defined below: 
+* `uint16_m max_component_depth`: equivalent to "maxComponentDepth" in the maxp table.
 
-```c
-uint16_m max_composite_points;
-```
+## Head information
 
+The struct `muttHead` is used to represent the head table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->head`, and loaded with the flag `MUTT_LOAD_HEAD`.
 
-* `max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table, defined below: 
+Its members are:
 
-```c
-uint16_m max_composite_contours;
-```
+* `uint16_m font_revision_high` - equivalent to the high bytes of "fontRevision" in the head table.
 
+* `uint16_m font_revision_low` - equivalent to the low bytes of "fontRevision" in the head table.
 
-* `max_zones`: equivalent to "maxZones" in the maxp table, defined below: 
+* `uint32_m checksum_adjustment` - equivalent to "checksumAdjustment" in the head table.
 
-```c
-uint16_m max_zones;
-```
+* `uint16_m flags` - equivalent to "flags" in the head table.
 
+* `uint16_m units_per_em` - equivalent to "unitsPerEm" in the head table.
 
-* `max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table, defined below: 
+* `int64_m created` - equivalent to "created" in the head table.
 
-```c
-uint16_m max_twilight_points;
-```
+* `int64_m modified` - equivalent to "modified" in the head table.
 
+* `int16_m x_min` - equivalent to "xMin" in the head table.
 
-* `max_storage`: equivalent to "maxStorage" in the maxp table, defined below: 
+* `int16_m y_min` - equivalent to "yMin" in the head table.
 
-```c
-uint16_m max_storage;
-```
+* `int16_m x_max` - equivalent to "xMax" in the head table.
 
+* `int16_m y_max` - equivalent to "yMax" in the head table.
 
-* `max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table, defined below: 
+* `uint16_m mac_style` - equivalent to "macStyle" in the head table.
 
-```c
-uint16_m max_function_defs;
-```
+* `uint16_m lowest_rec_ppem` - equivalent to "lowestRecPPEM" in the head table.
 
+* `int16_m font_direction_hint` - equivalent to "fontDirectionHint" in the head table.
 
-* `max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table, defined below: 
+* `int16_m index_to_loc_format` - equivalent to "indexToLocFormat" in the head table.
 
-```c
-uint16_m max_instruction_defs;
-```
+* `int16_m glyph_data_format` - equivalent to "glyphDataFormat" in the head table.
 
+### Head mac style macros
 
-* `max_stack_elements`: equivalent to "maxStackElements" in the maxp table, defined below: 
+The following macros are defined to make bit-masking the `mac_style` member of the `muttHead` struct easier:
 
-```c
-uint16_m max_stack_elements;
-```
+* [0x0001] `MUTT_MAC_STYLE_BOLD`: bold.
 
+* [0x0002] `MUTT_MAC_STYLE_ITALIC`: italic.
 
-* `max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table, defined below: 
+* [0x0004] `MUTT_MAC_STYLE_UNDERLINE`: underlined.
 
-```c
-uint16_m max_size_of_instructions;
-```
+* [0x0008] `MUTT_MAC_STYLE_OUTLINE`: outlined.
 
+* [0x0010] `MUTT_MAC_STYLE_SHADOW`: shadow.
 
-* `max_component_elements`: equivalent to "maxComponentElements" in the maxp table, defined below: 
+* [0x0020] `MUTT_MAC_STYLE_CONDENSED`: condensed.
 
-```c
-uint16_m max_component_elements;
-```
+* [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
 
-
-* `max_component_depth`: equivalent to "maxComponentDepth" in the maxp table, defined below: 
-
-```c
-uint16_m max_component_depth;
-```
-
-
-## C standard library dependencies
+# C standard library dependencies
 
 mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
 

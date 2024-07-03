@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-02
+LAST UPDATED:       2024-07-03
 
 ============================================================
                         DEMO PURPOSE
@@ -50,6 +50,18 @@ More explicit license information at the end of file.
 
 	// Result value:
 	muttResult result = MUTT_SUCCESS;
+
+/* Print functions */
+
+	// Prints a value in binary.
+	void print_binary(muByte* mem, size_m size) {
+		for (size_m byte = 0; byte < size; byte++) {
+			for (size_m bit = 0; bit < 8; bit++) {
+				uint8_m val = (mem[byte] >> bit) & 1;
+				printf("%" PRIu8 "", val);
+			}
+		}
+	}
 
 int main(void) {
 
@@ -153,6 +165,43 @@ if (font.maxp)
 else
 {
 	printf("Failed to load: %s\n", mutt_result_get_name(font.maxp_res));
+}
+
+printf("\n");
+
+/* Print head info */
+
+printf("== Head ==\n");
+
+if (font.head)
+{
+	printf("fontRevision: %" PRIu16 ".%" PRIu16 "\n", font.head->font_revision_high, font.head->font_revision_low);
+	printf("checksumAdjustment: %" PRIu32 "\n", font.head->checksum_adjustment);
+
+	printf("flags: ");
+	print_binary((muByte*)&font.head->flags, sizeof(font.head->flags));
+	printf("\n");
+
+	printf("unitsPerEm: %" PRIu16 "\n",         font.head->units_per_em);
+	printf("created: %" PRIi64 "\n",            font.head->created);
+	printf("modified: %" PRIi64 "\n",           font.head->modified);
+	printf("xMin: %" PRIi16 "\n",               font.head->x_min);
+	printf("yMin: %" PRIi16 "\n",               font.head->y_min);
+	printf("xMax: %" PRIi16 "\n",               font.head->x_max);
+	printf("yMax: %" PRIi16 "\n",               font.head->y_max);
+
+	printf("macStyle: ");
+	print_binary((muByte*)&font.head->mac_style, sizeof(font.head->mac_style));
+	printf("\n");
+
+	printf("lowestRecPPEM: %" PRIu16 "\n",      font.head->lowest_rec_ppem);
+	printf("fontDirectionHint: %" PRIi16 "\n",  font.head->font_direction_hint);
+	printf("indexToLocFormat: %" PRIi16 "\n",   font.head->index_to_loc_format);
+	printf("glyphDataFormat: %" PRIi16 "\n",    font.head->glyph_data_format);
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.head_res));
 }
 
 printf("\n");
