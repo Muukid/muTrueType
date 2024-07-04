@@ -102,6 +102,16 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
 
+* `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS`: the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
+
+* `MUTT_INVALID_HMTX_LENGTH`: the value for the table length of hmtx was invalid.
+
+* `MUTT_HHEA_REQUIRES_MAXP`: the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
+
+* `MUTT_HMTX_REQUIRES_MAXP`: the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
+
+* `MUTT_HMTX_REQUIRES_HHEA`: the hhea table failed to load because hhea is rather not being loaded 
+
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
 ## Result name function
@@ -157,6 +167,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000008] `MUTT_LOAD_HHEA` - load the hhea table.
 
+* [0x00000010] `MUTT_LOAD_HMTX` - load the hmtx table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -189,6 +201,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 
 * `muttResult hhea_res`: the result of loading the member `hhea`.
 
+* `muttHmtx* hmtx`: a pointer to the hmtx table.
+
+* `muttResult hmtx_res`: the result of loading the member `hmtx`.
+
 * `muByte* mem`: the inner allocated memory used for holding necessary data.
 
 * `size_m memlen`: the length of the allocated memory, in bytes.
@@ -200,6 +216,8 @@ Most of the members are in pairs of pointers and result values. If a requested p
 The contents of a pointer and result pair for information not included in the load flags are undefined.
 
 Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
+
+Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0.
 
 ## Directory information
 
@@ -350,6 +368,22 @@ Its members are:
 * `int16_m metric_data_format` - equivalent to "metricDataFormat" in the hhea table.
 
 * `uint16_m number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
+
+## Hmtx information
+
+The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hmtx`, and loaded with the flag `MUTT_LOAD_HMTX`.
+
+Its members are:
+
+* `muttLongHorMetric* hmetrics` - equivalent to "hMetrics" in the hmtx table.
+
+* `int16_m* left_side_bearings` - equivalent to "leftSideBearings" in the hmtx table.
+
+The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, and has the following members:
+
+* `uint16_m advance_width` - equivalent to "advanceWidth" in the LongHorMetric record.
+
+* `int16_m lsb` - equivalent to "lsb" in the LongHorMetric record.
 
 # C standard library dependencies
 

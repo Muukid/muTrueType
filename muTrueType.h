@@ -479,6 +479,16 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_HHEA_VERSION,
 			// @DOCLINE * `@NLFT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
 			MUTT_INVALID_HHEA_METRIC_DATA_FORMAT,
+			// @DOCLINE * `@NLFT`: the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
+			MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS,
+			// @DOCLINE * `@NLFT`: the value for the table length of hmtx was invalid.
+			MUTT_INVALID_HMTX_LENGTH,
+			// @DOCLINE * `@NLFT`: the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
+			MUTT_HHEA_REQUIRES_MAXP,
+			// @DOCLINE * `@NLFT`: the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
+			MUTT_HMTX_REQUIRES_MAXP,
+			// @DOCLINE * `@NLFT`: the hhea table failed to load because hhea is rather not being loaded 
+			MUTT_HMTX_REQUIRES_HHEA,
 		)
 
 		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
@@ -505,6 +515,7 @@ mutt is developed primarily off of these sources of documentation:
 		typedef struct muttMaxp muttMaxp;
 		typedef struct muttHead muttHead;
 		typedef struct muttHhea muttHhea;
+		typedef struct muttHmtx muttHmtx;
 
 		// @DOCLINE ## Loading and deloading functions
 
@@ -539,6 +550,9 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE * [0x00000008] `MUTT_LOAD_HHEA` - load the hhea table.
 				#define MUTT_LOAD_HHEA 0x00000008
+
+				// @DOCLINE * [0x00000010] `MUTT_LOAD_HMTX` - load the hmtx table.
+				#define MUTT_LOAD_HMTX 0x00000010
 
 			// @DOCLINE ### Group bit values
 
@@ -580,6 +594,11 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE * `@NLFT hhea_res`: the result of loading the member `hhea`.
 				muttResult hhea_res;
 
+				// @DOCLINE * `@NLFT* hmtx`: a pointer to the hmtx table.
+				muttHmtx* hmtx;
+				// @DOCLINE * `@NLFT hmtx_res`: the result of loading the member `hmtx`.
+				muttResult hmtx_res;
+
 				// @DOCLINE * `@NLFT* mem`: the inner allocated memory used for holding necessary data.
 				muByte* mem;
 				// @DOCLINE * `@NLFT memlen`: the length of the allocated memory, in bytes.
@@ -593,6 +612,8 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE The contents of a pointer and result pair for information not included in the load flags are undefined.
 
 			// @DOCLINE Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
+
+			// @DOCLINE Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0.
 
 		// @DOCLINE ## Directory information
 
@@ -758,6 +779,28 @@ mutt is developed primarily off of these sources of documentation:
 				uint16_m number_of_hmetrics;
 			};
 
+		// @DOCLINE ## Hmtx information
+
+			// @DOCLINE The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hmtx`, and loaded with the flag `MUTT_LOAD_HMTX`.
+
+			// @DOCLINE Its members are:
+			typedef struct muttLongHorMetric muttLongHorMetric;
+			struct muttHmtx {
+				// @DOCLINE * `@NLFT* hmetrics` - equivalent to "hMetrics" in the hmtx table.
+				muttLongHorMetric* hmetrics;
+				// @DOCLINE * `@NLFT* left_side_bearings` - equivalent to "leftSideBearings" in the hmtx table.
+				int16_m* left_side_bearings;
+			};
+
+			// @DOCLINE The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, and has the following members:
+
+			struct muttLongHorMetric {
+				// @DOCLINE * `@NLFT advance_width` - equivalent to "advanceWidth" in the LongHorMetric record.
+				uint16_m advance_width;
+				// @DOCLINE * `@NLFT lsb` - equivalent to "lsb" in the LongHorMetric record.
+				int16_m lsb;
+			};
+
 	// @DOCLINE # C standard library dependencies
 
 		// @DOCLINE mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
@@ -848,6 +891,11 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_HHEA_LENGTH: return "MUTT_INVALID_HHEA_LENGTH"; break;
 			case MUTT_INVALID_HHEA_VERSION: return "MUTT_INVALID_HHEA_VERSION"; break;
 			case MUTT_INVALID_HHEA_METRIC_DATA_FORMAT: return "MUTT_INVALID_HHEA_METRIC_DATA_FORMAT"; break;
+			case MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS: return "MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS"; break;
+			case MUTT_INVALID_HMTX_LENGTH: return "MUTT_INVALID_HMTX_LENGTH"; break;
+			case MUTT_HHEA_REQUIRES_MAXP: return "MUTT_HHEA_REQUIRES_MAXP"; break;
+			case MUTT_HMTX_REQUIRES_MAXP: return "MUTT_HMTX_REQUIRES_MAXP"; break;
+			case MUTT_HMTX_REQUIRES_HHEA: return "MUTT_HMTX_REQUIRES_HHEA"; break;
 		}
 	}
 
@@ -1005,6 +1053,10 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// : Allocate table records
+				if (directory->num_tables == 0) {
+					directory->table_records = 0;
+					return MUTT_SUCCESS;
+				}
 				directory->table_records = (muttTableRecord*)&font->mem[font->memcur];
 
 				res = mutt_get_mem(font, directory->num_tables*sizeof(muttTableRecord));
@@ -1057,7 +1109,7 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Maxp */
 
-		muttResult mutt_load_maxp(muttMaxp* maxp, muByte* data, uint32_m length) {
+		muttResult mutt_load_maxp(muttFont* font, muttMaxp* maxp, muByte* data, uint32_m length) {
 			// Ensure length
 			if (length < 32) {
 				return MUTT_INVALID_MAXP_LENGTH;
@@ -1135,12 +1187,12 @@ mutt is developed primarily off of these sources of documentation:
 			data += 2;
 			maxp->max_component_depth = mu_rbe_uint16(data);
 
-			return MUTT_SUCCESS;
+			return MUTT_SUCCESS; if (font) {}
 		}
 
 	/* Head */
 
-		muttResult mutt_load_head(muttHead* head, muByte* data, uint32_m length) {
+		muttResult mutt_load_head(muttFont* font, muttHead* head, muByte* data, uint32_m length) {
 			uint64_m u64;
 			uint16_m u16;
 
@@ -1254,12 +1306,13 @@ mutt is developed primarily off of these sources of documentation:
 				return MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT;
 			}
 
-			return MUTT_SUCCESS;
+			return MUTT_SUCCESS; if (font) {}
 		}
 
 	/* Hhea */
 
-		muttResult mutt_load_hhea(muttHhea* hhea, muByte* data, uint32_m length) {
+		// Req: maxp
+		muttResult mutt_load_hhea(muttFont* font, muttHhea* hhea, muByte* data, uint32_m length) {
 			uint16_m u16;
 
 			// Ensure length
@@ -1337,14 +1390,74 @@ mutt is developed primarily off of these sources of documentation:
 
 			// numberOfHMetrics
 			hhea->number_of_hmetrics = mu_rbe_uint16(data);
+			// : Verify that numGlyphs-numberOfHMetrics >= 0
+			if (hhea->number_of_hmetrics > font->maxp->num_glyphs) {
+				return MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+	/* Hmtx */
+
+		// Req: maxp, hhea
+		muttResult mutt_load_hmtx(muttFont* font, muttHmtx* hmtx, muByte* data, uint32_m length) {
+			// Verify length
+			uint16_m lsb_count = font->maxp->num_glyphs-font->hhea->number_of_hmetrics;
+			if (length < (uint32_m)(4*font->hhea->number_of_hmetrics + 2*lsb_count)) {
+				return MUTT_INVALID_HMTX_LENGTH;
+			}
+
+			muttResult res;
+			uint16_m u16;
+
+			// Allocate hMetrics
+			if (font->hhea->number_of_hmetrics == 0) {
+				hmtx->hmetrics = 0;
+			} else {
+				hmtx->hmetrics = (muttLongHorMetric*)&font->mem[font->memcur];
+				res = mutt_get_mem(font, sizeof(muttLongHorMetric)*font->hhea->number_of_hmetrics);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+			}
+
+			// Allocate leftSideBearings
+			if (lsb_count == 0) {
+				hmtx->left_side_bearings = 0;
+			} else {
+				hmtx->left_side_bearings = (int16_m*)&font->mem[font->memcur];
+				res = mutt_get_mem(font, sizeof(int16_m)*lsb_count);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+			}
+
+			// Loop through each hMetric
+			for (uint16_m m = 0; m < font->hhea->number_of_hmetrics; m++) {
+				// advanceWidth
+				hmtx->hmetrics[m].advance_width = mu_rbe_uint16(data);
+				data += 2;
+				// lsb
+				u16 = mu_rbe_uint16(data);
+				hmtx->hmetrics[m].lsb = *(int16_m*)&u16;
+				data += 2;
+			}
+
+			// Loop through each leftSideBearing
+			for (uint16_m l = 0; l < lsb_count; l++) {
+				u16 = mu_rbe_uint16(data);
+				hmtx->left_side_bearings[l] = *(int16_m*)&u16;
+				data += 2;
+			}
 
 			return MUTT_SUCCESS;
 		}
 
 	/* Full loading */
 
-		#define MUTT_LOAD_IT_TYPE muttResult (*)(void*, uint8_t*, uint32_t)
-		void mutt_load_individual_table(muttFont* font, void** p, muttResult* res, muttResult (*load)(void* table, muByte* data, uint32_m length), muByte* data, uint32_m length, size_m size) {
+		#define MUTT_LOAD_IT_TYPE muttResult (*)(muttFont*, void*, uint8_t*, uint32_t)
+		void mutt_load_individual_table(muttFont* font, void** p, muttResult* res, muttResult (*load)(muttFont* font, void* table, muByte* data, uint32_m length), muByte* data, uint32_m length, size_m size) {
 			if (*p != 0) {
 				*p = 0;
 				*res = MUTT_DUPLICATE_TABLE;
@@ -1361,7 +1474,7 @@ mutt is developed primarily off of these sources of documentation:
 			// If we have allocated:
 			} else {
 				// Try loading the table
-				*res = load(*p, data, length);
+				*res = load(font, *p, data, length);
 				// If it failed, it's 0
 				if (*res != MUTT_SUCCESS) {
 					*p = 0;
@@ -1369,10 +1482,56 @@ mutt is developed primarily off of these sources of documentation:
 			}
 		}
 
-		void mutt_load_tables(muttFont* font, uint16_m start_i, muByte* data) {
+		// - Macros for the table loading -
+
+			// Determines if a table has already been loaded or attempted such,
+			// or if we don't even need to load it
+			#define MUTT_SKIP_PROCESSED_TABLE(up_this_table) \
+				if (!(font->load_flags & MUTT_LOAD_##up_this_table)) { \
+					break; \
+				} \
+				if (!(first) && !(*skipped & MUTT_LOAD_##up_this_table)) { \
+					break; \
+				}
+
+			// Verifies a load flag
+			#define MUTT_VERIFY_LOAD_FLAG(up_load_table, up_this_table, low_this_table) \
+				if (!(font->load_flags & MUTT_LOAD_##up_load_table)) { \
+					font->low_this_table##_res = MUTT_##up_this_table##_REQUIRES_##up_load_table; \
+					break; \
+				}
+
+			// Handles a table with dependencies not existing yet
+			#define MUTT_VERIFY_TABLE(up_load_table, low_load_table, up_this_table, low_this_table) \
+				if (!(font->low_load_table)) { \
+					if ((*skipped) & MUTT_LOAD_##up_load_table) { \
+						*skipped |= MUTT_LOAD_##up_this_table; \
+						break; \
+					} \
+					if (first && (font->low_load_table##_res == MUTT_UNFOUND_TABLE)) { \
+						*skipped |= MUTT_LOAD_##up_this_table; \
+						break; \
+					} \
+					font->low_this_table##_res = MUTT_##up_this_table##_REQUIRES_##up_load_table; \
+					break; \
+				}
+
+			// Unmarks a table as skipped if necessary
+			#define MUTT_UNSKIP_TABLE(up_this_table) \
+				if (*skipped & MUTT_LOAD_##up_this_table) { \
+					*skipped ^= MUTT_LOAD_##up_this_table; \
+				}
+
+			// Loads a table
+			#define MUTT_LOAD_TABLE(first_up_this_table, low_this_table) \
+				if (font->low_this_table##_res != MUTT_DUPLICATE_TABLE) {\
+					mutt_load_individual_table(font, (void**)&font->low_this_table, &font->low_this_table##_res, (MUTT_LOAD_IT_TYPE)mutt_load_##low_this_table, &data[record->offset], record->length, sizeof(mutt##first_up_this_table)); \
+				}
+
+		void mutt_load_tables(muttFont* font, muByte* data, uint32_m* skipped, muBool first) {
 			// Loop through each table
 
-			for (uint16_m i = start_i; i < font->directory->num_tables; i++) {
+			for (uint16_m i = 0; i < font->directory->num_tables; i++) {
 				// Get tag as a number
 
 				muttTableRecord* record = &font->directory->table_records[i];
@@ -1383,23 +1542,44 @@ mutt is developed primarily off of these sources of documentation:
 
 					// maxp
 					case 0x6D617870: {
-						if (font->load_flags & MUTT_LOAD_MAXP && font->maxp_res != MUTT_DUPLICATE_TABLE) {
-							mutt_load_individual_table(font, (void**)&font->maxp, &font->maxp_res, (MUTT_LOAD_IT_TYPE)mutt_load_maxp, &data[record->offset], record->length, sizeof(muttMaxp));
-						}
+						MUTT_SKIP_PROCESSED_TABLE(MAXP)
+						MUTT_LOAD_TABLE(Maxp, maxp)
 					} break;
 
 					// head
 					case 0x68656164: {
-						if (font->load_flags & MUTT_LOAD_HEAD && font->head_res != MUTT_DUPLICATE_TABLE) {
-							mutt_load_individual_table(font, (void**)&font->head, &font->head_res, (MUTT_LOAD_IT_TYPE)mutt_load_head, &data[record->offset], record->length, sizeof(muttHead));
-						}
+						MUTT_SKIP_PROCESSED_TABLE(HEAD)
+						MUTT_LOAD_TABLE(Head, head)
 					} break;
 
 					// hhea
 					case 0x68686561: {
-						if (font->load_flags & MUTT_LOAD_HHEA && font->hhea_res != MUTT_DUPLICATE_TABLE) {
-							mutt_load_individual_table(font, (void**)&font->hhea, &font->hhea_res, (MUTT_LOAD_IT_TYPE)mutt_load_hhea, &data[record->offset], record->length, sizeof(muttHhea));
-						}
+						MUTT_SKIP_PROCESSED_TABLE(HHEA)
+
+						// Req: maxp
+						MUTT_VERIFY_LOAD_FLAG(MAXP, HHEA, hhea)
+						MUTT_VERIFY_TABLE(MAXP, maxp, HHEA, hhea)
+
+						MUTT_UNSKIP_TABLE(HHEA)
+
+						// Load
+						MUTT_LOAD_TABLE(Hhea, hhea)
+					} break;
+
+					// hmtx
+					case 0x686D7478: {
+						MUTT_SKIP_PROCESSED_TABLE(HMTX)
+
+						// Req: maxp, hhea
+						MUTT_VERIFY_LOAD_FLAG(MAXP, HMTX, hmtx)
+						MUTT_VERIFY_LOAD_FLAG(HHEA, HMTX, hmtx)
+						MUTT_VERIFY_TABLE(MAXP, maxp, HMTX, hmtx)
+						MUTT_VERIFY_TABLE(HHEA, hhea, HMTX, hmtx)
+
+						MUTT_UNSKIP_TABLE(HMTX)
+
+						// Load
+						MUTT_LOAD_TABLE(Hmtx, hmtx)
 					} break;
 				}
 			}
@@ -1458,10 +1638,22 @@ mutt is developed primarily off of these sources of documentation:
 					font->hhea = 0;
 					font->hhea_res = MUTT_UNFOUND_TABLE;
 				}
+				if (load_flags & MUTT_LOAD_HMTX) {
+					font->hmtx = 0;
+					font->hmtx_res = MUTT_UNFOUND_TABLE;
+				}
 
 			/* Find tables */
 
-				mutt_load_tables(font, 0, data);
+				// Used to mark what tables have been skipped;
+				// multiple passes are needed due to table dependencies.
+				uint32_m skipped_flags = 0;
+
+				mutt_load_tables(font, data, &skipped_flags, MU_TRUE);
+
+				while (skipped_flags) {
+					mutt_load_tables(font, data, &skipped_flags, MU_FALSE);
+				}
 
 			return MUTT_SUCCESS;
 		}

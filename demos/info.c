@@ -232,6 +232,49 @@ else
 
 printf("\n");
 
+/* Print hmtx info */
+
+printf("== Hmtx ==\n");
+
+if (font.hmtx)
+{
+	// Print hMetrics
+	if (font.hhea->number_of_hmetrics > 0) {
+		printf("[Various hMetrics]\n");
+
+		for (uint16_m h = 0; h < font.hhea->number_of_hmetrics && h < (uint16_m)((h+1)*2); h *= 2) {
+			printf("%" PRIu16 ": ", h);
+			printf("advanceWidth: %" PRIu16 ", ", font.hmtx->hmetrics[h].advance_width);
+			printf("lsb: %"          PRIi16 "\n", font.hmtx->hmetrics[h].lsb);
+			
+			if (h == 0) {
+				h = 1;
+			}
+		}
+	}
+
+	// Print left side bearings
+	uint16_m lsb_count = font.maxp->num_glyphs - font.hhea->number_of_hmetrics;
+	if (lsb_count > 0) {
+		printf("[Various leftSideBearings]\n");
+
+		for (uint16_m l = 0; l < lsb_count && l < (uint16_m)((l+1)*2); l *= 2) {
+			printf("%" PRIu16 ": ", l);
+			printf("leftSideBearing: %" PRIi16 "\n", font.hmtx->left_side_bearings[l]);
+
+			if (l == 0) {
+				l = 1;
+			}
+		}
+	}
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.hmtx_res));
+}
+
+printf("\n");
+
 /* Deload */
 
 {
