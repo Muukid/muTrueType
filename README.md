@@ -106,11 +106,17 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HMTX_LENGTH`: the value for the table length of hmtx was invalid.
 
+* `MUTT_INVALID_LOCA_LENGTH`: the value for the table length of loca was invalid.
+
 * `MUTT_HHEA_REQUIRES_MAXP`: the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 
 * `MUTT_HMTX_REQUIRES_MAXP`: the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
 
-* `MUTT_HMTX_REQUIRES_HHEA`: the hhea table failed to load because hhea is rather not being loaded 
+* `MUTT_HMTX_REQUIRES_HHEA`: the hmtx table failed to load because hhea is rather not being loaded or failed to load, and hmtx relies on hhea.
+
+* `MUTT_LOCA_REQUIRES_HEAD`: the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
+
+* `MUTT_LOCA_REQUIRES_MAXP`: the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -169,6 +175,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000010] `MUTT_LOAD_HMTX` - load the hmtx table.
 
+* [0x00000020] `MUTT_LOAD_LOCA` - load the loca table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -204,6 +212,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 * `muttHmtx* hmtx`: a pointer to the hmtx table.
 
 * `muttResult hmtx_res`: the result of loading the member `hmtx`.
+
+* `muttLoca* loca`: a pointer to the loca table.
+
+* `muttResult loca_res`: the result of loading the member `loca`.
 
 * `muByte* mem`: the inner allocated memory used for holding necessary data.
 
@@ -339,9 +351,17 @@ The following macros are defined to make bit-masking the `mac_style` member of t
 
 * [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
 
+### Head index to loc format macros
+
+The following macros are defined to make the value of the `index_to_loc_format` member of the `muttHead` struct easier to interpret:
+
+* [0x0000] `MUTT_LOCA_FORMAT_OFFSET16`: short offsets (offset16).
+
+* [0x0001] `MUTT_LOCA_FORMAT_OFFSET32`: long offsets (offset32).
+
 ## Hhea information
 
-The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hhea`, and loaded with the flag `MUTT_LOAD_HHEA`.
+The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hhea`, and loaded with the flag `MUTT_LOAD_HHEA` (flag `MUTT_LOAD_MAXP` also needs to be set for loca to load successfully).
 
 Its members are:
 
@@ -371,7 +391,7 @@ Its members are:
 
 ## Hmtx information
 
-The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hmtx`, and loaded with the flag `MUTT_LOAD_HMTX`.
+The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->hmtx`, and loaded with the flag `MUTT_LOAD_HMTX` (flags `MUTT_LOAD_MAXP` and `MUTT_LOAD_HHEA` also need to be set for loca to load successfully).
 
 Its members are:
 
@@ -384,6 +404,16 @@ The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, an
 * `uint16_m advance_width` - equivalent to "advanceWidth" in the LongHorMetric record.
 
 * `int16_m lsb` - equivalent to "lsb" in the LongHorMetric record.
+
+## Loca information
+
+The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttLoca->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+
+Its members are:
+
+* `uint16_m* offsets16` - equivalent to "offsets" in the short format of the loca table.
+
+* `uint32_m* offsets32` - equivalent to "offsets" in the long format of the loca table.
 
 # C standard library dependencies
 

@@ -238,7 +238,7 @@ printf("== Hmtx ==\n");
 
 if (font.hmtx)
 {
-	// Print hMetrics
+	// Print various hMetrics
 	if (font.hhea->number_of_hmetrics > 0) {
 		printf("[Various hMetrics]\n");
 
@@ -246,14 +246,14 @@ if (font.hmtx)
 			printf("%" PRIu16 ": ", h);
 			printf("advanceWidth: %" PRIu16 ", ", font.hmtx->hmetrics[h].advance_width);
 			printf("lsb: %"          PRIi16 "\n", font.hmtx->hmetrics[h].lsb);
-			
+
 			if (h == 0) {
 				h = 1;
 			}
 		}
 	}
 
-	// Print left side bearings
+	// Print various left side bearings
 	uint16_m lsb_count = font.maxp->num_glyphs - font.hhea->number_of_hmetrics;
 	if (lsb_count > 0) {
 		printf("[Various leftSideBearings]\n");
@@ -271,6 +271,42 @@ if (font.hmtx)
 else
 {
 	printf("Failed to load: %s\n", mutt_result_get_name(font.hmtx_res));
+}
+
+printf("\n");
+
+/* Print loca information */
+
+printf("== Loca ==\n");
+
+if (font.loca)
+{
+	// Print offset types
+	printf("[Various offsets ");
+	if (font.head->index_to_loc_format == MUTT_LOCA_FORMAT_OFFSET16) {
+		printf("(16-bit)]\n");
+	} else {
+		printf("(32-bit)]\n");
+	}
+
+	// Print various offsets
+	for (uint32_m o = 0; o < (uint32_m)(font.maxp->num_glyphs+1) && o < (uint32_m)((o+1)*2); o *= 2) {
+		printf("%" PRIu32 ": ", o);
+
+		if (font.head->index_to_loc_format == MUTT_LOCA_FORMAT_OFFSET16) {
+			printf("%" PRIu16 "\n", font.loca->offsets16[o]);
+		} else {
+			printf("%" PRIu32 "\n", font.loca->offsets32[o]);
+		}
+
+		if (o == 0) {
+			o = 1;
+		}
+	}
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.loca_res));
 }
 
 printf("\n");
