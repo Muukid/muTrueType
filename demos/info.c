@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-03
+LAST UPDATED:       2024-07-05
 
 ============================================================
                         DEMO PURPOSE
@@ -275,7 +275,7 @@ else
 
 printf("\n");
 
-/* Print loca information */
+/* Print loca info */
 
 printf("== Loca ==\n");
 
@@ -290,7 +290,7 @@ if (font.loca)
 	}
 
 	// Print various offsets
-	for (uint32_m o = 0; o < (uint32_m)(font.maxp->num_glyphs+1) && o < (uint32_m)((o+1)*2); o *= 2) {
+	for (uint32_m o = 0; o < (uint32_m)(font.maxp->num_glyphs+1) && o < (uint64_m)((o+1)*2); o *= 2) {
 		printf("%" PRIu32 ": ", o);
 
 		if (font.head->index_to_loc_format == MUTT_LOCA_FORMAT_OFFSET16) {
@@ -307,6 +307,84 @@ if (font.loca)
 else
 {
 	printf("Failed to load: %s\n", mutt_result_get_name(font.loca_res));
+}
+
+printf("\n");
+
+/* Print post info */
+
+printf("== Post ==\n");
+
+if (font.post)
+{
+	printf("version: %" PRIu16 ".%" PRIu16 "\n", font.post->version_high, font.post->version_low);
+
+	printf("italicAngle: %"        PRIi32 "\n", font.post->italic_angle);
+	printf("underlinePosition: %"  PRIi16 "\n", font.post->underline_position);
+	printf("underlineThickness: %" PRIi16 "\n", font.post->underline_thickness);
+	printf("isFixedPitch: %"       PRIu32 "\n", font.post->is_fixed_pitch);
+	printf("minMemType42: %"       PRIu32 "\n", font.post->min_mem_type42);
+	printf("maxMemType42: %"       PRIu32 "\n", font.post->max_mem_type42);
+	printf("minMemType1: %"        PRIu32 "\n", font.post->min_mem_type1);
+	printf("maxMemType1: %"        PRIu32 "\n", font.post->max_mem_type1);
+
+	// 2.0 subtable
+	if (font.post->version_high == 2 && font.post->version_low == 0) {
+		printf("[2.0]\n");
+
+		printf("numGlyphs: %" PRIu16 "\n", font.post->subtable.v20.num_glyphs);
+
+		// Print various glyph name indexes
+		for (uint16_m i = 0; i < font.post->subtable.v20.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+			uint16_m name_index = font.post->subtable.v20.glyph_name_index[i];
+			printf("#%" PRIu16 ": %" PRIu16 "", i, name_index);
+
+			// Print stringData if exists
+			if (name_index >= 258) {
+				name_index -= 258;
+
+				// Increment by length until string is reached
+				uint8_m* string_data = font.post->subtable.v20.string_data;
+				for (uint32_m c = 0; c < name_index; c++) {
+					string_data += string_data[0] + 1;
+				}
+				uint8_m length = string_data[0];
+
+				// Print each character
+				printf(" (");
+				for (uint16_m i = 1; i <= length; i++) {
+					printf("%c", string_data[i]);
+				}
+				printf(")\n");
+			} else {
+				printf("\n");
+			}
+
+			if (i == 0) {
+				i = 1;
+			}
+		}
+	}
+
+	// 2.5 subtable
+	else if (font.post->version_high == 2 && font.post->version_low == 5) {
+		printf("[2.5]\n");
+
+		printf("numGlyphs: %" PRIu16 "\n", font.post->subtable.v25.num_glyphs);
+
+		// Print various glyph offsets
+		for (uint16_m i = 0; i < font.post->subtable.v25.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+			printf("#%" PRIu16 ": %" PRIi8 "\n", i, font.post->subtable.v25.offset[i]);
+
+			if (i == 0) {
+				i = 1;
+			}
+		}
+	}
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.post_res));
 }
 
 printf("\n");

@@ -48,75 +48,81 @@ Note that the libraries listed may also have other dependencies that they also i
 
 mutt uses the `muttResult` enumerator to represent how a function went. It has the following possible values:
 
-* `MUTT_SUCCESS`: the task succeeded.
+* `MUTT_SUCCESS` - the task succeeded.
 
-* `MUTT_FAILED_MALLOC`: a call to malloc failed; memory was insufficient to perform the operation
+* `MUTT_FAILED_MALLOC` - a call to malloc failed; memory was insufficient to perform the operation
 
-* `MUTT_FAILED_REALLOC`: a call to realloc failled; memory was insufficient to perform the operation.
+* `MUTT_FAILED_REALLOC` - a call to realloc failled; memory was insufficient to perform the operation.
 
-* `MUTT_UNFOUND_TABLE`: the table could not be located within the data.
+* `MUTT_UNFOUND_TABLE` - the table could not be located within the data.
 
-* `MUTT_DUPLICATE_TABLE`: another table with the same tag was found.
+* `MUTT_DUPLICATE_TABLE` - another table with the same tag was found.
 
-* `MUTT_INVALID_TABLE_DIRECTORY_LENGTH`: the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
+* `MUTT_INVALID_TABLE_DIRECTORY_LENGTH` - the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
 
-* `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION`: the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
+* `MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION` - the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
 
-* `MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE`: the value for "searchRange" in the table directory was invalid.
+* `MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE` - the value for "searchRange" in the table directory was invalid.
 
-* `MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR`: the value for "entrySelector" in the table directory was invalid.
+* `MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR` - the value for "entrySelector" in the table directory was invalid.
 
-* `MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT`: the value for "rangeShift" in the table directory was invalid.
+* `MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT` - the value for "rangeShift" in the table directory was invalid.
 
-* `MUTT_INVALID_TABLE_RECORD_OFFSET`: the value for "offset" in a table record was out of range.
+* `MUTT_INVALID_TABLE_RECORD_OFFSET` - the value for "offset" in a table record was out of range.
 
-* `MUTT_INVALID_TABLE_RECORD_LENGTH`: the value for "length" in a table record was out of range.
+* `MUTT_INVALID_TABLE_RECORD_LENGTH` - the value for "length" in a table record was out of range.
 
-* `MUTT_INVALID_TABLE_RECORD_CHECKSUM`: the value for "checksum" in a table record was invalid.
+* `MUTT_INVALID_TABLE_RECORD_CHECKSUM` - the value for "checksum" in a table record was invalid.
 
-* `MUTT_INVALID_MAXP_LENGTH`: the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_MAXP_LENGTH` - the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
 
-* `MUTT_INVALID_MAXP_VERSION`: the version value in the maxp table was invalid/unsupported.
+* `MUTT_INVALID_MAXP_VERSION` - the version value in the maxp table was invalid/unsupported.
 
-* `MUTT_INVALID_MAXP_MAX_ZONES`: the value for "maxZones" in the maxp table was invalid.
+* `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" in the maxp table was invalid.
 
-* `MUTT_INVALID_HEAD_LENGTH`: the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_HEAD_LENGTH` - the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
 
-* `MUTT_INVALID_HEAD_VERSION`: the version value in the head table was invalid/unsupported.
+* `MUTT_INVALID_HEAD_VERSION` - the version value in the head table was invalid/unsupported.
 
-* `MUTT_INVALID_HEAD_MAGIC_NUMBER`: the value for "magicNumber" in the head table was invalid.
+* `MUTT_INVALID_HEAD_MAGIC_NUMBER` - the value for "magicNumber" in the head table was invalid.
 
-* `MUTT_INVALID_HEAD_UNITS_PER_EM`: the value for "unitsPerEm" in the head table was invalid.
+* `MUTT_INVALID_HEAD_UNITS_PER_EM` - the value for "unitsPerEm" in the head table was invalid.
 
-* `MUTT_INVALID_HEAD_X_MIN_MAX`: the values for "xMin" and "xMax" in the head table were invalid.
+* `MUTT_INVALID_HEAD_X_MIN_MAX` - the values for "xMin" and "xMax" in the head table were invalid.
 
-* `MUTT_INVALID_HEAD_Y_MIN_MAX`: the values for "yMin" and "yMax" in the head table were invalid.
+* `MUTT_INVALID_HEAD_Y_MIN_MAX` - the values for "yMin" and "yMax" in the head table were invalid.
 
-* `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT`: the value for "indexToLocFormat" in the head table was invalid.
+* `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT` - the value for "indexToLocFormat" in the head table was invalid.
 
-* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT`: the value for "glyphDataFormat" in the head table was invalid/unsupported.
+* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" in the head table was invalid/unsupported.
 
-* `MUTT_INVALID_HHEA_LENGTH`: the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_HHEA_LENGTH` - the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
 
-* `MUTT_INVALID_HHEA_VERSION`: the version value in the hhea table was invalid/unsupported.
+* `MUTT_INVALID_HHEA_VERSION` - the version value in the hhea table was invalid/unsupported.
 
-* `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
+* `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" in the hhea table was invalid/unsupported.
 
-* `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS`: the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
+* `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS` - the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
 
-* `MUTT_INVALID_HMTX_LENGTH`: the value for the table length of hmtx was invalid.
+* `MUTT_INVALID_HMTX_LENGTH` - the value for the table length of hmtx was invalid.
 
-* `MUTT_INVALID_LOCA_LENGTH`: the value for the table length of loca was invalid.
+* `MUTT_INVALID_LOCA_LENGTH` - the value for the table length of loca was invalid.
 
-* `MUTT_HHEA_REQUIRES_MAXP`: the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
+* `MUTT_INVALID_POST_LENGTH` - the value for the table length of post was invalid.
 
-* `MUTT_HMTX_REQUIRES_MAXP`: the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
+* `MUTT_INVALID_POST_VERSION` - the value "version" in the post table was invalid/unsupported.
 
-* `MUTT_HMTX_REQUIRES_HHEA`: the hmtx table failed to load because hhea is rather not being loaded or failed to load, and hmtx relies on hhea.
+* `MUTT_INVALID_GLYPH_NAME_INDEX` - an index in the array "glyphNameIndex" in the version 2.0 post subtable was out of range.
 
-* `MUTT_LOCA_REQUIRES_HEAD`: the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
+* `MUTT_HHEA_REQUIRES_MAXP` - the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 
-* `MUTT_LOCA_REQUIRES_MAXP`: the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
+* `MUTT_HMTX_REQUIRES_MAXP` - the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
+
+* `MUTT_HMTX_REQUIRES_HHEA` - the hmtx table failed to load because hhea is rather not being loaded or failed to load, and hmtx relies on hhea.
+
+* `MUTT_LOCA_REQUIRES_HEAD` - the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
+
+* `MUTT_LOCA_REQUIRES_MAXP` - the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -177,6 +183,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000020] `MUTT_LOAD_LOCA` - load the loca table.
 
+* [0x00000040] `MUTT_LOAD_POST` - load the post table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -193,35 +201,39 @@ A TrueType font is represented by the struct `muttFont`. Once successfully loade
 
 Inside the `muttFont` struct is all of the loaded information from when it was loaded. The actual full list of members is:
 
-* `uint32_m load_flags`: the load flags that were provided to the load function.
+* `uint32_m load_flags` - the load flags that were provided to the load function.
 
-* `muttDirectory* directory`: a pointer to a directory listing all of the tables provided by the given font.
+* `muttDirectory* directory` - a pointer to a directory listing all of the tables provided by the given font.
 
-* `muttMaxp* maxp`: a pointer to the maxp table.
+* `muttMaxp* maxp` - a pointer to the maxp table.
 
-* `muttResult maxp_res`: the result of loading the member `maxp`.
+* `muttResult maxp_res` - the result of loading the member `maxp`.
 
-* `muttHead* head`: a pointer to the head table.
+* `muttHead* head` - a pointer to the head table.
 
-* `muttResult head_res`: the result of loading the member `head`.
+* `muttResult head_res` - the result of loading the member `head`.
 
-* `muttHhea* hhea`: a pointer to the hhea table.
+* `muttHhea* hhea` - a pointer to the hhea table.
 
-* `muttResult hhea_res`: the result of loading the member `hhea`.
+* `muttResult hhea_res` - the result of loading the member `hhea`.
 
-* `muttHmtx* hmtx`: a pointer to the hmtx table.
+* `muttHmtx* hmtx` - a pointer to the hmtx table.
 
-* `muttResult hmtx_res`: the result of loading the member `hmtx`.
+* `muttResult hmtx_res` - the result of loading the member `hmtx`.
 
-* `muttLoca* loca`: a pointer to the loca table.
+* `muttLoca* loca` - a pointer to the loca table.
 
-* `muttResult loca_res`: the result of loading the member `loca`.
+* `muttResult loca_res` - the result of loading the member `loca`.
 
-* `muByte* mem`: the inner allocated memory used for holding necessary data.
+* `muttPost* post` - a pointer to the post table.
 
-* `size_m memlen`: the length of the allocated memory, in bytes.
+* `muttResult post_res` - the result of loading the member `post`.
 
-* `size_m memcur`: offset to the latest unused memory in `mem`, in bytes.
+* `muByte* mem` - the inner allocated memory used for holding necessary data.
+
+* `size_m memlen` - the length of the allocated memory, in bytes.
+
+* `size_m memcur` - offset to the latest unused memory in `mem`, in bytes.
 
 Most of the members are in pairs of pointers and result values. If a requested pointer is 0, it could not be loaded, and its corresponding result value will indicate the result enumerator indicating what went wrong.
 
@@ -229,7 +241,7 @@ The contents of a pointer and result pair for information not included in the lo
 
 Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
 
-Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0.
+Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0 unless stated otherwise.
 
 ## Directory information
 
@@ -237,25 +249,25 @@ The struct `muttDirectory` is used to list all of the tables provided by a TrueT
 
 Its members are:
 
-* `uint16_m num_tables`: equivalent to "numTables" in the table directory.
+* `uint16_m num_tables` - equivalent to "numTables" in the table directory.
 
-* `uint16_m search_range`: equivalent to "searchRange" in the table directory.
+* `uint16_m search_range` - equivalent to "searchRange" in the table directory.
 
-* `uint16_m entry_selector`: equivalent to "entrySelector" in the table directory.
+* `uint16_m entry_selector` - equivalent to "entrySelector" in the table directory.
 
-* `uint16_m range_shift`: equivalent to "rangeShift" in the table directory.
+* `uint16_m range_shift` - equivalent to "rangeShift" in the table directory.
 
-* `muttTableRecord* table_records`: equivalent to "tableRecords" in the table directory.
+* `muttTableRecord* table_records` - equivalent to "tableRecords" in the table directory.
 
 The struct `muttTableRecord` is similar to TrueType's table record, and has the following members:
 
-* `uint8_m table_tag[4]`: equivalent to "tableTag" in the table record.
+* `uint8_m table_tag[4]` - equivalent to "tableTag" in the table record.
 
-* `uint32_m checksum`: equivalent to "checksum" in the table record.
+* `uint32_m checksum` - equivalent to "checksum" in the table record.
 
-* `uint32_m offset`: equivalent to "offset" in the table record.
+* `uint32_m offset` - equivalent to "offset" in the table record.
 
-* `uint32_m length`: equivalent to "length" in the table record.
+* `uint32_m length` - equivalent to "length" in the table record.
 
 ## Maxp information
 
@@ -263,37 +275,37 @@ The struct `muttMaxp` is used to represent the maxp table provided by a TrueType
 
 Its members are:
 
-* `uint16_m version_high`: equivalent to the high bytes of "version" in the maxp table.
+* `uint16_m version_high` - equivalent to the high bytes of "version" in the maxp table.
 
-* `uint16_m version_low`: equivalent to the low bytes "version" in the maxp table.
+* `uint16_m version_low` - equivalent to the low bytes "version" in the maxp table.
 
-* `uint16_m num_glyphs`: equivalent to "numGlyphs" in the maxp table.
+* `uint16_m num_glyphs` - equivalent to "numGlyphs" in the maxp table.
 
-* `uint16_m max_points`: equivalent to "maxPoints" in the maxp table.
+* `uint16_m max_points` - equivalent to "maxPoints" in the maxp table.
 
-* `uint16_m max_contours`: equivalent to "maxContours" in the maxp table.
+* `uint16_m max_contours` - equivalent to "maxContours" in the maxp table.
 
-* `uint16_m max_composite_points`: equivalent to "maxCompositePoints" in the maxp table.
+* `uint16_m max_composite_points` - equivalent to "maxCompositePoints" in the maxp table.
 
-* `uint16_m max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table.
+* `uint16_m max_composite_contours` - equivalent to "maxCompositeContours" in the maxp table.
 
-* `uint16_m max_zones`: equivalent to "maxZones" in the maxp table.
+* `uint16_m max_zones` - equivalent to "maxZones" in the maxp table.
 
-* `uint16_m max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table.
+* `uint16_m max_twilight_points` - equivalent to "maxTwilightPoints" in the maxp table.
 
-* `uint16_m max_storage`: equivalent to "maxStorage" in the maxp table.
+* `uint16_m max_storage` - equivalent to "maxStorage" in the maxp table.
 
-* `uint16_m max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table.
+* `uint16_m max_function_defs` - equivalent to "maxFunctionDefs" in the maxp table.
 
-* `uint16_m max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table.
+* `uint16_m max_instruction_defs` - equivalent to "maxInstructionDefs" in the maxp table.
 
-* `uint16_m max_stack_elements`: equivalent to "maxStackElements" in the maxp table.
+* `uint16_m max_stack_elements` - equivalent to "maxStackElements" in the maxp table.
 
-* `uint16_m max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table.
+* `uint16_m max_size_of_instructions` - equivalent to "maxSizeOfInstructions" in the maxp table.
 
-* `uint16_m max_component_elements`: equivalent to "maxComponentElements" in the maxp table.
+* `uint16_m max_component_elements` - equivalent to "maxComponentElements" in the maxp table.
 
-* `uint16_m max_component_depth`: equivalent to "maxComponentDepth" in the maxp table.
+* `uint16_m max_component_depth` - equivalent to "maxComponentDepth" in the maxp table.
 
 ## Head information
 
@@ -337,27 +349,27 @@ Its members are:
 
 The following macros are defined to make bit-masking the `mac_style` member of the `muttHead` struct easier:
 
-* [0x0001] `MUTT_MAC_STYLE_BOLD`: bold.
+* [0x0001] `MUTT_MAC_STYLE_BOLD` - bold.
 
-* [0x0002] `MUTT_MAC_STYLE_ITALIC`: italic.
+* [0x0002] `MUTT_MAC_STYLE_ITALIC` - italic.
 
-* [0x0004] `MUTT_MAC_STYLE_UNDERLINE`: underlined.
+* [0x0004] `MUTT_MAC_STYLE_UNDERLINE` - underlined.
 
-* [0x0008] `MUTT_MAC_STYLE_OUTLINE`: outlined.
+* [0x0008] `MUTT_MAC_STYLE_OUTLINE` - outlined.
 
-* [0x0010] `MUTT_MAC_STYLE_SHADOW`: shadow.
+* [0x0010] `MUTT_MAC_STYLE_SHADOW` - shadow.
 
-* [0x0020] `MUTT_MAC_STYLE_CONDENSED`: condensed.
+* [0x0020] `MUTT_MAC_STYLE_CONDENSED` - condensed.
 
-* [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
+* [0x0040] `MUTT_MAC_STYLE_EXTENDED` - extended.
 
 ### Head index to loc format macros
 
 The following macros are defined to make the value of the `index_to_loc_format` member of the `muttHead` struct easier to interpret:
 
-* [0x0000] `MUTT_LOCA_FORMAT_OFFSET16`: short offsets (offset16).
+* [0x0000] `MUTT_LOCA_FORMAT_OFFSET16` - short offsets (offset16).
 
-* [0x0001] `MUTT_LOCA_FORMAT_OFFSET32`: long offsets (offset32).
+* [0x0001] `MUTT_LOCA_FORMAT_OFFSET32` - long offsets (offset32).
 
 ## Hhea information
 
@@ -407,7 +419,7 @@ The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, an
 
 ## Loca information
 
-The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttLoca->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
 
 Its members are:
 
@@ -415,22 +427,78 @@ Its members are:
 
 * `uint32_m* offsets32` - equivalent to "offsets" in the long format of the loca table.
 
+## Post information
+
+### Version 2.0 post subtable
+
+The struct `muttPost20` represents a version 2.0 post subtable. It has the following members:
+
+* `uint16_m num_glyphs` - equivalent to "numGlyphs" in version 2.0 of the post subtable. If this value is equal to 0, the contents of all other members are undefined.
+
+* `uint16_m* glyph_name_index` - equivalent to "glyphNameIndex" in version 2.0 of the post subtable.
+
+* `uint8_m* string_data` - equivalent to "stringData" in version 2.0 of the post subtable.
+
+### Version 2.5 post subtable
+
+The struct `muttPost25` represents a version 2.5 post subtable. It has the following members:
+
+* `uint16_m num_glyphs` - equivalent to "numGlyphs" in version 2.5 of the post subtable. If this value is equal to 0, the contents of all other members are undefined.
+
+* `int8_m* offset` - equivalent to "offset" in version 2.5 of the post subtable.
+
+### Post subtable
+
+The union `muttPostSubtable` represents the possible subtables offered by different versions of the post table. It has the following members:
+
+* `muttPost20 v20` - version 2.0 post subtable.
+
+* `muttPost25 v25` - version 2.5 post subtable.
+
+### Post struct
+
+The struct `muttPost` is used to represent the post table provided by a TrueType font, stored in the struct `muttPost` as `muttFont->post`, and loaded with the flag `MUTT_LOAD_POST`.
+
+Its members are:
+
+* `uint16_m version_high` - equivalent to the high bytes of "version" in the post table.
+
+* `uint16_m version_low` - equivalent to the low bytes of "version" in the post table.
+
+* `int32_m italic_angle` - equivalent to "italicAngle" in the post table.
+
+* `int16_m underline_position` - equivalent to "underlinePosition" in the post table.
+
+* `int16_m underline_thickness` - equivalent to "underlineThickness" in the post table.
+
+* `uint32_m is_fixed_pitch` - equivalent to "isFixedPitch" in the post table.
+
+* `uint32_m min_mem_type42` - equivalent to "minMemType42" in the post table.
+
+* `uint32_m max_mem_type42` - equivalent to "maxMemType42" in the post table.
+
+* `uint32_m min_mem_type1` - equivalent to "minMemType1" in the post table.
+
+* `uint32_m max_mem_type1` - equivalent to "maxMemType1" in the post table.
+
+* `muttPostSubtable subtable` - the subtable offered by the version of the post table; the contents of this member are undefined if the version is not 2.0 or 2.5.
+
 # C standard library dependencies
 
 mutt has several C standard library dependencies not provided by its other library dependencies, all of which are overridable by defining them before the inclusion of its header. This is a list of all of those dependencies.
 
 ## `stdlib.h` dependencies
 
-* `mu_malloc`: equivalent to `malloc`.
+* `mu_malloc` - equivalent to `malloc`.
 
-* `mu_free`: equivalent to `free`.
+* `mu_free` - equivalent to `free`.
 
-* `mu_realloc`: equivalent to `realloc`.
+* `mu_realloc` - equivalent to `realloc`.
 
 ## `string.h` dependencies
 
-* `mu_memcpy`: equivalent to `memcpy`.
+* `mu_memcpy` - equivalent to `memcpy`.
 
 ## `math.h` dependencies
 
-* `mu_pow`: equivalent to `pow`.
+* `mu_pow` - equivalent to `pow`.

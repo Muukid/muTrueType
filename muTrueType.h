@@ -425,75 +425,81 @@ mutt is developed primarily off of these sources of documentation:
 		// @DOCLINE mutt uses the `muttResult` enumerator to represent how a function went. It has the following possible values:
 
 		MU_ENUM(muttResult,
-			// @DOCLINE * `@NLFT`: the task succeeded.
+			// @DOCLINE * `@NLFT` - the task succeeded.
 			MUTT_SUCCESS,
-			// @DOCLINE * `@NLFT`: a call to malloc failed; memory was insufficient to perform the operation
+			// @DOCLINE * `@NLFT` - a call to malloc failed; memory was insufficient to perform the operation
 			MUTT_FAILED_MALLOC,
-			// @DOCLINE * `@NLFT`: a call to realloc failled; memory was insufficient to perform the operation.
+			// @DOCLINE * `@NLFT` - a call to realloc failled; memory was insufficient to perform the operation.
 			MUTT_FAILED_REALLOC,
-			// @DOCLINE * `@NLFT`: the table could not be located within the data.
+			// @DOCLINE * `@NLFT` - the table could not be located within the data.
 			MUTT_UNFOUND_TABLE,
-			// @DOCLINE * `@NLFT`: another table with the same tag was found.
+			// @DOCLINE * `@NLFT` - another table with the same tag was found.
 			MUTT_DUPLICATE_TABLE,
-			// @DOCLINE * `@NLFT`: the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
+			// @DOCLINE * `@NLFT` - the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
 			MUTT_INVALID_TABLE_DIRECTORY_LENGTH,
-			// @DOCLINE * `@NLFT`: the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
+			// @DOCLINE * `@NLFT` - the value for "sfntVersion" in the table directory was invalid. Since this is the first value read when loading TrueType data, this most likely means that rather the data given is corrupt, not TrueType data, or is under another incompatible wrapper (such as fonts that use CFF data).
 			MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION,
-			// @DOCLINE * `@NLFT`: the value for "searchRange" in the table directory was invalid.
+			// @DOCLINE * `@NLFT` - the value for "searchRange" in the table directory was invalid.
 			MUTT_INVALID_TABLE_DIRECTORY_SEARCH_RANGE,
-			// @DOCLINE * `@NLFT`: the value for "entrySelector" in the table directory was invalid.
+			// @DOCLINE * `@NLFT` - the value for "entrySelector" in the table directory was invalid.
 			MUTT_INVALID_TABLE_DIRECTORY_ENTRY_SELECTOR,
-			// @DOCLINE * `@NLFT`: the value for "rangeShift" in the table directory was invalid.
+			// @DOCLINE * `@NLFT` - the value for "rangeShift" in the table directory was invalid.
 			MUTT_INVALID_TABLE_DIRECTORY_RANGE_SHIFT,
-			// @DOCLINE * `@NLFT`: the value for "offset" in a table record was out of range.
+			// @DOCLINE * `@NLFT` - the value for "offset" in a table record was out of range.
 			MUTT_INVALID_TABLE_RECORD_OFFSET,
-			// @DOCLINE * `@NLFT`: the value for "length" in a table record was out of range.
+			// @DOCLINE * `@NLFT` - the value for "length" in a table record was out of range.
 			MUTT_INVALID_TABLE_RECORD_LENGTH,
-			// @DOCLINE * `@NLFT`: the value for "checksum" in a table record was invalid.
+			// @DOCLINE * `@NLFT` - the value for "checksum" in a table record was invalid.
 			MUTT_INVALID_TABLE_RECORD_CHECKSUM,
-			// @DOCLINE * `@NLFT`: the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
+			// @DOCLINE * `@NLFT` - the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
 			MUTT_INVALID_MAXP_LENGTH,
-			// @DOCLINE * `@NLFT`: the version value in the maxp table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the version value in the maxp table was invalid/unsupported.
 			MUTT_INVALID_MAXP_VERSION,
-			// @DOCLINE * `@NLFT`: the value for "maxZones" in the maxp table was invalid.
+			// @DOCLINE * `@NLFT` - the value for "maxZones" in the maxp table was invalid.
 			MUTT_INVALID_MAXP_MAX_ZONES,
-			// @DOCLINE * `@NLFT`: the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
+			// @DOCLINE * `@NLFT` - the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
 			MUTT_INVALID_HEAD_LENGTH,
-			// @DOCLINE * `@NLFT`: the version value in the head table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the version value in the head table was invalid/unsupported.
 			MUTT_INVALID_HEAD_VERSION,
-			// @DOCLINE * `@NLFT`: the value for "magicNumber" in the head table was invalid.
+			// @DOCLINE * `@NLFT` - the value for "magicNumber" in the head table was invalid.
 			MUTT_INVALID_HEAD_MAGIC_NUMBER,
-			// @DOCLINE * `@NLFT`: the value for "unitsPerEm" in the head table was invalid.
+			// @DOCLINE * `@NLFT` - the value for "unitsPerEm" in the head table was invalid.
 			MUTT_INVALID_HEAD_UNITS_PER_EM,
-			// @DOCLINE * `@NLFT`: the values for "xMin" and "xMax" in the head table were invalid.
+			// @DOCLINE * `@NLFT` - the values for "xMin" and "xMax" in the head table were invalid.
 			MUTT_INVALID_HEAD_X_MIN_MAX,
-			// @DOCLINE * `@NLFT`: the values for "yMin" and "yMax" in the head table were invalid.
+			// @DOCLINE * `@NLFT` - the values for "yMin" and "yMax" in the head table were invalid.
 			MUTT_INVALID_HEAD_Y_MIN_MAX,
-			// @DOCLINE * `@NLFT`: the value for "indexToLocFormat" in the head table was invalid.
+			// @DOCLINE * `@NLFT` - the value for "indexToLocFormat" in the head table was invalid.
 			MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT,
-			// @DOCLINE * `@NLFT`: the value for "glyphDataFormat" in the head table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the value for "glyphDataFormat" in the head table was invalid/unsupported.
 			MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT,
-			// @DOCLINE * `@NLFT`: the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
+			// @DOCLINE * `@NLFT` - the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
 			MUTT_INVALID_HHEA_LENGTH,
-			// @DOCLINE * `@NLFT`: the version value in the hhea table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the version value in the hhea table was invalid/unsupported.
 			MUTT_INVALID_HHEA_VERSION,
-			// @DOCLINE * `@NLFT`: the value for "metricDataFormat" in the hhea table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the value for "metricDataFormat" in the hhea table was invalid/unsupported.
 			MUTT_INVALID_HHEA_METRIC_DATA_FORMAT,
-			// @DOCLINE * `@NLFT`: the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
+			// @DOCLINE * `@NLFT` - the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
 			MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS,
-			// @DOCLINE * `@NLFT`: the value for the table length of hmtx was invalid.
+			// @DOCLINE * `@NLFT` - the value for the table length of hmtx was invalid.
 			MUTT_INVALID_HMTX_LENGTH,
-			// @DOCLINE * `@NLFT`: the value for the table length of loca was invalid.
+			// @DOCLINE * `@NLFT` - the value for the table length of loca was invalid.
 			MUTT_INVALID_LOCA_LENGTH,
-			// @DOCLINE * `@NLFT`: the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
+			// @DOCLINE * `@NLFT` - the value for the table length of post was invalid.
+			MUTT_INVALID_POST_LENGTH,
+			// @DOCLINE * `@NLFT` - the value "version" in the post table was invalid/unsupported.
+			MUTT_INVALID_POST_VERSION,
+			// @DOCLINE * `@NLFT` - an index in the array "glyphNameIndex" in the version 2.0 post subtable was out of range.
+			MUTT_INVALID_GLYPH_NAME_INDEX,
+			// @DOCLINE * `@NLFT` - the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 			MUTT_HHEA_REQUIRES_MAXP,
-			// @DOCLINE * `@NLFT`: the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
+			// @DOCLINE * `@NLFT` - the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
 			MUTT_HMTX_REQUIRES_MAXP,
-			// @DOCLINE * `@NLFT`: the hmtx table failed to load because hhea is rather not being loaded or failed to load, and hmtx relies on hhea.
+			// @DOCLINE * `@NLFT` - the hmtx table failed to load because hhea is rather not being loaded or failed to load, and hmtx relies on hhea.
 			MUTT_HMTX_REQUIRES_HHEA,
-			// @DOCLINE * `@NLFT`: the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
+			// @DOCLINE * `@NLFT` - the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
 			MUTT_LOCA_REQUIRES_HEAD,
-			// @DOCLINE * `@NLFT`: the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
+			// @DOCLINE * `@NLFT` - the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
 			MUTT_LOCA_REQUIRES_MAXP,
 		)
 
@@ -523,6 +529,7 @@ mutt is developed primarily off of these sources of documentation:
 		typedef struct muttHhea muttHhea;
 		typedef struct muttHmtx muttHmtx;
 		typedef union muttLoca muttLoca;
+		typedef struct muttPost muttPost;
 
 		// @DOCLINE ## Loading and deloading functions
 
@@ -564,6 +571,9 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE * [0x00000020] `MUTT_LOAD_LOCA` - load the loca table.
 				#define MUTT_LOAD_LOCA 0x00000020
 
+				// @DOCLINE * [0x00000040] `MUTT_LOAD_POST` - load the post table.
+				#define MUTT_LOAD_POST 0x00000040
+
 			// @DOCLINE ### Group bit values
 
 				// @DOCLINE The following macros are defined for loading groups of tables:
@@ -583,42 +593,47 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE Inside the `muttFont` struct is all of the loaded information from when it was loaded. The actual full list of members is:
 
 			struct muttFont {
-				// @DOCLINE * `@NLFT load_flags`: the load flags that were provided to the load function.
+				// @DOCLINE * `@NLFT load_flags` - the load flags that were provided to the load function.
 				uint32_m load_flags;
 
-				// @DOCLINE * `@NLFT* directory`: a pointer to a directory listing all of the tables provided by the given font.
+				// @DOCLINE * `@NLFT* directory` - a pointer to a directory listing all of the tables provided by the given font.
 				muttDirectory* directory;
 
-				// @DOCLINE * `@NLFT* maxp`: a pointer to the maxp table.
+				// @DOCLINE * `@NLFT* maxp` - a pointer to the maxp table.
 				muttMaxp* maxp;
-				// @DOCLINE * `@NLFT maxp_res`: the result of loading the member `maxp`.
+				// @DOCLINE * `@NLFT maxp_res` - the result of loading the member `maxp`.
 				muttResult maxp_res;
 
-				// @DOCLINE * `@NLFT* head`: a pointer to the head table.
+				// @DOCLINE * `@NLFT* head` - a pointer to the head table.
 				muttHead* head;
-				// @DOCLINE * `@NLFT head_res`: the result of loading the member `head`.
+				// @DOCLINE * `@NLFT head_res` - the result of loading the member `head`.
 				muttResult head_res;
 
-				// @DOCLINE * `@NLFT* hhea`: a pointer to the hhea table.
+				// @DOCLINE * `@NLFT* hhea` - a pointer to the hhea table.
 				muttHhea* hhea;
-				// @DOCLINE * `@NLFT hhea_res`: the result of loading the member `hhea`.
+				// @DOCLINE * `@NLFT hhea_res` - the result of loading the member `hhea`.
 				muttResult hhea_res;
 
-				// @DOCLINE * `@NLFT* hmtx`: a pointer to the hmtx table.
+				// @DOCLINE * `@NLFT* hmtx` - a pointer to the hmtx table.
 				muttHmtx* hmtx;
-				// @DOCLINE * `@NLFT hmtx_res`: the result of loading the member `hmtx`.
+				// @DOCLINE * `@NLFT hmtx_res` - the result of loading the member `hmtx`.
 				muttResult hmtx_res;
 
-				// @DOCLINE * `@NLFT* loca`: a pointer to the loca table.
+				// @DOCLINE * `@NLFT* loca` - a pointer to the loca table.
 				muttLoca* loca;
-				// @DOCLINE * `@NLFT loca_res`: the result of loading the member `loca`.
+				// @DOCLINE * `@NLFT loca_res` - the result of loading the member `loca`.
 				muttResult loca_res;
 
-				// @DOCLINE * `@NLFT* mem`: the inner allocated memory used for holding necessary data.
+				// @DOCLINE * `@NLFT* post` - a pointer to the post table.
+				muttPost* post;
+				// @DOCLINE * `@NLFT post_res` - the result of loading the member `post`.
+				muttResult post_res;
+
+				// @DOCLINE * `@NLFT* mem` - the inner allocated memory used for holding necessary data.
 				muByte* mem;
-				// @DOCLINE * `@NLFT memlen`: the length of the allocated memory, in bytes.
+				// @DOCLINE * `@NLFT memlen` - the length of the allocated memory, in bytes.
 				size_m memlen;
-				// @DOCLINE * `@NLFT memcur`: offset to the latest unused memory in `mem`, in bytes.
+				// @DOCLINE * `@NLFT memcur` - offset to the latest unused memory in `mem`, in bytes.
 				size_m memcur;
 			};
 
@@ -628,7 +643,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Note that if the directory fails to load, the entire loading function fails, and what went wrong is returned in the loading function; this is why there is no respective result for the member `directory`.
 
-			// @DOCLINE Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0.
+			// @DOCLINE Note that if an array in a table or directory is of length 0, the value for the pointer within the respective struct is 0 unless stated otherwise.
 
 		// @DOCLINE ## Directory information
 
@@ -638,28 +653,28 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Its members are:
 			struct muttDirectory {
-				// @DOCLINE * `@NLFT num_tables`: equivalent to "numTables" in the table directory.
+				// @DOCLINE * `@NLFT num_tables` - equivalent to "numTables" in the table directory.
 				uint16_m num_tables;
-				// @DOCLINE * `@NLFT search_range`: equivalent to "searchRange" in the table directory.
+				// @DOCLINE * `@NLFT search_range` - equivalent to "searchRange" in the table directory.
 				uint16_m search_range;
-				// @DOCLINE * `@NLFT entry_selector`: equivalent to "entrySelector" in the table directory.
+				// @DOCLINE * `@NLFT entry_selector` - equivalent to "entrySelector" in the table directory.
 				uint16_m entry_selector;
-				// @DOCLINE * `@NLFT range_shift`: equivalent to "rangeShift" in the table directory.
+				// @DOCLINE * `@NLFT range_shift` - equivalent to "rangeShift" in the table directory.
 				uint16_m range_shift;
-				// @DOCLINE * `@NLFT* table_records`: equivalent to "tableRecords" in the table directory.
+				// @DOCLINE * `@NLFT* table_records` - equivalent to "tableRecords" in the table directory.
 				muttTableRecord* table_records;
 			};
 
 			// @DOCLINE The struct `muttTableRecord` is similar to TrueType's table record, and has the following members:
 
 			struct muttTableRecord {
-				// @DOCLINE * `@NLFT table_tag[4]`: equivalent to "tableTag" in the table record.
+				// @DOCLINE * `@NLFT table_tag[4]` - equivalent to "tableTag" in the table record.
 				uint8_m table_tag[4];
-				// @DOCLINE * `@NLFT checksum`: equivalent to "checksum" in the table record.
+				// @DOCLINE * `@NLFT checksum` - equivalent to "checksum" in the table record.
 				uint32_m checksum;
-				// @DOCLINE * `@NLFT offset`: equivalent to "offset" in the table record.
+				// @DOCLINE * `@NLFT offset` - equivalent to "offset" in the table record.
 				uint32_m offset;
-				// @DOCLINE * `@NLFT length`: equivalent to "length" in the table record.
+				// @DOCLINE * `@NLFT length` - equivalent to "length" in the table record.
 				uint32_m length;
 			};
 
@@ -669,37 +684,37 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Its members are:
 			struct muttMaxp {
-				// @DOCLINE * `@NLFT version_high`: equivalent to the high bytes of "version" in the maxp table.
+				// @DOCLINE * `@NLFT version_high` - equivalent to the high bytes of "version" in the maxp table.
 				uint16_m version_high;
-				// @DOCLINE * `@NLFT version_low`: equivalent to the low bytes "version" in the maxp table.
+				// @DOCLINE * `@NLFT version_low` - equivalent to the low bytes "version" in the maxp table.
 				uint16_m version_low;
-				// @DOCLINE * `@NLFT num_glyphs`: equivalent to "numGlyphs" in the maxp table.
+				// @DOCLINE * `@NLFT num_glyphs` - equivalent to "numGlyphs" in the maxp table.
 				uint16_m num_glyphs;
-				// @DOCLINE * `@NLFT max_points`: equivalent to "maxPoints" in the maxp table.
+				// @DOCLINE * `@NLFT max_points` - equivalent to "maxPoints" in the maxp table.
 				uint16_m max_points;
-				// @DOCLINE * `@NLFT max_contours`: equivalent to "maxContours" in the maxp table.
+				// @DOCLINE * `@NLFT max_contours` - equivalent to "maxContours" in the maxp table.
 				uint16_m max_contours;
-				// @DOCLINE * `@NLFT max_composite_points`: equivalent to "maxCompositePoints" in the maxp table.
+				// @DOCLINE * `@NLFT max_composite_points` - equivalent to "maxCompositePoints" in the maxp table.
 				uint16_m max_composite_points;
-				// @DOCLINE * `@NLFT max_composite_contours`: equivalent to "maxCompositeContours" in the maxp table.
+				// @DOCLINE * `@NLFT max_composite_contours` - equivalent to "maxCompositeContours" in the maxp table.
 				uint16_m max_composite_contours;
-				// @DOCLINE * `@NLFT max_zones`: equivalent to "maxZones" in the maxp table.
+				// @DOCLINE * `@NLFT max_zones` - equivalent to "maxZones" in the maxp table.
 				uint16_m max_zones;
-				// @DOCLINE * `@NLFT max_twilight_points`: equivalent to "maxTwilightPoints" in the maxp table.
+				// @DOCLINE * `@NLFT max_twilight_points` - equivalent to "maxTwilightPoints" in the maxp table.
 				uint16_m max_twilight_points;
-				// @DOCLINE * `@NLFT max_storage`: equivalent to "maxStorage" in the maxp table.
+				// @DOCLINE * `@NLFT max_storage` - equivalent to "maxStorage" in the maxp table.
 				uint16_m max_storage;
-				// @DOCLINE * `@NLFT max_function_defs`: equivalent to "maxFunctionDefs" in the maxp table.
+				// @DOCLINE * `@NLFT max_function_defs` - equivalent to "maxFunctionDefs" in the maxp table.
 				uint16_m max_function_defs;
-				// @DOCLINE * `@NLFT max_instruction_defs`: equivalent to "maxInstructionDefs" in the maxp table.
+				// @DOCLINE * `@NLFT max_instruction_defs` - equivalent to "maxInstructionDefs" in the maxp table.
 				uint16_m max_instruction_defs;
-				// @DOCLINE * `@NLFT max_stack_elements`: equivalent to "maxStackElements" in the maxp table.
+				// @DOCLINE * `@NLFT max_stack_elements` - equivalent to "maxStackElements" in the maxp table.
 				uint16_m max_stack_elements;
-				// @DOCLINE * `@NLFT max_size_of_instructions`: equivalent to "maxSizeOfInstructions" in the maxp table.
+				// @DOCLINE * `@NLFT max_size_of_instructions` - equivalent to "maxSizeOfInstructions" in the maxp table.
 				uint16_m max_size_of_instructions;
-				// @DOCLINE * `@NLFT max_component_elements`: equivalent to "maxComponentElements" in the maxp table.
+				// @DOCLINE * `@NLFT max_component_elements` - equivalent to "maxComponentElements" in the maxp table.
 				uint16_m max_component_elements;
-				// @DOCLINE * `@NLFT max_component_depth`: equivalent to "maxComponentDepth" in the maxp table.
+				// @DOCLINE * `@NLFT max_component_depth` - equivalent to "maxComponentDepth" in the maxp table.
 				uint16_m max_component_depth;
 			};
 
@@ -747,28 +762,28 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE The following macros are defined to make bit-masking the `mac_style` member of the `muttHead` struct easier:
 
-				// @DOCLINE * [0x0001] `MUTT_MAC_STYLE_BOLD`: bold.
+				// @DOCLINE * [0x0001] `MUTT_MAC_STYLE_BOLD` - bold.
 				#define MUTT_MAC_STYLE_BOLD 0x0001
-				// @DOCLINE * [0x0002] `MUTT_MAC_STYLE_ITALIC`: italic.
+				// @DOCLINE * [0x0002] `MUTT_MAC_STYLE_ITALIC` - italic.
 				#define MUTT_MAC_STYLE_ITALIC 0x0002
-				// @DOCLINE * [0x0004] `MUTT_MAC_STYLE_UNDERLINE`: underlined.
+				// @DOCLINE * [0x0004] `MUTT_MAC_STYLE_UNDERLINE` - underlined.
 				#define MUTT_MAC_STYLE_UNDERLINE 0x0004
-				// @DOCLINE * [0x0008] `MUTT_MAC_STYLE_OUTLINE`: outlined.
+				// @DOCLINE * [0x0008] `MUTT_MAC_STYLE_OUTLINE` - outlined.
 				#define MUTT_MAC_STYLE_OUTLINE 0x0008
-				// @DOCLINE * [0x0010] `MUTT_MAC_STYLE_SHADOW`: shadow.
+				// @DOCLINE * [0x0010] `MUTT_MAC_STYLE_SHADOW` - shadow.
 				#define MUTT_MAC_STYLE_SHADOW 0x0010
-				// @DOCLINE * [0x0020] `MUTT_MAC_STYLE_CONDENSED`: condensed.
+				// @DOCLINE * [0x0020] `MUTT_MAC_STYLE_CONDENSED` - condensed.
 				#define MUTT_MAC_STYLE_CONDENSED 0x0020
-				// @DOCLINE * [0x0040] `MUTT_MAC_STYLE_EXTENDED`: extended.
+				// @DOCLINE * [0x0040] `MUTT_MAC_STYLE_EXTENDED` - extended.
 				#define MUTT_MAC_STYLE_EXTENDED 0x0040
 
 			// @DOCLINE ### Head index to loc format macros
 
 				// @DOCLINE The following macros are defined to make the value of the `index_to_loc_format` member of the `muttHead` struct easier to interpret:
 
-				// @DOCLINE * [0x0000] `MUTT_LOCA_FORMAT_OFFSET16`: short offsets (offset16).
+				// @DOCLINE * [0x0000] `MUTT_LOCA_FORMAT_OFFSET16` - short offsets (offset16).
 				#define MUTT_LOCA_FORMAT_OFFSET16 0x0000
-				// @DOCLINE * [0x0001] `MUTT_LOCA_FORMAT_OFFSET32`: long offsets (offset32).
+				// @DOCLINE * [0x0001] `MUTT_LOCA_FORMAT_OFFSET32` - long offsets (offset32).
 				#define MUTT_LOCA_FORMAT_OFFSET32 0x0001
 
 		// @DOCLINE ## Hhea information
@@ -827,7 +842,7 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Loca information
 
-			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttLoca->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
 
 			// @DOCLINE Its members are:
 			union muttLoca {
@@ -835,6 +850,72 @@ mutt is developed primarily off of these sources of documentation:
 				uint16_m* offsets16;
 				// @DOCLINE * `@NLFT* offsets32` - equivalent to "offsets" in the long format of the loca table.
 				uint32_m* offsets32;
+			};
+
+		// @DOCLINE ## Post information
+
+			// @DOCLINE ### Version 2.0 post subtable
+			// @DOCLINE The struct `muttPost20` represents a version 2.0 post subtable. It has the following members:
+			struct muttPost20 {
+				// @DOCLINE * `@NLFT num_glyphs` - equivalent to "numGlyphs" in version 2.0 of the post subtable. If this value is equal to 0, the contents of all other members are undefined.
+				uint16_m num_glyphs;
+				// @DOCLINE * `@NLFT* glyph_name_index` - equivalent to "glyphNameIndex" in version 2.0 of the post subtable.
+				uint16_m* glyph_name_index;
+				// @DOCLINE * `@NLFT* string_data` - equivalent to "stringData" in version 2.0 of the post subtable.
+				uint8_m* string_data;
+			};
+			typedef struct muttPost20 muttPost20;
+
+			// @DOCLINE ### Version 2.5 post subtable
+			// @DOCLINE The struct `muttPost25` represents a version 2.5 post subtable. It has the following members:
+
+			struct muttPost25 {
+				// @DOCLINE * `@NLFT num_glyphs` - equivalent to "numGlyphs" in version 2.5 of the post subtable. If this value is equal to 0, the contents of all other members are undefined.
+				uint16_m num_glyphs;
+				// @DOCLINE * `@NLFT* offset` - equivalent to "offset" in version 2.5 of the post subtable.
+				int8_m* offset;
+			};
+			typedef struct muttPost25 muttPost25;
+
+			// @DOCLINE ### Post subtable
+			// @DOCLINE The union `muttPostSubtable` represents the possible subtables offered by different versions of the post table. It has the following members:
+
+			union muttPostSubtable {
+				// @DOCLINE * `@NLFT v20` - version 2.0 post subtable.
+				muttPost20 v20;
+				// @DOCLINE * `@NLFT v25` - version 2.5 post subtable.
+				muttPost25 v25;
+			};
+			typedef union muttPostSubtable muttPostSubtable;
+
+			// @DOCLINE ### Post struct
+
+			// @DOCLINE The struct `muttPost` is used to represent the post table provided by a TrueType font, stored in the struct `muttPost` as `muttFont->post`, and loaded with the flag `MUTT_LOAD_POST`.
+
+			// @DOCLINE Its members are:
+			struct muttPost {
+				// @DOCLINE * `@NLFT version_high` - equivalent to the high bytes of "version" in the post table.
+				uint16_m version_high;
+				// @DOCLINE * `@NLFT version_low` - equivalent to the low bytes of "version" in the post table.
+				uint16_m version_low;
+				// @DOCLINE * `@NLFT italic_angle` - equivalent to "italicAngle" in the post table.
+				int32_m italic_angle;
+				// @DOCLINE * `@NLFT underline_position` - equivalent to "underlinePosition" in the post table.
+				int16_m underline_position;
+				// @DOCLINE * `@NLFT underline_thickness` - equivalent to "underlineThickness" in the post table.
+				int16_m underline_thickness;
+				// @DOCLINE * `@NLFT is_fixed_pitch` - equivalent to "isFixedPitch" in the post table.
+				uint32_m is_fixed_pitch;
+				// @DOCLINE * `@NLFT min_mem_type42` - equivalent to "minMemType42" in the post table.
+				uint32_m min_mem_type42;
+				// @DOCLINE * `@NLFT max_mem_type42` - equivalent to "maxMemType42" in the post table.
+				uint32_m max_mem_type42;
+				// @DOCLINE * `@NLFT min_mem_type1` - equivalent to "minMemType1" in the post table.
+				uint32_m min_mem_type1;
+				// @DOCLINE * `@NLFT max_mem_type1` - equivalent to "maxMemType1" in the post table.
+				uint32_m max_mem_type1;
+				// @DOCLINE * `@NLFT subtable` - the subtable offered by the version of the post table; the contents of this member are undefined if the version is not 2.0 or 2.5.
+				muttPostSubtable subtable;
 			};
 
 	// @DOCLINE # C standard library dependencies
@@ -848,17 +929,17 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ## `stdlib.h` dependencies
 			#include <stdlib.h>
 
-			// @DOCLINE * `mu_malloc`: equivalent to `malloc`.
+			// @DOCLINE * `mu_malloc` - equivalent to `malloc`.
 			#ifndef mu_malloc
 				#define mu_malloc malloc
 			#endif
 
-			// @DOCLINE * `mu_free`: equivalent to `free`.
+			// @DOCLINE * `mu_free` - equivalent to `free`.
 			#ifndef mu_free
 				#define mu_free free
 			#endif
 
-			// @DOCLINE * `mu_realloc`: equivalent to `realloc`.
+			// @DOCLINE * `mu_realloc` - equivalent to `realloc`.
 			#ifndef mu_realloc
 				#define mu_realloc realloc
 			#endif
@@ -870,7 +951,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ## `string.h` dependencies
 			#include <string.h>
 
-			// @DOCLINE * `mu_memcpy`: equivalent to `memcpy`.
+			// @DOCLINE * `mu_memcpy` - equivalent to `memcpy`.
 			#ifndef mu_memcpy
 				#define mu_memcpy memcpy
 			#endif
@@ -882,7 +963,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
 
-			// @DOCLINE * `mu_pow`: equivalent to `pow`.
+			// @DOCLINE * `mu_pow` - equivalent to `pow`.
 			#ifndef mu_pow
 				#define mu_pow pow
 			#endif
@@ -930,6 +1011,9 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS: return "MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS"; break;
 			case MUTT_INVALID_HMTX_LENGTH: return "MUTT_INVALID_HMTX_LENGTH"; break;
 			case MUTT_INVALID_LOCA_LENGTH: return "MUTT_INVALID_LOCA_LENGTH"; break;
+			case MUTT_INVALID_POST_LENGTH: return "MUTT_INVALID_POST_LENGTH"; break;
+			case MUTT_INVALID_POST_VERSION: return "MUTT_INVALID_POST_VERSION"; break;
+			case MUTT_INVALID_GLYPH_NAME_INDEX: return "MUTT_INVALID_GLYPH_NAME_INDEX"; break;
 			case MUTT_HHEA_REQUIRES_MAXP: return "MUTT_HHEA_REQUIRES_MAXP"; break;
 			case MUTT_HMTX_REQUIRES_MAXP: return "MUTT_HMTX_REQUIRES_MAXP"; break;
 			case MUTT_HMTX_REQUIRES_HHEA: return "MUTT_HMTX_REQUIRES_HHEA"; break;
@@ -1549,6 +1633,160 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
+	/* Post */
+
+		muttResult mutt_load_post(muttFont* font, muttPost* post, muByte* data, uint32_m length) {
+			// Verify main table length
+			if (length < 32) {
+				return MUTT_INVALID_POST_LENGTH;
+			}
+
+			uint32_m u32;
+			uint16_m u16;
+			muttResult res;
+
+			// version high bytes
+			post->version_high = mu_rbe_uint16(data);
+			data += 2;
+
+			// version low bytes
+			post->version_low = mu_rbe_uint16(data);
+			data += 2;
+
+			// Verify version
+			if (!(post->version_high == 1 && post->version_low == 0) &&
+				!(post->version_high == 2 && post->version_low == 0) &&
+				!(post->version_high == 2 && post->version_low == 5) &&
+				!(post->version_high == 3 && post->version_low == 0)
+			) {
+				return MUTT_INVALID_POST_VERSION;
+			}
+
+			// italicAngle
+			u32 = mu_rbe_uint32(data);
+			post->italic_angle = *(int16_m*)&u32;
+			data += 4;
+
+			// underlinePosition
+			u16 = mu_rbe_uint16(data);
+			post->underline_position = *(int16_m*)&u16;
+			data += 2;
+
+			// underlineThickness
+			u16 = mu_rbe_uint16(data);
+			post->underline_thickness = *(int16_m*)&u16;
+			data += 2;
+
+			// isFixedPitch
+			post->is_fixed_pitch = mu_rbe_uint32(data);
+			data += 4;
+
+			// minMemType42
+			post->min_mem_type42 = mu_rbe_uint32(data);
+			data += 4;
+
+			// maxMemType42
+			post->max_mem_type42 = mu_rbe_uint32(data);
+			data += 4;
+
+			// minMemType1
+			post->min_mem_type1 = mu_rbe_uint32(data);
+			data += 4;
+
+			// maxMemType1
+			post->max_mem_type1 = mu_rbe_uint32(data);
+			data += 4;
+
+			// version handling
+
+			// : 2.0
+			if (post->version_high == 2 && post->version_low == 0) {
+				// Verify length for numGlyphs
+				if (length < 34) {
+					return MUTT_INVALID_POST_LENGTH;
+				}
+
+				// numGlyphs
+				post->subtable.v20.num_glyphs = mu_rbe_uint16(data);
+				data += 2;
+
+				if (post->subtable.v20.num_glyphs == 0) {
+					return MUTT_SUCCESS;
+				}
+
+				// Verify length for glyphNameIndex
+				if (length < (uint32_m)(34 + (2*post->subtable.v20.num_glyphs))) {
+					return MUTT_INVALID_POST_LENGTH;
+				}
+				length -= 34 + (2*post->subtable.v20.num_glyphs);
+
+				// glyphNameIndex allocation
+				post->subtable.v20.glyph_name_index = (uint16_m*)&font->mem[font->memcur];
+				res = mutt_get_mem(font, 2*post->subtable.v20.num_glyphs);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				// Loop through each number in glyphNameIndex
+				for (uint16_m i = 0; i < post->subtable.v20.num_glyphs; i++) {
+					// glyphNameIndex[i]
+					post->subtable.v20.glyph_name_index[i] = mu_rbe_uint16(data);
+
+					// Verify index
+					if (post->subtable.v20.glyph_name_index[i] >= 258) {
+						if ((uint32_m)(post->subtable.v20.glyph_name_index[i]-258) > length) {
+							return MUTT_INVALID_GLYPH_NAME_INDEX;
+						}
+					}
+
+					data += 2;
+				}
+
+				// Allocate stringData
+				post->subtable.v20.string_data = (uint8_m*)&font->mem[font->memcur];
+				res = mutt_get_mem(font, length);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				// Copy stringData over
+				mu_memcpy(post->subtable.v20.string_data, data, length);
+			}
+
+			// : 2.5
+			else if (post->version_high == 2 && post->version_low == 5) {
+				// Verify length for numGlyphs
+				if (length < 34) {
+					return MUTT_INVALID_POST_LENGTH;
+				}
+
+				// numGlyphs
+				post->subtable.v25.num_glyphs = mu_rbe_uint16(data);
+				data += 2;
+
+				if (post->subtable.v25.num_glyphs == 0) {
+					return MUTT_SUCCESS;
+				}
+
+				// Verify length for offset
+				if (length < (uint32_m)(34+post->subtable.v25.num_glyphs)) {
+					return MUTT_INVALID_POST_LENGTH;
+				}
+
+				// Allocate offset
+				post->subtable.v25.offset = (int8_m*)&font->mem[font->memcur];
+				res = mutt_get_mem(font, post->subtable.v25.num_glyphs);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				// Copy offset data
+				mu_memcpy(post->subtable.v25.offset, data, post->subtable.v25.num_glyphs);
+			}
+
+			return MUTT_SUCCESS;
+		}
+
 	/* Full loading */
 
 		#define MUTT_LOAD_IT_TYPE muttResult (*)(muttFont*, void*, uint8_t*, uint32_t)
@@ -1692,6 +1930,12 @@ mutt is developed primarily off of these sources of documentation:
 						// Load
 						MUTT_LOAD_TABLE(Loca, loca)
 					} break;
+
+					// post
+					case 0x706F7374: {
+						MUTT_SKIP_PROCESSED_TABLE(POST)
+						MUTT_LOAD_TABLE(Post, post)
+					} break;
 				}
 			}
 		}
@@ -1752,6 +1996,14 @@ mutt is developed primarily off of these sources of documentation:
 				if (load_flags & MUTT_LOAD_HMTX) {
 					font->hmtx = 0;
 					font->hmtx_res = MUTT_UNFOUND_TABLE;
+				}
+				if (load_flags & MUTT_LOAD_LOCA) {
+					font->loca = 0;
+					font->loca_res = MUTT_UNFOUND_TABLE;
+				}
+				if (load_flags & MUTT_LOAD_POST) {
+					font->post = 0;
+					font->post_res = MUTT_UNFOUND_TABLE;
 				}
 
 			/* Find tables */
