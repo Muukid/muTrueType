@@ -74,13 +74,13 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_TABLE_RECORD_CHECKSUM` - the value for "checksum" in a table record was invalid.
 
-* `MUTT_INVALID_MAXP_LENGTH` - the value for the table length of maxp was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_MAXP_LENGTH` - the value for the table length of the maxp table was invalid. This could mean that an unsupported version of the table is being used.
 
 * `MUTT_INVALID_MAXP_VERSION` - the version value in the maxp table was invalid/unsupported.
 
 * `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" in the maxp table was invalid.
 
-* `MUTT_INVALID_HEAD_LENGTH` - the value for the table length of head was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_HEAD_LENGTH` - the value for the table length of the head table was invalid. This could mean that an unsupported version of the table is being used.
 
 * `MUTT_INVALID_HEAD_VERSION` - the version value in the head table was invalid/unsupported.
 
@@ -96,7 +96,7 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" in the head table was invalid/unsupported.
 
-* `MUTT_INVALID_HHEA_LENGTH` - the value for the table length of hhea was invalid. This could mean that an unsupported version of the table is being used.
+* `MUTT_INVALID_HHEA_LENGTH` - the value for the table length of the hhea table was invalid. This could mean that an unsupported version of the table is being used.
 
 * `MUTT_INVALID_HHEA_VERSION` - the version value in the hhea table was invalid/unsupported.
 
@@ -104,15 +104,31 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS` - the value for "numberOfHMetrics" in the hhea table was invalid/unsupported.
 
-* `MUTT_INVALID_HMTX_LENGTH` - the value for the table length of hmtx was invalid.
+* `MUTT_INVALID_HMTX_LENGTH` - the value for the table length of the hmtx table was invalid.
 
-* `MUTT_INVALID_LOCA_LENGTH` - the value for the table length of loca was invalid.
+* `MUTT_INVALID_LOCA_LENGTH` - the value for the table length of the loca table was invalid.
 
-* `MUTT_INVALID_POST_LENGTH` - the value for the table length of post was invalid.
+* `MUTT_INVALID_POST_LENGTH` - the value for the table length of the post table was invalid.
 
 * `MUTT_INVALID_POST_VERSION` - the value "version" in the post table was invalid/unsupported.
 
-* `MUTT_INVALID_GLYPH_NAME_INDEX` - an index in the array "glyphNameIndex" in the version 2.0 post subtable was out of range.
+* `MUTT_INVALID_POST_GLYPH_NAME_INDEX` - an index in the array "glyphNameIndex" in the version 2.0 post subtable was out of range.
+
+* `MUTT_INVALID_NAME_LENGTH` - the value for the table length of the name table was invalid. This could mean that an unsupported version of the table is being used.
+
+* `MUTT_INVALID_NAME_VERSION` - the value "version" in the name table was invalid/unsupported.
+
+* `MUTT_INVALID_NAME_STORAGE_OFFSET` - the value "storageOffset" in the name table was out of range.
+
+* `MUTT_INVALID_NAME_PLATFORM_ID` - the value "platformID" in a NameRecord within the "nameRecord" array in the name table was invalid/unsupported.
+
+* `MUTT_INVALID_NAME_ENCODING_ID` - the value "encodingID" in a NameRecord within the "nameRecord" array in the name table was invalid/unsupported.
+
+* `MUTT_INVALID_NAME_LANGUAGE_ID` - the value "languageID" in a NameRecord within the "nameRecord" array in the name table was invalid/unsupported.
+
+* `MUTT_INVALID_NAME_STRING_OFFSET` - the value "stringOffset" and "length" in a NameRecord within the "nameRecord" array in the name table were out of range.
+
+* `MUTT_INVALID_NAME_LANG_TAG_OFFSET` - the value "langTagOffset" and "length" in a LangTagRecord within the "langTagRecord" array in the name table were out of range.
 
 * `MUTT_HHEA_REQUIRES_MAXP` - the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 
@@ -185,6 +201,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000040] `MUTT_LOAD_POST` - load the post table.
 
+* [0x00000080] `MUTT_LOAD_NAME` - load the name table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -228,6 +246,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 * `muttPost* post` - a pointer to the post table.
 
 * `muttResult post_res` - the result of loading the member `post`.
+
+* `muttName* name` - a pointer to the name table.
+
+* `muttResult name_res` - the result of loading the member `name`.
 
 * `muByte* mem` - the inner allocated memory used for holding necessary data.
 
@@ -419,7 +441,7 @@ The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, an
 
 ## Loca information
 
-The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the union `muttLoca` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
 
 Its members are:
 
@@ -457,7 +479,7 @@ The union `muttPostSubtable` represents the possible subtables offered by differ
 
 ### Post struct
 
-The struct `muttPost` is used to represent the post table provided by a TrueType font, stored in the struct `muttPost` as `muttFont->post`, and loaded with the flag `MUTT_LOAD_POST`.
+The struct `muttPost` is used to represent the post table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->post`, and loaded with the flag `MUTT_LOAD_POST`.
 
 Its members are:
 
@@ -482,6 +504,626 @@ Its members are:
 * `uint32_m max_mem_type1` - equivalent to "maxMemType1" in the post table.
 
 * `muttPostSubtable subtable` - the subtable offered by the version of the post table; the contents of this member are undefined if the version is not 2.0 or 2.5.
+
+## Name information
+
+The struct `muttName` is used to represent the name table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->name`, and loaded with the flag `MUTT_LOAD_NAME`.
+
+Its members are:
+
+* `uint16_m version` - equivalent to "version" in the name table.
+
+* `uint16_m count` - equivalent to "count" in the name table. If this value is 0, the contents of all members listed after this are undefined.
+
+* `uint16_m storage_offset` - equivalent to "storageOffset" in the name table.
+
+* `muttNameRecord* name_record` - equivalent to "nameRecord" in the name table.
+
+* `uint16_m lang_tag_count` - equivalent to "langTagCount" in the name table (version 1). The value of this member is undefined if `version` is 0.
+
+* `muttLangTagRecord* lang_tag_record` - equivalent to "langTagRecord" in the name table (version 1). The value of this member is undefined if `version` is 0.
+
+* `muByte* storage` - the raw storage data.
+
+### Name record
+
+The struct `muttNameRecord` represents a NameRecord in the name table. It has the following members:
+
+* `uint16_m platform_id` - equivalent to "platformID" in the NameRecord subtable of the name table.
+
+* `uint16_m encoding_id` - equivalent to "encodingID" in the NameRecord subtable of the name table.
+
+* `uint16_m language_id` - equivalent to "languageID" in the NameRecord subtable of the name table.
+
+* `uint16_m name_id` - equivalent to "nameID" in the NameRecord subtable of the name table.
+
+* `uint16_m length` - equivalent to "length" in the NameRecord subtable of the name table.
+
+* `uint16_m string_offset` - equivalent to "stringOffset" in the NameRecord subtable of the name table.
+
+The raw data for the string can be accessed via `&muttName.storage[muttNameRecord.string_offset]`.
+
+### Lang tag record
+
+The struct `muttLangTagRecord` represents a LangTagRecord in the name table. It has the following members:
+
+* `uint16_m length` - equivalent to "length" in the LangTagRecord subtable of the name table.
+
+* `uint16_m lang_tag_offset` - equivalent to "langTagOffset" in the LangTagRecord subtable of the name table.
+
+The raw data for the language tag string can be accessed via `&muttName.storage[muttLangTagRecord.lang_tag_offset]`.
+
+### Name ID macros
+
+The following macros are defined for getting the meaning of some name IDs:
+
+* [00] `MUTT_NAME_ID_COPYRIGHT`
+
+* [01] `MUTT_NAME_ID_FONT_FAMILY`
+
+* [02] `MUTT_NAME_ID_FONT_SUBFAMILY`
+
+* [03] `MUTT_NAME_ID_UNIQUE`
+
+* [04] `MUTT_NAME_ID_FONT_NAME`
+
+* [05] `MUTT_NAME_ID_VERSION`
+
+* [06] `MUTT_NAME_ID_POSTSCRIPT_NAME`
+
+* [07] `MUTT_NAME_ID_TRADEMARK`
+
+* [08] `MUTT_NAME_ID_MANUFACTURER`
+
+* [09] `MUTT_NAME_ID_DESIGNER`
+
+* [10] `MUTT_NAME_ID_DESCRIPTION`
+
+* [11] `MUTT_NAME_ID_VENDOR_URL`
+
+* [12] `MUTT_NAME_ID_DESIGNER_URL`
+
+* [13] `MUTT_NAME_ID_LICENSE_DESCRIPTION`
+
+* [14] `MUTT_NAME_ID_LICENSE_URL`
+
+* [16] `MUTT_NAME_ID_TYPOGRAPHIC_FAMILY`
+
+* [17] `MUTT_NAME_ID_TYPOGRAPHIC_SUBFAMILY`
+
+* [18] `MUTT_NAME_ID_COMPATIBLE`
+
+* [19] `MUTT_NAME_ID_SAMPLE_TEXT`
+
+* [20] `MUTT_NAME_ID_FINDFONT`
+
+* [21] `MUTT_NAME_ID_WWS_FAMILY`
+
+* [22] `MUTT_NAME_ID_WWS_SUBFAMILY`
+
+* [23] `MUTT_NAME_ID_LIGHT_BACKGROUND`
+
+* [24] `MUTT_NAME_ID_DARK_BACKGROUND`
+
+* [25] `MUTT_NAME_ID_VARIATIONS_PREFIX`
+
+The exact meaning of these values can be found in the TrueType and OpenType documentation. Note that name IDs are not limited to just the values defined above.
+
+The function `mutt_name_id_get_name` returns a stringified version of a given name ID value, directly converting its macro equivalent to a string version (for example, `MUTT_NAME_ID_COPYRIGHT` turns into `"MUTT_NAME_ID_COPYRIGHT"`), defined below: 
+
+```c
+MUDEF const char* mutt_name_id_get_name(uint16_m name_id);
+```
+
+
+The function `mutt_name_id_get_nice_name` returns a readable string version of a given name ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_NAME_ID_COPYRIGHT` turns into `"Copyright notice"`), defined below: 
+
+```c
+MUDEF const char* mutt_name_id_get_nice_name(uint16_m name_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given name ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### Platform ID macros
+
+The following macros are defined for getting the meaning of some name IDs:
+
+* [0] `MUTT_PLATFORM_UNICODE`
+
+* [1] `MUTT_PLATFORM_MACINTOSH`
+
+* [2] `MUTT_PLATFORM_ISO`
+
+* [3] `MUTT_PLATFORM_WINDOWS`
+
+* [4] `MUTT_PLATFORM_CUSTOM`
+
+All of the platform ID values defined above are the ones defined by TrueType and OpenType as of the writing of this, and are the only platform ID values compatible with mutt, and an error will be thrown for a table if a platform ID value is given that is not one of the values defined above.
+
+Note that `MUTT_PLATFORM_ISO` and `MUTT_PLATFORM_CUSTOM` are invalid values for a platform ID in a name table; they will not be a given value in the name table if it successfully loaded.
+
+More information about these values is available in the TrueType standard.
+
+The function `mutt_platform_id_get_name` returns a stringified version of a given platform ID value, directly converting its macro equivalent to a string version (for example, `MUTT_PLATFORM_UNICODE` turns into `"MUTT_PLATFORM_UNICODE"`), defined below: 
+
+```c
+MUDEF const char* mutt_platform_id_get_name(uint16_m platform_id);
+```
+
+
+The function `mutt_platform_id_get_nice_name` returns a readable string version of a given platform ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_PLATFORM_UNICODE` turns into `"Unicode"`), defined below: 
+
+```c
+MUDEF const char* mutt_platform_id_get_nice_name(uint16_m platform_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given platform ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### Unicode encoding ID macros
+
+The following macros are defined for interpreting Unicode encoding IDs:
+
+* [0] `MUTT_UNICODE_ENCODING_1_0`
+
+* [1] `MUTT_UNICODE_ENCODING_1_1`
+
+* [2] `MUTT_UNICODE_ENCODING_ISO_IEC_10646`
+
+* [3] `MUTT_UNICODE_ENCODING_2_0_BMP`
+
+* [4] `MUTT_UNICODE_ENCODING_2_0_FULL`
+
+* [5] `MUTT_UNICODE_ENCODING_VARIATION`
+
+* [6] `MUTT_UNICODE_ENCODING_FULL`
+
+All of the Unicode encoding ID values defined above are the ones defined by TrueType and OpenType as of writing this, and are the only Unicode encoding ID values compatible with mutt, and an error will be thrown for a table if a Unicode encoding ID value is given that is not one of the values defined above.
+
+Note that `MUTT_UNICODE_ENCODING_VARIATION` and `MUTT_UNICODE_ENCODING_FULL` are invalid values for a Unicode encoding ID in a name table; they will not be a given value in the name table if it successfully loaded.
+
+More information about these values is available in the TrueType standard.
+
+The function `mutt_unicode_encoding_id_get_name` returns a stringified version of a given Unicode encoding ID value, directly converting its macro equivalent to a string version (for example, `MUTT_UNICODE_ENCODING_1_0` turns into `"MUTT_UNICODE_ENCODING_1_0"`), defined below: 
+
+```c
+MUDEF const char* mutt_unicode_encoding_id_get_name(uint16_m encoding_id);
+```
+
+
+The function `mutt_unicode_encoding_id_get_nice_name` returns a readable string version of a given Unicode encoding ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_UNICODE_ENCODING_1_0` turns into `"Unicode 1.0"`), defined below: 
+
+```c
+MUDEF const char* mutt_unicode_encoding_id_get_nice_name(uint16_m encoding_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given Unicode encoding ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### Macintosh encoding ID macros
+
+The following macros are defined for interpreting Macintosh encoding IDs:
+
+* [00] `MUTT_MACINTOSH_ENCODING_ROMAN`
+
+* [01] `MUTT_MACINTOSH_ENCODING_JAPANESE`
+
+* [02] `MUTT_MACINTOSH_ENCODING_CHINESE_TRADITIONAL`
+
+* [03] `MUTT_MACINTOSH_ENCODING_KOREAN`
+
+* [04] `MUTT_MACINTOSH_ENCODING_ARABIC`
+
+* [05] `MUTT_MACINTOSH_ENCODING_HEBREW`
+
+* [06] `MUTT_MACINTOSH_ENCODING_GREEK`
+
+* [07] `MUTT_MACINTOSH_ENCODING_RUSSIAN`
+
+* [08] `MUTT_MACINTOSH_ENCODING_RSYMBOL`
+
+* [09] `MUTT_MACINTOSH_ENCODING_DEVANAGARI`
+
+* [10] `MUTT_MACINTOSH_ENCODING_GURMUKHI`
+
+* [11] `MUTT_MACINTOSH_ENCODING_GUJARATI`
+
+* [12] `MUTT_MACINTOSH_ENCODING_ODIA`
+
+* [13] `MUTT_MACINTOSH_ENCODING_BANGLA`
+
+* [14] `MUTT_MACINTOSH_ENCODING_TAMIL`
+
+* [15] `MUTT_MACINTOSH_ENCODING_TELUGU`
+
+* [16] `MUTT_MACINTOSH_ENCODING_KANNADA`
+
+* [17] `MUTT_MACINTOSH_ENCODING_MALAYALAM`
+
+* [18] `MUTT_MACINTOSH_ENCODING_SINHALESE`
+
+* [19] `MUTT_MACINTOSH_ENCODING_BURMESE`
+
+* [20] `MUTT_MACINTOSH_ENCODING_KHMER`
+
+* [21] `MUTT_MACINTOSH_ENCODING_THAI`
+
+* [22] `MUTT_MACINTOSH_ENCODING_LAOTIAN`
+
+* [23] `MUTT_MACINTOSH_ENCODING_GEORGIAN`
+
+* [24] `MUTT_MACINTOSH_ENCODING_ARMENIAN`
+
+* [25] `MUTT_MACINTOSH_ENCODING_CHINESE_SIMPLIFIED`
+
+* [26] `MUTT_MACINTOSH_ENCODING_TIBETAN`
+
+* [27] `MUTT_MACINTOSH_ENCODING_MONGOLIAN`
+
+* [28] `MUTT_MACINTOSH_ENCODING_GEEZ`
+
+* [29] `MUTT_MACINTOSH_ENCODING_SLAVIC`
+
+* [30] `MUTT_MACINTOSH_ENCODING_VIETNAMESE`
+
+* [31] `MUTT_MACINTOSH_ENCODING_SINDHI`
+
+* [32] `MUTT_MACINTOSH_ENCODING_UNINTERPRETED`
+
+All of the Macintosh encoding ID values defined above are the ones defined by TrueType and OpenType as of writing this, and are the only Macintosh encoding ID values compatible with mutt, and an error will be thrown for a table if a Macintosh encoding ID value is given that is not one of the values defined above.
+
+More information about these values is available in the TrueType standard.
+
+The function `mutt_macintosh_encoding_id_get_name` returns a stringified version of a given Macintosh encoding ID value, directly converting its macro equivalent to a string version (for example, `MUTT_MACINTOSH_ENCODING_ROMAN` turns into `"MUTT_MACINTOSH_ENCODING_ROMAN"`), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_encoding_id_get_name(uint16_m encoding_id);
+```
+
+
+The function `mutt_macintosh_encoding_id_get_nice_name` returns a readable string version of a given Macintosh encoding ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_MACINTOSH_ENCODING_ROMAN` turns into `"Roman"`), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_encoding_id_get_nice_name(uint16_m encoding_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given Macintosh encoding ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### Macintosh language ID macros
+
+The following macros are defined for interpreting Macintosh language IDs:
+
+* [000] `MUTT_MACINTOSH_LANGUAGE_ENGLISH`
+
+* [001] `MUTT_MACINTOSH_LANGUAGE_FRENCH`
+
+* [002] `MUTT_MACINTOSH_LANGUAGE_GERMAN`
+
+* [003] `MUTT_MACINTOSH_LANGUAGE_ITALIAN`
+
+* [004] `MUTT_MACINTOSH_LANGUAGE_DUTCH`
+
+* [005] `MUTT_MACINTOSH_LANGUAGE_SWEDISH`
+
+* [006] `MUTT_MACINTOSH_LANGUAGE_SPANISH`
+
+* [007] `MUTT_MACINTOSH_LANGUAGE_DANISH`
+
+* [008] `MUTT_MACINTOSH_LANGUAGE_PORTUGUESE`
+
+* [009] `MUTT_MACINTOSH_LANGUAGE_NORWEGIAN`
+
+* [010] `MUTT_MACINTOSH_LANGUAGE_HEBREW`
+
+* [011] `MUTT_MACINTOSH_LANGUAGE_JAPANESE`
+
+* [012] `MUTT_MACINTOSH_LANGUAGE_ARABIC`
+
+* [013] `MUTT_MACINTOSH_LANGUAGE_FINNISH`
+
+* [014] `MUTT_MACINTOSH_LANGUAGE_GREEK`
+
+* [015] `MUTT_MACINTOSH_LANGUAGE_ICELANDIC`
+
+* [016] `MUTT_MACINTOSH_LANGUAGE_MALTESE`
+
+* [017] `MUTT_MACINTOSH_LANGUAGE_TURKISH`
+
+* [018] `MUTT_MACINTOSH_LANGUAGE_CROATIAN`
+
+* [019] `MUTT_MACINTOSH_LANGUAGE_CHINESE_TRADITIONAL`
+
+* [020] `MUTT_MACINTOSH_LANGUAGE_URDU`
+
+* [021] `MUTT_MACINTOSH_LANGUAGE_HINDI`
+
+* [022] `MUTT_MACINTOSH_LANGUAGE_THAI`
+
+* [023] `MUTT_MACINTOSH_LANGUAGE_KOREAN`
+
+* [024] `MUTT_MACINTOSH_LANGUAGE_LITHUANIAN`
+
+* [025] `MUTT_MACINTOSH_LANGUAGE_POLISH`
+
+* [026] `MUTT_MACINTOSH_LANGUAGE_HUNGARIAN`
+
+* [027] `MUTT_MACINTOSH_LANGUAGE_ESTONIAN`
+
+* [028] `MUTT_MACINTOSH_LANGUAGE_LATVIAN`
+
+* [029] `MUTT_MACINTOSH_LANGUAGE_SAMI`
+
+* [030] `MUTT_MACINTOSH_LANGUAGE_FAROESE`
+
+* [031] `MUTT_MACINTOSH_LANGUAGE_FARSI_PERSIAN`
+
+* [032] `MUTT_MACINTOSH_LANGUAGE_RUSSIAN`
+
+* [033] `MUTT_MACINTOSH_LANGUAGE_CHINESE_SIMPLIFIED`
+
+* [034] `MUTT_MACINTOSH_LANGUAGE_FLEMISH`
+
+* [035] `MUTT_MACINTOSH_LANGUAGE_IRISH_GAELIC`
+
+* [036] `MUTT_MACINTOSH_LANGUAGE_ALBANIAN`
+
+* [037] `MUTT_MACINTOSH_LANGUAGE_ROMANIAN`
+
+* [038] `MUTT_MACINTOSH_LANGUAGE_CZECH`
+
+* [039] `MUTT_MACINTOSH_LANGUAGE_SLOVAK`
+
+* [040] `MUTT_MACINTOSH_LANGUAGE_SLOVENIAN`
+
+* [041] `MUTT_MACINTOSH_LANGUAGE_YIDDISH`
+
+* [042] `MUTT_MACINTOSH_LANGUAGE_SERBIAN`
+
+* [043] `MUTT_MACINTOSH_LANGUAGE_MACEDONIAN`
+
+* [044] `MUTT_MACINTOSH_LANGUAGE_BULGARIAN`
+
+* [045] `MUTT_MACINTOSH_LANGUAGE_UKRAINIAN`
+
+* [046] `MUTT_MACINTOSH_LANGUAGE_BYELORUSSIAN`
+
+* [047] `MUTT_MACINTOSH_LANGUAGE_UZBEK`
+
+* [048] `MUTT_MACINTOSH_LANGUAGE_KAZAKH`
+
+* [049] `MUTT_MACINTOSH_LANGUAGE_AZERBAIJANI_CYRILLIC`
+
+* [050] `MUTT_MACINTOSH_LANGUAGE_AZERBAIJANI_ARABIC`
+
+* [051] `MUTT_MACINTOSH_LANGUAGE_ARMENIAN`
+
+* [052] `MUTT_MACINTOSH_LANGUAGE_GEORGIAN`
+
+* [053] `MUTT_MACINTOSH_LANGUAGE_MOLDAVIAN`
+
+* [054] `MUTT_MACINTOSH_LANGUAGE_KIRGHIZ`
+
+* [055] `MUTT_MACINTOSH_LANGUAGE_TAJIKI`
+
+* [056] `MUTT_MACINTOSH_LANGUAGE_TURKMEN`
+
+* [057] `MUTT_MACINTOSH_LANGUAGE_MONGOLIAN`
+
+* [058] `MUTT_MACINTOSH_LANGUAGE_MONGOLIAN_CYRILLIC`
+
+* [059] `MUTT_MACINTOSH_LANGUAGE_PASHTO`
+
+* [060] `MUTT_MACINTOSH_LANGUAGE_KURDISH`
+
+* [061] `MUTT_MACINTOSH_LANGUAGE_KASHMIRI`
+
+* [062] `MUTT_MACINTOSH_LANGUAGE_SINDHI`
+
+* [063] `MUTT_MACINTOSH_LANGUAGE_TIBETAN`
+
+* [064] `MUTT_MACINTOSH_LANGUAGE_NEPALI`
+
+* [065] `MUTT_MACINTOSH_LANGUAGE_SANSKRIT`
+
+* [066] `MUTT_MACINTOSH_LANGUAGE_MARATHI`
+
+* [067] `MUTT_MACINTOSH_LANGUAGE_BENGALI`
+
+* [068] `MUTT_MACINTOSH_LANGUAGE_ASSAMESE`
+
+* [069] `MUTT_MACINTOSH_LANGUAGE_GUJARATI`
+
+* [070] `MUTT_MACINTOSH_LANGUAGE_PUNJABI`
+
+* [071] `MUTT_MACINTOSH_LANGUAGE_ORIYA`
+
+* [072] `MUTT_MACINTOSH_LANGUAGE_MALAYALAM`
+
+* [073] `MUTT_MACINTOSH_LANGUAGE_KANNADA`
+
+* [074] `MUTT_MACINTOSH_LANGUAGE_TAMIL`
+
+* [075] `MUTT_MACINTOSH_LANGUAGE_TELUGU`
+
+* [076] `MUTT_MACINTOSH_LANGUAGE_SINHALESE`
+
+* [077] `MUTT_MACINTOSH_LANGUAGE_BURMESE`
+
+* [078] `MUTT_MACINTOSH_LANGUAGE_KHMER`
+
+* [079] `MUTT_MACINTOSH_LANGUAGE_LAO`
+
+* [080] `MUTT_MACINTOSH_LANGUAGE_VIETNAMESE`
+
+* [081] `MUTT_MACINTOSH_LANGUAGE_INDONESIAN`
+
+* [082] `MUTT_MACINTOSH_LANGUAGE_TAGALOG`
+
+* [083] `MUTT_MACINTOSH_LANGUAGE_MALAY_ROMAN`
+
+* [084] `MUTT_MACINTOSH_LANGUAGE_MALAY_ARABIC`
+
+* [085] `MUTT_MACINTOSH_LANGUAGE_AMHARIC`
+
+* [086] `MUTT_MACINTOSH_LANGUAGE_TIGRINYA`
+
+* [087] `MUTT_MACINTOSH_LANGUAGE_GALLA`
+
+* [088] `MUTT_MACINTOSH_LANGUAGE_SOMALI`
+
+* [089] `MUTT_MACINTOSH_LANGUAGE_SWAHILI`
+
+* [090] `MUTT_MACINTOSH_LANGUAGE_KINYARWANDA_RUANDA`
+
+* [091] `MUTT_MACINTOSH_LANGUAGE_RUNDI`
+
+* [092] `MUTT_MACINTOSH_LANGUAGE_NYANJA_CHEWA`
+
+* [093] `MUTT_MACINTOSH_LANGUAGE_MALAGASY`
+
+* [094] `MUTT_MACINTOSH_LANGUAGE_ESPERANTO`
+
+* [128] `MUTT_MACINTOSH_LANGUAGE_WELSH`
+
+* [129] `MUTT_MACINTOSH_LANGUAGE_BASQUE`
+
+* [130] `MUTT_MACINTOSH_LANGUAGE_CATALAN`
+
+* [131] `MUTT_MACINTOSH_LANGUAGE_LATIN`
+
+* [132] `MUTT_MACINTOSH_LANGUAGE_QUECHUA`
+
+* [133] `MUTT_MACINTOSH_LANGUAGE_GUARANI`
+
+* [134] `MUTT_MACINTOSH_LANGUAGE_AYMARA`
+
+* [135] `MUTT_MACINTOSH_LANGUAGE_TATAR`
+
+* [136] `MUTT_MACINTOSH_LANGUAGE_UIGHUR`
+
+* [137] `MUTT_MACINTOSH_LANGUAGE_DZONGKHA`
+
+* [138] `MUTT_MACINTOSH_LANGUAGE_JAVANESE`
+
+* [139] `MUTT_MACINTOSH_LANGUAGE_SUNDANESE`
+
+* [140] `MUTT_MACINTOSH_LANGUAGE_GALICIAN`
+
+* [141] `MUTT_MACINTOSH_LANGUAGE_AFRIKAANS`
+
+* [142] `MUTT_MACINTOSH_LANGUAGE_BRETON`
+
+* [143] `MUTT_MACINTOSH_LANGUAGE_INUKTITUT`
+
+* [144] `MUTT_MACINTOSH_LANGUAGE_SCOTTISH_GAELIC`
+
+* [145] `MUTT_MACINTOSH_LANGUAGE_MANX_GAELIC`
+
+* [146] `MUTT_MACINTOSH_LANGUAGE_IRISH_GAELIC_DOT`
+
+* [147] `MUTT_MACINTOSH_LANGUAGE_TONGAN`
+
+* [148] `MUTT_MACINTOSH_LANGUAGE_GREEK_POLYTONIC`
+
+* [149] `MUTT_MACINTOSH_LANGUAGE_GREENLANDIC`
+
+* [150] `MUTT_MACINTOSH_LANGUAGE_AZERBAIJANI`
+
+All of the Macintosh language ID values defined above are the ones defined by TrueType and OpenType as of writing this, and are the only Macintosh language ID values compatible with mutt, and an error will be thrown for a table if a Macintosh language ID value is given that is not one of the values defined above.
+
+More information about these values is available in the TrueType standard.
+
+The function `mutt_macintosh_language_id_get_name` returns a stringified version of a given Macintosh language ID value, directly converting its macro equivalent to a string version (for example, `MUTT_MACINTOSH_LANGUAGE_ENGLISH` turns into `"MUTT_MACINTOSH_LANGUAGE_ENGLISH"`), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_language_id_get_name(uint16_m language_id);
+```
+
+
+The function `mutt_macintosh_language_id_get_nice_name` returns a readable string version of a given Macintosh language ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_MACINTOSH_LANGUAGE_ENGLISH` turns into `"English"`), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_language_id_get_nice_name(uint16_m language_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given Macintosh language ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### ISO encoding ID macros
+
+The following macros are defined for interpreting ISO encoding IDs:
+
+* [0] `MUTT_ISO_ENCODING_7_BIT_ASCII`
+
+* [1] `MUTT_ISO_ENCODING_10646`
+
+* [2] `MUTT_ISO_ENCODING_8859_1`
+
+All of the ISO encoding ID values defined above are the ones defined by TrueType and OpenType as of writing this, and are the only ISO encoding ID values compatible with mutt, and an error will be thrown for a table if an ISO encoding ID value is given that is not one of the values defined above.
+
+More information about these values is available in the TrueType standard.
+
+The function `mutt_iso_encoding_id_get_name` returns a stringified version of a given ISO encoding ID value, directly converting its macro equivalent to a string version (for example, `MUTT_ISO_ENCODING_7_BIT_ASCII` turns into `"MUTT_ISO_ENCODING_7_BIT_ASCII"`), defined below: 
+
+```c
+MUDEF const char* mutt_iso_encoding_id_get_name(uint16_m encoding_id);
+```
+
+
+The function `mutt_iso_encoding_id_get_nice_name` returns a readable string version of a given ISO encoding ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_ISO_ENCODING_7_BIT_ASCII` turns into `"7-bit ASCII"`), defined below: 
+
+```c
+MUDEF const char* mutt_iso_encoding_id_get_nice_name(uint16_m encoding_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given ISO encoding ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+### Windows encoding ID macros
+
+The following macros are defined for interpreting Windows encoding IDs:
+
+* [00] `MUTT_WINDOWS_ENCODING_SYMBOL`
+
+* [01] `MUTT_WINDOWS_ENCODING_UNICODE_BMP`
+
+* [02] `MUTT_WINDOWS_ENCODING_SHIFT_JIS`
+
+* [03] `MUTT_WINDOWS_ENCODING_PRC`
+
+* [04] `MUTT_WINDOWS_ENCODING_BIG5`
+
+* [05] `MUTT_WINDOWS_ENCODING_WANSUNG`
+
+* [06] `MUTT_WINDOWS_ENCODING_JOHAB`
+
+* [10] `MUTT_WINDOWS_ENCODING_UNICODE_FULL`
+
+All of the Windows encoding ID values defined above are the ones defined by TrueType and OpenType as of writing this, and are the only Windows encoding ID values compatible with mutt, and an error will be thrown for a table if a Windows encoding ID value is given that is not one of the values defined above.
+
+More information about these values is available in the OpenType standard.
+
+The function `mutt_windows_encoding_id_get_name` returns a stringified version of a given Windows encoding ID value, directly converting its macro equivalent to a string version (for example, `MUTT_WINDOWS_ENCODING_SYMBOL` turns into `"MUTT_WINDOWS_ENCODING_SYMBOL"`), defined below: 
+
+```c
+MUDEF const char* mutt_windows_encoding_id_get_name(uint16_m encoding_id);
+```
+
+
+The function `mutt_windows_encoding_id_get_nice_name` returns a readable string version of a given Windows encoding ID value, directly converting its macro equivalent to a readable string version (for example, `MUTT_WINDOWS_ENCODING_SYMBOL` turns into `"Symbol"`), defined below: 
+
+```c
+MUDEF const char* mutt_windows_encoding_id_get_nice_name(uint16_m encoding_id);
+```
+
+
+Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given Windows encoding ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+# Version macros
+
+mutt defines three macros to define the version of mutt: `MUTT_VERSION_MAJOR`, `MUTT_VERSION_MINOR`, and `MUTT_VERSION_PATCH`, following the format of `vMAJOR.MINOR.PATCH`.
 
 # C standard library dependencies
 

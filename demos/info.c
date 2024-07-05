@@ -43,6 +43,9 @@ More explicit license information at the end of file.
 	// For allocation:
 	#include <stdlib.h>
 
+	// For string comparison:
+	#include <string.h>
+
 /* Global variables */
 		
 	// Font information holder:
@@ -60,6 +63,17 @@ More explicit license information at the end of file.
 				uint8_m val = (mem[byte] >> bit) & 1;
 				printf("%" PRIu8 "", val);
 			}
+		}
+	}
+
+	// Prints a UTF16-BE string.
+	void print_utf16_be(muByte* str, size_m size) {
+		wchar_t ws[2];
+		ws[1] = 0;
+
+		for (size_m i = 0; i < size; i++) {
+			ws[0] = (wchar_t)mu_rbe_uint16(((char*)&str[i]));
+			printf("%ls", ws);
 		}
 	}
 
@@ -386,6 +400,90 @@ else
 {
 	printf("Failed to load: %s\n", mutt_result_get_name(font.post_res));
 }
+
+printf("\n");
+
+/* Print name info */
+
+printf("== Name ==\n");
+
+if (font.name)
+{
+	printf("version: %"       PRIu16 "\n", font.name->version);
+	printf("count: %"         PRIu16 "\n", font.name->count);
+	if (font.name->count == 0) {
+		goto out_name;
+	}
+	printf("storageOffset: %" PRIu16 "\n", font.name->storage_offset);
+
+	// Loop through each name record
+	if (font.name->count > 0) {
+		printf("[Name records]\n");
+	}
+	for (uint16_m r = 0; r < font.name->count; r++) {
+		muttNameRecord record = font.name->name_record[r];
+
+		// Name ID
+		const char* name_id = mutt_name_id_get_nice_name(record.name_id);
+		if (strcmp(name_id, "MUTT_UNKNOWN") == 0) {
+			continue;
+		}
+
+		printf("* %s\n", name_id);
+
+		// Platform
+		printf("\t[%s", mutt_platform_id_get_nice_name(record.platform_id));
+
+		// Unicode
+		if (record.platform_id == MUTT_PLATFORM_UNICODE) {
+			printf(", %s", mutt_unicode_encoding_id_get_nice_name(record.encoding_id));
+		}
+		// Macintosh
+		else if (record.platform_id == MUTT_PLATFORM_MACINTOSH) {
+			printf(", %s", mutt_macintosh_encoding_id_get_nice_name(record.encoding_id));
+			printf(", %s", mutt_macintosh_language_id_get_nice_name(record.language_id));
+		}
+		// Windows
+		else {
+			printf(", %s", mutt_windows_encoding_id_get_nice_name(record.encoding_id));
+			printf(", lang=%" PRIu16 "", record.language_id);
+		}
+
+		printf("]\n");
+
+		// UTF16-BE
+		if (
+			(record.platform_id == MUTT_PLATFORM_UNICODE) ||
+			(record.platform_id == MUTT_PLATFORM_WINDOWS && (
+				record.encoding_id == MUTT_WINDOWS_ENCODING_UNICODE_BMP ||
+				record.encoding_id == MUTT_WINDOWS_ENCODING_UNICODE_FULL
+			))
+		) {
+			printf("\tUTF16-BE string - ");
+			print_utf16_be(&font.name->storage[record.string_offset], record.length);
+			printf("\n");
+		}
+	}
+
+	// Loop through each lang tag
+	if (font.name->version == 1 && font.name->lang_tag_count > 0) {
+		printf("[Lang tags]\n");
+
+		for (uint16_m l = 0; l < font.name->lang_tag_count; l++) {
+			muttLangTagRecord record = font.name->lang_tag_record[l];
+
+			printf("%" PRIu16 " - ", l);
+			print_utf16_be(&font.name->storage[record.lang_tag_offset], record.length);
+			printf("\n");
+		}
+	}
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.name_res));
+}
+
+out_name:
 
 printf("\n");
 
