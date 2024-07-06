@@ -485,6 +485,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_HMTX_LENGTH,
 			// @DOCLINE * `@NLFT` - the value for the table length of the loca table was invalid.
 			MUTT_INVALID_LOCA_LENGTH,
+			// @DOCLINE * `@NLFT` - the value for an offset value in the loca table was invalid.
+			MUTT_INVALID_LOCA_OFFSET,
 			// @DOCLINE * `@NLFT` - the value for the table length of the post table was invalid.
 			MUTT_INVALID_POST_LENGTH,
 			// @DOCLINE * `@NLFT` - the value "version" in the post table was invalid/unsupported.
@@ -544,7 +546,7 @@ mutt is developed primarily off of these sources of documentation:
 		typedef struct muttHead muttHead;
 		typedef struct muttHhea muttHhea;
 		typedef struct muttHmtx muttHmtx;
-		typedef union muttLoca muttLoca;
+		typedef struct muttLoca muttLoca;
 		typedef struct muttPost muttPost;
 		typedef struct muttName muttName;
 
@@ -593,6 +595,8 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE * [0x00000080] `MUTT_LOAD_NAME` - load the name table.
 				#define MUTT_LOAD_NAME 0x00000080
+
+				// @DOCLINE * [0x00000100] `MUTT_LOAD_GLYF` - load the glyf table.
 
 			// @DOCLINE ### Group bit values
 
@@ -867,14 +871,23 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Loca information
 
-			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+			// @DOCLINE The struct `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
 
-			// @DOCLINE Its members are:
-			union muttLoca {
-				// @DOCLINE * `@NLFT* offsets16` - equivalent to "offsets" in the short format of the loca table.
-				uint16_m* offsets16;
-				// @DOCLINE * `@NLFT* offsets32` - equivalent to "offsets" in the long format of the loca table.
-				uint32_m* offsets32;
+			// @DOCLINE `muttLoca` relies on the union `muttLocaOffsets` to store the offsets in a loca table. It has the following members:
+			union muttLocaOffsets {
+				// @DOCLINE * `@NLFT* o16` - equivalent to "offsets" in the short format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET16`, the contents of this member are undefined.
+				uint16_m* o16;
+				// @DOCLINE * `@NLFT* o32` - equivalent to "offsets" in the long format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET32`, the contents of this member are undefined.
+				uint32_m* o32;
+			};
+			typedef union muttLocaOffsets muttLocaOffsets;
+
+			// @DOCLINE The members of the `muttLoca` struct are:
+			struct muttLoca {
+				// @DOCLINE * `@NLFT offsets` - the offsets in the loca table.
+				muttLocaOffsets offsets;
+				// @DOCLINE * `@NLFT* indexes` - per glyph ID, the index in `glyf->descriptions` for the given glyph description being referenced. The length of this array is equal to `maxp->num_glyphs+1`, with the last element equaling the array element count of `glyf->descriptions` minus one.
+				uint16_m* indexes;
 			};
 
 		// @DOCLINE ## Post information
@@ -1633,6 +1646,7 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS: return "MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS"; break;
 			case MUTT_INVALID_HMTX_LENGTH: return "MUTT_INVALID_HMTX_LENGTH"; break;
 			case MUTT_INVALID_LOCA_LENGTH: return "MUTT_INVALID_LOCA_LENGTH"; break;
+			case MUTT_INVALID_LOCA_OFFSET: return "MUTT_INVALID_LOCA_OFFSET"; break;
 			case MUTT_INVALID_POST_LENGTH: return "MUTT_INVALID_POST_LENGTH"; break;
 			case MUTT_INVALID_POST_VERSION: return "MUTT_INVALID_POST_VERSION"; break;
 			case MUTT_INVALID_POST_GLYPH_NAME_INDEX: return "MUTT_INVALID_POST_GLYPH_NAME_INDEX"; break;
@@ -2141,22 +2155,39 @@ mutt is developed primarily off of these sources of documentation:
 	// Moves the cursor forward if needed for allocation of memory;
 	// the actual pointer to memory is &font->mem[font->memcur]
 	// BEFORE calling this function.
+	#ifdef MUTT_PRINT_MEMORY_USAGE
+	#include <stdio.h>
+	#endif
+
 	muttResult mutt_get_mem(muttFont* font, size_m len) {
 		if (font->memlen-font->memcur >= len) {
 			font->memcur += len;
+			#ifdef MUTT_PRINT_MEMORY_USAGE
+			printf("allocated memory: %i more bytes, %i in total\n", (int)len, (int)font->memcur);
+			#endif
 			return MUTT_SUCCESS;
 		}
 
+		#ifdef MUTT_PRINT_MEMORY_USAGE
+		printf("reallocated from %i bytes ", (int)font->memlen);
+		#endif
 		font->memlen *= 2;
 		while (font->memlen-font->memcur < len) {
 			font->memlen *= 2;
 		}
+		#ifdef MUTT_PRINT_MEMORY_USAGE
+		printf("to %i bytes\n", (int)font->memlen);
+		#endif
 
 		muByte* new_mem = (muByte*)mu_realloc(font->mem, font->memlen);
 		if (new_mem == 0) {
 			return MUTT_FAILED_REALLOC;
 		}
+		#ifdef MUTT_PRINT_MEMORY_USAGE
+		printf("allocated memory: %i more bytes, %i in total\n", (int)len, (int)font->memcur);
+		#endif
 
+		font->mem = new_mem;
 		font->memcur += len;
 		return MUTT_SUCCESS;
 	}
@@ -2698,6 +2729,13 @@ mutt is developed primarily off of these sources of documentation:
 			muttResult res;
 			uint32_m needed_length; // (in bytes)
 
+			// Allocate indexes
+			loca->indexes = (uint16_m*)&font->mem[font->memcur];
+			res = mutt_get_mem(font, 2*(font->maxp->num_glyphs+1));
+			if (res != MUTT_SUCCESS) {
+				return res;
+			}
+
 			// - Offset16 -
 
 			if (font->head->index_to_loc_format == MUTT_LOCA_FORMAT_OFFSET16) {
@@ -2708,7 +2746,7 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Allocate length
-				loca->offsets16 = (uint16_m*)&font->mem[font->memcur];
+				loca->offsets.o16 = (uint16_m*)&font->mem[font->memcur];
 				res = mutt_get_mem(font, needed_length);
 				if (res != MUTT_SUCCESS) {
 					return res;
@@ -2716,7 +2754,29 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Loop through each offset
 				for (uint32_m i = 0; i < (uint32_m)(font->maxp->num_glyphs+1); i++) {
-					loca->offsets16[i] = mu_rbe_uint16(data);
+					loca->offsets.o16[i] = mu_rbe_uint16(data);
+
+					// Verify first offset equaling 0
+					if (i == 0 && loca->offsets.o16[i] != 0) {
+						return MUTT_INVALID_LOCA_OFFSET;
+					}
+					// For non-zero i values
+					if (i != 0) {
+						// Verify offset increasing order
+						if (loca->offsets.o16[i] < loca->offsets.o16[i-1]) {
+							return MUTT_INVALID_LOCA_OFFSET;
+						}
+						// List corresponding index
+						loca->indexes[i] = loca->indexes[i-1];
+						// (i != font->maxp->num_glyphs to prevent last index from increasing)
+						if (loca->offsets.o16[i] > loca->offsets.o16[i-1] && i != font->maxp->num_glyphs) {
+							loca->indexes[i] += 1;
+						}
+					}
+					else {
+						loca->indexes[i] = 0;
+					}
+
 					data += 2;
 				}
 
@@ -2732,7 +2792,7 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Allocate length
-			loca->offsets32 = (uint32_m*)&font->mem[font->memcur];
+			loca->offsets.o32 = (uint32_m*)&font->mem[font->memcur];
 			res = mutt_get_mem(font, needed_length);
 			if (res != MUTT_SUCCESS) {
 				return res;
@@ -2740,7 +2800,27 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Loop through each offset
 			for (uint32_m i = 0; i < (uint32_m)(font->maxp->num_glyphs+1); i++) {
-				loca->offsets32[i] = mu_rbe_uint32(data);
+				loca->offsets.o32[i] = mu_rbe_uint32(data);
+
+				// Verify first offset equaling 0
+				if (i == 0 && loca->offsets.o32[i] != 0) {
+					return MUTT_INVALID_LOCA_OFFSET;
+				}
+				// Verify offset increasing order
+				if (i != 0) {
+					if (loca->offsets.o32[i] < loca->offsets.o32[i-1]) {
+						return MUTT_INVALID_LOCA_OFFSET;
+					}
+					// List corresponding index
+					loca->indexes[i] = loca->indexes[i-1];
+					if (loca->offsets.o32[i] > loca->offsets.o32[i-1]) {
+						loca->indexes[i] += 1;
+					}
+				}
+				else {
+					loca->indexes[i] = 0;
+				}
+
 				data += 4;
 			}
 

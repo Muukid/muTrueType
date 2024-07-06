@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-05
+LAST UPDATED:       2024-07-06
 
 ============================================================
                         DEMO PURPOSE
@@ -31,6 +31,7 @@ More explicit license information at the end of file.
 	// Include muTrueType
 
 	#define MUTT_NAMES // (for name functions)
+	#define MUTT_PRINT_MEMORY_USAGE
 	#define MUTT_IMPLEMENTATION
 	#include "muTrueType.h"
 	
@@ -308,10 +309,12 @@ if (font.loca)
 		printf("%" PRIu32 ": ", o);
 
 		if (font.head->index_to_loc_format == MUTT_LOCA_FORMAT_OFFSET16) {
-			printf("%" PRIu16 "\n", font.loca->offsets16[o]);
+			printf("%" PRIu16 ", ", font.loca->offsets.o16[o]);
 		} else {
-			printf("%" PRIu32 "\n", font.loca->offsets32[o]);
+			printf("%" PRIu32 ", ", font.loca->offsets.o32[o]);
 		}
+
+		printf("index=%" PRIu16 "\n", font.loca->indexes[o]);
 
 		if (o == 0) {
 			o = 1;

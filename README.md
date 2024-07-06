@@ -108,6 +108,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_LOCA_LENGTH` - the value for the table length of the loca table was invalid.
 
+* `MUTT_INVALID_LOCA_OFFSET` - the value for an offset value in the loca table was invalid.
+
 * `MUTT_INVALID_POST_LENGTH` - the value for the table length of the post table was invalid.
 
 * `MUTT_INVALID_POST_VERSION` - the value "version" in the post table was invalid/unsupported.
@@ -202,6 +204,8 @@ The following macros are defined for certain bits indicating what information to
 * [0x00000040] `MUTT_LOAD_POST` - load the post table.
 
 * [0x00000080] `MUTT_LOAD_NAME` - load the name table.
+
+* [0x00000100] `MUTT_LOAD_GLYF` - load the glyf table.
 
 ### Group bit values
 
@@ -441,13 +445,19 @@ The struct `muttLongHorMetric` is similar to TrueType's LongHorMetric record, an
 
 ## Loca information
 
-The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
+The struct `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->loca`, and loaded with the flag `MUTT_LOAD_LOCA` (flags `MUTT_LOAD_HEAD` and `MUTT_LOAD_MAXP` also need to be set for loca to load successfully).
 
-Its members are:
+`muttLoca` relies on the union `muttLocaOffsets` to store the offsets in a loca table. It has the following members:
 
-* `uint16_m* offsets16` - equivalent to "offsets" in the short format of the loca table.
+* `uint16_m* o16` - equivalent to "offsets" in the short format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET16`, the contents of this member are undefined.
 
-* `uint32_m* offsets32` - equivalent to "offsets" in the long format of the loca table.
+* `uint32_m* o32` - equivalent to "offsets" in the long format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET32`, the contents of this member are undefined.
+
+The members of the `muttLoca` struct are:
+
+* `muttLocaOffsets offsets` - the offsets in the loca table.
+
+* `uint16_m* indexes` - per glyph ID, the index in `glyf->descriptions` for the given glyph description being referenced. The length of this array is equal to `maxp->num_glyphs+1`, with the last element equaling the array element count of `glyf->descriptions` minus one.
 
 ## Post information
 
