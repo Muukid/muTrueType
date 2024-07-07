@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-06
+LAST UPDATED:       2024-07-07
 
 ============================================================
                         DEMO PURPOSE
@@ -314,8 +314,6 @@ if (font.loca)
 			printf("%" PRIu32 ", ", font.loca->offsets.o32[o]);
 		}
 
-		printf("index=%" PRIu16 "\n", font.loca->indexes[o]);
-
 		if (o == 0) {
 			o = 1;
 		}
@@ -489,6 +487,192 @@ else
 out_name:
 
 printf("\n");
+
+/* Print glyf info */
+
+printf("== Glyf ==\n");
+
+if (font.glyf)
+{	
+	// Allocation
+
+	uint32_m simple_max = mutt_simple_glyph_get_maximum_size(&font);
+	printf("Maximum bytes for simple glyph: %" PRIu32 "\n", simple_max);
+	uint32_m composite_max = mutt_composite_glyph_get_maximum_size(&font);
+	printf("Maximum bytes for composite glyph: %" PRIu32 "\n", composite_max);
+
+	muByte* simple_mem = (muByte*)malloc(simple_max);
+	if (!simple_mem) {
+		goto out_glyf;
+	}
+
+	muByte* composite_mem = (muByte*)malloc(composite_max);
+	if (!composite_mem) {
+		free(simple_mem);
+		goto out_glyf;
+	}
+
+	// Go through various glyph IDs
+	for (uint16_m i = 0; i < font.post->subtable.v20.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+		printf("[%" PRIu16 "]\n", i);
+
+		// Get header
+		muttGlyphHeader header;
+		result = mutt_glyph_get_header(&font, i, &header);
+		if (result != MUTT_SUCCESS) {
+			printf("Failed to load: %s\n", mutt_result_get_name(result));
+			goto end_glyph_loop;
+		}
+
+		// Print header info
+		printf("\t{ numberOfContours = %" PRIi16 ", ", header.number_of_contours);
+		printf("xMin = %" PRIi16 ", ", header.x_min);
+		printf("yMin = %" PRIi16 ", ", header.y_min);
+		printf("xMax = %" PRIi16 ", ", header.x_max);
+		printf("yMax = %" PRIi16 " }\n", header.y_max);
+
+		if (header.length) {
+			// Simple glyph handling:
+			if (header.number_of_contours > -1) {
+				// Get glyph data
+				muttSimpleGlyph glyph;
+				uint32_m written;
+				result = mutt_simple_glyph_get_data(&font, &header, &glyph, simple_mem, &written);
+				if (result != MUTT_SUCCESS) {
+					printf("Failed to get data: %s\n", mutt_result_get_name(result));
+					goto end_glyph_loop;
+				}
+				printf("\tData = %" PRIu32 " bytes\n", written);
+
+				// Print end points of contours
+				if (header.number_of_contours != 0) {
+					printf("\tendPtsOfContours[%" PRIi16 "] = { ", header.number_of_contours);
+
+					for (uint16_m c = 0; c < header.number_of_contours; c++) {
+						if (c != 0) {
+							printf(", ");
+						}
+						printf("%" PRIu16 "", glyph.end_pts_of_contours[c]);
+					}
+
+					printf(" }\n");
+
+					// Go through and print each point, separated by contour
+					uint16_m points = glyph.end_pts_of_contours[header.number_of_contours-1] + 1;
+					uint16_m contour = 0;
+
+					printf("\tcontour[0] { ");
+					for (uint16_m p = 0; p < points; p++) {
+						// Print contour
+						if (p-1 == glyph.end_pts_of_contours[contour]) {
+							contour += 1;
+							printf(" \n\t}\n\tcontour[%" PRIu16 "] {\n\t\t", contour);
+						}
+
+						// Print a new line for every 8 points
+						if (contour == 0) {
+							if (p % 8 == 0) {
+								printf("\n\t\t");
+							}
+						} else {
+							if ((p-glyph.end_pts_of_contours[contour-1]) % 8 == 0) {
+								printf("\n\t\t");
+							}
+						}
+
+						// Print coordinate
+						printf("(%" PRIi16 ", %" PRIi16 ")", glyph.points[p].x, glyph.points[p].y);
+						if (p+1 < points && p != glyph.end_pts_of_contours[contour]) {
+							printf(", ");
+						}
+					}
+					printf(" \n\t}\n");
+				}
+
+			}
+			// Composite glyph handling:
+			else {
+				// Get glyph data
+				muttCompositeGlyph glyph;
+				uint32_m written;
+				result = mutt_composite_glyph_get_data(&font, &header, &glyph, composite_mem, &written);
+				if (result != MUTT_SUCCESS) {
+					printf("Failed to get data: %s\n", mutt_result_get_name(result));
+					goto end_glyph_loop;
+				}
+				printf("\tData = %" PRIu32 " bytes\n", written);
+
+				// Print instruction length
+				printf("\tInstruction length = %" PRIu16 " bytes\n", glyph.instruction_length);
+
+				// Loop through each component
+				for (uint16_m c = 0; c < glyph.component_count; c++) {
+					muttComponentGlyph* component = &glyph.components[c];
+
+					// Component number
+					printf("\tcomponent[%" PRIu16 "] {\n", c);
+
+					// flags
+					printf("\t\tflags -  ");
+					print_binary((muByte*)&component->flags, sizeof(component->flags));
+					printf("\n");
+
+					// glyphIndex
+					printf("\t\tglyphIndex - %" PRIu16 "\n", component->glyph_index);
+
+					// argument1
+					printf("\t\targument1 - %" PRIi32 "", component->argument1);
+					if (component->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						printf(" (x-coordinate offset)\n");
+					} else {
+						printf(" (x-coordinate point number)\n");
+					}
+
+					// argument2
+					printf("\t\targument2 - %" PRIi32 "", component->argument2);
+					if (component->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						printf(" (y-coordinate offset)\n");
+					} else {
+						printf(" (y-coordinate point number)\n");
+					}
+
+					// Scale
+					if (component->flags & MUTT_WE_HAVE_A_SCALE) {
+						printf("Scale - %f\n", component->scales[0]);
+					}
+					// X-Y scale
+					else if (component->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+						printf("Scale - [%f, %f]\n", component->scales[0], component->scales[1]);
+					}
+					// 2x2 scale
+					else if (component->flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+						printf("Scale - [%f, %f, %f, %f]\n", component->scales[0], component->scales[1], component->scales[2], component->scales[3]);
+					}
+
+					printf("\t}\n");
+				}
+			}
+		} else {
+			printf("No data\n");
+		}
+
+		end_glyph_loop:
+		if (i == 0) {
+			i = 1;
+		}
+	}
+
+	free(simple_mem);
+	free(composite_mem);
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.glyf_res));
+}
+
+printf("\n");
+
+out_glyf:
 
 /* Deload */
 

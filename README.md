@@ -88,7 +88,7 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_HEAD_UNITS_PER_EM` - the value for "unitsPerEm" in the head table was invalid.
 
-* `MUTT_INVALID_HEAD_X_MIN_MAX` - the values for "xMin" and "xMax" in the head table were invalid.
+* `MUTT_INVALID_HEAD_X_MIN_MAX` - the values for "xMin" and "xMax" in the head table were invalid, rather in comparison to each other or exist outside of the valid font-unit range.
 
 * `MUTT_INVALID_HEAD_Y_MIN_MAX` - the values for "yMin" and "yMax" in the head table were invalid.
 
@@ -132,6 +132,38 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_NAME_LANG_TAG_OFFSET` - the value "langTagOffset" and "length" in a LangTagRecord within the "langTagRecord" array in the name table were out of range.
 
+* `MUTT_INVALID_GLYF_LENGTH` - the value for the table length of the glyf table was invalid. This could mean that loca table values are invalid, as the proper length is initially calculated via loca's offset values.
+
+* `MUTT_INVALID_GLYF_DESCRIPTION_LENGTH` - the length of the glyph description according to loca was invalid.
+
+* `MUTT_INVALID_GLYF_NUMBER_OF_CONTOURS` - the number of contours in the glyph description was invalid in comparison to the value listed in the maxp table.
+
+* `MUTT_INVALID_GLYF_END_PTS_OF_CONTOURS` - a value in the array "endPtsOfContours" in the simple glyph table was invalid.
+
+* `MUTT_INVALID_GLYF_POINTS` - the amount of points specified in the simple glyph table exceeded the maximum amount specified in maxp.
+
+* `MUTT_INVALID_GLYF_DESCRIPTION_SIZE` - the calculated amount of memory needed for the glyph to be allocated exceeded the maximum calculated based on the values within the maxp table; this means that some value or amount of values in the glyph exceeds a maximum set in maxp, but it is unknown precisely which one.
+
+* `MUTT_INVALID_GLYF_X_MIN` - the value "xMin" in a glyph header was invalid in comparison to the value listed in the head table.
+
+* `MUTT_INVALID_GLYF_Y_MIN` - the value "yMin" in a glyph header was invalid in comparison to the value listed in the head table.
+
+* `MUTT_INVALID_GLYF_X_MAX` - the value "xMax" in a glyph header was invalid in comparison to the value listed in the head table or to xMin in the glyph header.
+
+* `MUTT_INVALID_GLYF_Y_MAX` - the value "yMax" in a glyph header was invalid in comparison to the value listed in the head table or to yMin in the glyph header.
+
+* `MUTT_INVALID_GLYF_FLAGS` - a "flags" value in a simple or composite glyph table doesn't make sense. For example, if the flags indicate to repeat the previous coordinate value, but this flag represents the first coordinate value (AKA there is no previous coordinate), this result will be returned.
+
+* `MUTT_INVALID_GLYF_REPEAT_FLAG_COUNT` - the amount of flag repeats in a "flags" value in a simple glyph table exceeds the amount of points.
+
+* `MUTT_INVALID_GLYF_X_COORD` - an x-coordinate specified in a simple glyph table is not within range of the minimum and maximum values for this glyph.
+
+* `MUTT_INVALID_GLYF_Y_COORD` - a y-coordinate specified in a simple glyph table is not within range of the minimum and maximum values for this glyph.
+
+* `MUTT_INVALID_GLYF_COMPONENT_COUNT` - the amount of components specified in a composite glyph were above the maximum amount specified in maxp.
+
+* `MUTT_INVALID_GLYF_GLYPH_INDEX` - a glyph index specified in a composite glyph component was an invalid glyph index.
+
 * `MUTT_HHEA_REQUIRES_MAXP` - the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 
 * `MUTT_HMTX_REQUIRES_MAXP` - the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
@@ -141,6 +173,12 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_LOCA_REQUIRES_HEAD` - the loca table failed to load because head is rather not being loaded or failed to load, and loca relies on head.
 
 * `MUTT_LOCA_REQUIRES_MAXP` - the loca table failed to load because maxp is rather not being loaded or failed to load, and loca relies on maxp.
+
+* `MUTT_GLYF_REQUIRES_LOCA` - the glyf table failed to load because loca is rather not being loaded or failed to load, and glyf relies on loca.
+
+* `MUTT_GLYF_REQUIRES_MAXP` - the glyf table failed to load because maxp is rather not being loaded or failed to load, and glyf relies on maxp.
+
+* `MUTT_GLYF_REQUIRES_HEAD` - the glyf table failed to load because head is rather not being loaded or failed to load, and glyf relies on head.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -215,7 +253,7 @@ The following macros are defined for loading groups of tables:
 
 * [0xFFFFFFFF] `MUTT_LOAD_ALL` - loads everything; sets all flags.
 
-# Reading information from a TrueType font
+# Reading low-level information from a TrueType font
 
 ## The `muttFont` struct
 
@@ -254,6 +292,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 * `muttName* name` - a pointer to the name table.
 
 * `muttResult name_res` - the result of loading the member `name`.
+
+* `muttGlyf* glyf` - a pointer to the glyf table.
+
+* `muttResult glyf_res` - the result of loading the member `glyf`.
 
 * `muByte* mem` - the inner allocated memory used for holding necessary data.
 
@@ -449,15 +491,13 @@ The struct `muttLoca` is used to represent the loca table provided by a TrueType
 
 `muttLoca` relies on the union `muttLocaOffsets` to store the offsets in a loca table. It has the following members:
 
-* `uint16_m* o16` - equivalent to "offsets" in the short format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET16`, the contents of this member are undefined.
+* `uint16_m* o16` - equivalent to "offsets" in the short format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET16`, the value of this member is undefined.
 
-* `uint32_m* o32` - equivalent to "offsets" in the long format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET32`, the contents of this member are undefined.
+* `uint32_m* o32` - equivalent to "offsets" in the long format of the loca table. If `head->index_to_loc_format` does not equal `MUTT_LOCA_FORMAT_OFFSET32`, the value of this member is undefined.
 
 The members of the `muttLoca` struct are:
 
 * `muttLocaOffsets offsets` - the offsets in the loca table.
-
-* `uint16_m* indexes` - per glyph ID, the index in `glyf->descriptions` for the given glyph description being referenced. The length of this array is equal to `maxp->num_glyphs+1`, with the last element equaling the array element count of `glyf->descriptions` minus one.
 
 ## Post information
 
@@ -513,7 +553,7 @@ Its members are:
 
 * `uint32_m max_mem_type1` - equivalent to "maxMemType1" in the post table.
 
-* `muttPostSubtable subtable` - the subtable offered by the version of the post table; the contents of this member are undefined if the version is not 2.0 or 2.5.
+* `muttPostSubtable subtable` - the subtable offered by the version of the post table; the value of this member is undefined if the version is not 2.0 or 2.5.
 
 ## Name information
 
@@ -1130,6 +1170,220 @@ MUDEF const char* mutt_windows_encoding_id_get_nice_name(uint16_m encoding_id);
 
 
 Both above-listed functions returns `MUTT_UNKNOWN` if there is no defined macro equivalent for the given Windows encoding ID value. Both functions are only defined if `MUTT_NAMES` is defined.
+
+## Glyf information
+
+The struct `muttGlyf` is used to represent the glyf table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->glyf`, and loaded with the flag `MUTT_LOAD_GLYF` (flags `MUTT_LOAD_LOCA`, `MUTT_LOAD_MAXP`, and `MUTT_LOAD_HEAD` also need to be set for loca to load successfully).
+
+It has the following member:
+
+* `muByte* data` - the raw binary data of the glyf table. If `maxp->num_glyphs` equals 0, the value of this member is undefined.
+
+Only the raw binary data is stored due to the fact that verifying the data would entail decompressing the data to some extent; if the decompressed result is not stored, the same data is processed twice, and if it is stored, a considerable amount of memory is wasted. Therefore, the glyf data goes unchecked (besides making sure the loca offsets for it are in range), and is instead decompressed (and therefore checked) glyph-by-glyph by the user using the following functions in this section. This saves both processing time and memory usage.
+
+### Glyph memory maximums
+
+The function `mutt_simple_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a simple glyph in the struct `muttSimpleGlyph`, defined below: 
+
+```c
+MUDEF uint32_m mutt_simple_glyph_get_maximum_size(muttFont* font);
+```
+
+
+The function `mutt_composite_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a composite glyph in the struct `muttCompositeGlyph`, defined below: 
+
+```c
+MUDEF uint32_m mutt_composite_glyph_get_maximum_size(muttFont* font);
+```
+
+
+The maximums returned by these functions are not the maximum size that a glyph WILL take up, but the maximum size a glyph CAN take up, based on the values in the maxp table; there may not be a glyph that meets the maximum size.
+
+Note that these functions require the maxp table to be successfully loaded.
+
+### Get glyph description
+
+The function `mutt_glyph_get_header` retrieves the glyph header of a glyph, defined below: 
+
+```c
+MUDEF muttResult mutt_glyph_get_header(muttFont* font, uint16_m glyph_id, muttGlyphHeader* header);
+```
+
+
+This function requires maxp, head, and glyf to be loaded.
+
+`glyph_id` must be a valid glyph ID (less than `font->maxp->num_glyphs`).
+
+If `mutt_glyph_get_header` does not return `MUTT_SUCCESS`, the contents of `*header` are undefined.
+
+The members of `muttGlyphHeader` are:
+
+* `int16_m number_of_contours` - equivalent to "numberOfContours" in the glyph header.
+
+* `int16_m x_min` - equivalent to "xMin" in the glyph header.
+
+* `int16_m y_min` - equivalent to "yMin" in the glyph header.
+
+* `int16_m x_max` - equivalent to "xMax" in the glyph header.
+
+* `int16_m y_max` - equivalent to "yMax" in the glyph header.
+
+* `muByte* data` - a pointer to byte data in `font->glyf->data` after the header. This is primarily used internally by mutt.
+
+* `uint32_m length` - the length of the data after the header in bytes. If no data is defined after the glyph header, this is set to 0, and the contents of `data` are undefined.
+
+### Get simple glyph data
+
+The function `mutt_simple_glyph_get_data` retrieves simple glyph data from a given glyph header, defined below: 
+
+```c
+MUDEF muttResult mutt_simple_glyph_get_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muByte* data, uint32_m* written);
+```
+
+
+If `data` is 0, `written` is dereferenced and set to how much memory the glyph needs. See the section "Glyph memory maximums" for querying the maximum amount of memory a glyph will take up.
+
+If `data` is not 0, it is expected to be a pointer to memory sufficient for the glyph to be defined, and if `written` is not 0, `written` will be dereferenced and set to how much memory was written.
+
+The given glyph must have data after its header; `header->length` must not equal 0. If it does equal 0, the glyph definition has no data attached to it, and this function will return a non-success value.
+
+The given glyph must be a simple glyph; `header->number_of_contours` must be greater than -1.
+
+If the return value of this function is not `MUTT_SUCCESS`, the contents of `*glyph` are undefined, and `written` is not dereferenced.
+
+This function requires the maxp and head table to be loaded successfully.
+
+Note that due to the fact that checks are not fully performed when `data` is 0 (id est checks are only performed that are relevant to the memory requirements of the glyph; full checks are performed if `data` is not 0), `mutt_simple_glyph_get_data` can return `MUTT_SUCCESS` when `data` is 0 and then return a failure value when it is called again with a valid data pointer.
+
+The struct `muttSimpleGlyph` has the following members:
+
+* `uint16_m* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table. If `muttGlyphDescription->numberOfContours` equals 0, the value of this member is undefined.
+
+* `uint16_m instruction_length` - equivalent to "instructionLength" in the simple glyph table.
+
+* `uint8_m* instructions` - equivalent to "instructions" in the simple glyph table. If `instruction_length` equals 0, the value of this member is undefined.
+
+* `muttSimpleGlyphPoint* points` - each point of the simple glyph. The amount of points is equal to `end_pts_of_contours[number_of_contours-1]+1`. If the amount of points is equal to 0, the value of this member is undefined.
+
+The struct `muttSimpleGlyphPoint` has the following members:
+
+* `uint8_m flags` - the flags of the given coordinate.
+
+* `int16_m x` - the x-coordinate of the point, in FUnits.
+
+* `int16_m y` - the y-coordinate of the point, in FUnits.
+
+Note that the point does not store vector offsets, like it does in the raw TrueType data, but instead the coordinates that those offsets sum up to; it stores the actual coordinates in the font-unit space.
+
+The following macros are defined for bitmasking a flag value in the simple glyph table:
+
+* [0x01] - `MUTT_ON_CURVE_POINT`
+
+* [0x02] - `MUTT_X_SHORT_VECTOR`
+
+* [0x04] - `MUTT_Y_SHORT_VECTOR`
+
+* [0x08] - `MUTT_REPEAT_FLAG`
+
+* [0x10] - `MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR`
+
+* [0x20] - `MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR`
+
+* [0x40] - `MUTT_OVERLAP_SIMPLE`
+
+### Get composite glyph data
+
+The function `mutt_composite_glyph_get_data` retrieves composite glyph data from a given glyph header, defined below: 
+
+```c
+MUDEF muttResult mutt_composite_glyph_get_data(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written);
+```
+
+
+If `data` is 0, `written` is dereferenced and set to how much memory the glyph needs. See the "Glyph memory maximums" for querying the maximum amount of memory a glyph will take up.
+
+If `data` is not 0, it is expected to be a pointer to memory sufficient for the glyph to be defined, and if `written` is not 0, `written` will be dereferenced and set to how much memory was written.
+
+The given glyph must have data after its header; `header->length` must not equal 0. If it does equal 0, the glyph definition has no data attached to it, and this function will return a non-success value.
+
+The given glyph must be a composite glyph; `header->number_of_contours` must be less than 0.
+
+If the return value of this function is not `MUTT_SUCCESS`, the contents of `*glyph` are undefined, and `written` is not dereferenced.
+
+This function requires the maxp and head table to be loaded successfully.
+
+Note that due to the fact that checks are not fully performed when `data` is 0 (id est checks are only performed that are relevant to the memory requirements of the glyph; full checks are performed if `data` is not 0), `mutt_composite_glyph_get_data` can return `MUTT_SUCCESS` when `data` is 0 and then return a failure value when it is called again with a valid data pointer.
+
+The struct `muttCompositeGlyph` has the following members:
+
+* `uint16_m component_count` - the amount of components in the composite glyph.
+
+* `muttComponentGlyph* components` - an array of components, representing each component in the composite glyph.
+
+* `uint16_m instruction_length` - the length of the instructions for the composite glyph.
+
+* `muByte* instructions` - the instructions for the composite glyph. If `instruction_length` equals 0, the value of this member is undefined.
+
+The struct `muttComponentGlyph` has the following members:
+
+* `uint16_m flags` - equivalent to "flags" in the component glyph record.
+
+* `uint16_m glyph_index` - equivalent to "glyphIndex" in the component glyph record.
+
+* `int32_m argument1` - equivalent to "argument1" in the component glyph record.
+
+* `int32_m argument2` - equivalent to "argument2" in the component glyph record.
+
+* `float scales[4]` - the transform data of the component.
+
+The data of `scales` depends on the value of `flags` (see TrueType/OpenType documentation for more information on how these data work); the following conditions exist:
+
+* If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale.
+
+* If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x and y scales respectively.
+
+* If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2 by 2 affine transformation values (xscale, scale01, scale10, and yscale respectively).
+
+* If none of the bits mentioned above are 1, the contents of `scales` are undefined.
+
+The following macros are defined for bitmasking a flag value in the component glyph record:
+
+* [0x0001] - `MUTT_ARG_1_AND_2_ARE_WORDS`
+
+* [0x0002] - `MUTT_ARGS_ARE_XY_VALUES`
+
+* [0x0004] - `MUTT_ROUND_XY_TO_GRID`
+
+* [0x0008] - `MUTT_WE_HAVE_A_SCALE`
+
+* [0x0020] - `MUTT_MORE_COMPONENTS`
+
+* [0x0040] - `MUTT_WE_HAVE_AN_X_AND_Y_SCALE`
+
+* [0x0080] - `MUTT_WE_HAVE_A_TWO_BY_TWO`
+
+* [0x0100] - `MUTT_WE_HAVE_INSTRUCTIONS`
+
+* [0x0200] - `MUTT_USE_MY_METRICS`
+
+* [0x0400] - `MUTT_OVERLAP_COMPOUND`
+
+* [0x0800] - `MUTT_SCALED_COMPONENT_OFFSET`
+
+* [0x1000] - `MUTT_UNSCALED_COMPONENT_OFFSET`
+
+## Miscellaneous inner utility functions
+
+The following functions are miscellaneous functions used for reading values from a TrueType file.
+
+### F2DOT14 reading
+
+The macro function "MUTT_F2DOT14" creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: 
+
+```c
+#define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
+```
+
 
 # Version macros
 
