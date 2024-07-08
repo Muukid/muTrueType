@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-07
+LAST UPDATED:       2024-07-08
 
 ============================================================
                         DEMO PURPOSE
@@ -54,6 +54,26 @@ More explicit license information at the end of file.
 
 	// Result value:
 	muttResult result = MUTT_SUCCESS;
+
+	// Test characters
+	uint32_m test_chars[] = {
+		// A B C
+		0x41, 0x42, 0x43,
+		// a b c
+		0x61, 0x62, 0x63,
+		// & ? %
+		0x26, 0x3f, 0x25,
+		// a (with acute, circumflex, and tilde)
+		0xE1, 0xE2, 0xE3,
+		// Various unified ideographs
+		0x4e57, 0x4ea4, 0x4ebf
+	};
+
+	// Test character length
+	#define TEST_CHAR_LEN (sizeof(test_chars)/sizeof(uint32_m))
+
+	// To-be-filled glyph IDs for test characters
+	uint16_m glyph_ids[TEST_CHAR_LEN] = {0};
 
 /* Print functions */
 
@@ -673,6 +693,94 @@ else
 printf("\n");
 
 out_glyf:
+
+/* Print cmap info */
+
+printf("== Cmap ==\n");
+
+if (font.cmap)
+{
+	printf("version: %"   PRIu16 "\n", font.cmap->version);
+	printf("numTables: %" PRIu16 "\n", font.cmap->num_tables);
+
+	for (uint16_m t = 0; t < font.cmap->num_tables; t++) {
+		printf("[Table %" PRIu16 "]\n", t);
+		muttEncodingRecord* record = &font.cmap->encoding_records[t];
+
+		printf("\tplatformID - %s ", mutt_platform_id_get_nice_name(record->platform_id));
+		printf("[%" PRIu16 "]\n", record->platform_id);
+
+		// (Get name for encoding based on platform ID and print it)
+		const char* encoding_name = "Unknown";
+
+		switch (record->platform_id) {
+			case MUTT_PLATFORM_UNICODE: {
+				encoding_name = mutt_unicode_encoding_id_get_nice_name(record->encoding_id);
+			} break;
+			case MUTT_PLATFORM_MACINTOSH: {
+				encoding_name = mutt_macintosh_encoding_id_get_nice_name(record->encoding_id);
+			} break;
+			case MUTT_PLATFORM_ISO: {
+				encoding_name = mutt_iso_encoding_id_get_nice_name(record->encoding_id);
+			} break;
+			case MUTT_PLATFORM_WINDOWS: {
+				encoding_name = mutt_windows_encoding_id_get_nice_name(record->encoding_id);
+			} break;
+		}
+
+		printf("\tencodingID - %s ", encoding_name);
+		printf("[%" PRIu16 "]\n", record->encoding_id);
+
+		printf("\tformat - %" PRIu16 "\n", record->format);
+
+		// Test characters on supported formats
+
+		muBool got_chars = MU_TRUE;
+
+		if (record->platform_id == MUTT_PLATFORM_UNICODE || record->platform_id == MUTT_PLATFORM_WINDOWS) {
+			switch (record->format) {
+				default: got_chars = MU_FALSE; break;
+
+				case 0: {
+					for (uint32_m i = 0; i < TEST_CHAR_LEN; i++) {
+						glyph_ids[i] = mutt_get_glyph_id_0(record->formats.f0, test_chars[i]);
+					}
+				} break;
+
+				case 4: {
+					for (uint32_m i = 0; i < TEST_CHAR_LEN; i++) {
+						glyph_ids[i] = mutt_get_glyph_id_4(record->formats.f4, test_chars[i]);
+					}
+				} break;
+
+				case 12: {
+					for (uint32_m i = 0; i < TEST_CHAR_LEN; i++) {
+						glyph_ids[i] = mutt_get_glyph_id_12(record->formats.f12, test_chars[i]);
+					}
+				} break;
+			}
+		}
+
+		if (got_chars) {
+			printf("\tchars {");
+
+			for (uint16_m i = 0; i < TEST_CHAR_LEN; i++) {
+				if (i%3 == 0) {
+					printf("\n\t\t");
+				}
+				printf("[0x%04x] - %05" PRIu16 ", ", test_chars[i], glyph_ids[i]);
+			}
+
+			printf("\n\t}\n");
+		}
+	}
+}
+else
+{
+	printf("Failed to load: %s\n", mutt_result_get_name(font.cmap_res));
+}
+
+printf("\n");
 
 /* Deload */
 

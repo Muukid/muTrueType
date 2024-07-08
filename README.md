@@ -2,7 +2,7 @@
 
 # muTrueType v1.0.0
 
-muTrueType (abbreviated to 'mutt') is a public domain header-only single-file C library for retrieving data from the TrueType file format, rendering glyphs to a bitmap, and handling the layout/spacing of multiple glyphs in sequence.
+muTrueType (abbreviated to 'mutt') is a public domain single-file C library for retrieving data from the TrueType file format, rendering glyphs to a bitmap, and handling the layout/spacing of multiple glyphs in sequence.
 
 ***WARNING!*** This library is still under heavy development, has no official releases, and won't be stable until its first public release v1.0.0.
 
@@ -77,6 +77,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_INVALID_MAXP_LENGTH` - the value for the table length of the maxp table was invalid. This could mean that an unsupported version of the table is being used.
 
 * `MUTT_INVALID_MAXP_VERSION` - the version value in the maxp table was invalid/unsupported.
+
+* `MUTT_INVALID_MAXP_NUM_GLYPHS` - the "numGlyphs" value in the maxp table did not reach the minimum of 2 glyphs.
 
 * `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" in the maxp table was invalid.
 
@@ -164,6 +166,40 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_INVALID_GLYF_GLYPH_INDEX` - a glyph index specified in a composite glyph component was an invalid glyph index.
 
+* `MUTT_INVALID_CMAP_LENGTH` - the value for the table length of the cmap table was invalid. This could mean that an unsupported version of the table is being used.
+
+* `MUTT_INVALID_CMAP_VERSION` - the version of the cmap table was invalid/unsupported.
+
+* `MUTT_INVALID_CMAP_PLATFORM_ID` - a "platformID" value in an encoding record in the cmap table was invalid/unsupported.
+
+* `MUTT_INVALID_CMAP_ENCODING_ID` - an "encodingID" value in an encoding record in the cmap table was invalid/unsupported.
+
+* `MUTT_INVALID_CMAP_FORMAT_LENGTH` - the length of a cmap table format was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT_LANGUAGE` - the value "language" in a cmap table format was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT0_GLYPH_ID` - a glyph ID listed in a format 0 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_SEG_COUNT` - the value "segCountX2" in a format 4 cmap subtable was not divisible by 2.
+
+* `MUTT_INVALID_CMAP_FORMAT4_SEARCH_RANGE` - the value "searchRange" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_ENTRY_SELECTOR` - the value "entrySelector" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_RANGE_SHIFT` - the value "rangeShift" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_END_CODE` - a value in the array "endCode" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_START_CODE` - a value in the array "startCode" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_ID_DELTA` - a value in the array "idDelta" in a format 4 cmap subtable gave a glyph ID that was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT4_ID_RANGE_OFFSET` - a value in the array "idRangeOffset" in a format 4 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT12_START_CHAR_CODE` - the value "startCharCode" in a sequential map group within the array "groups" in a format 12 cmap subtable was invalid.
+
+* `MUTT_INVALID_CMAP_FORMAT12_START_GLYPH_ID` - the value "startGlyphID" in a sequential map group within the array "groups" in a format 12 cmap subtable was out of range of valid glyph IDs.
+
 * `MUTT_HHEA_REQUIRES_MAXP` - the hhea table failed to load becuase maxp is rather not being loaded or failed to load, and hhea relies on maxp.
 
 * `MUTT_HMTX_REQUIRES_MAXP` - the hmtx table failed to load because maxp is rather not being loaded or failed to load, and hmtx relies on mxap.
@@ -179,6 +215,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_GLYF_REQUIRES_MAXP` - the glyf table failed to load because maxp is rather not being loaded or failed to load, and glyf relies on maxp.
 
 * `MUTT_GLYF_REQUIRES_HEAD` - the glyf table failed to load because head is rather not being loaded or failed to load, and glyf relies on head.
+
+* `MUTT_CMAP_REQUIRES_MAXP` - the cmap table failed to load because maxp is rather not being loaded or failed to load, and cmap relies on maxp.
 
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
@@ -245,6 +283,8 @@ The following macros are defined for certain bits indicating what information to
 
 * [0x00000100] `MUTT_LOAD_GLYF` - load the glyf table.
 
+* [0x00000200] `MUTT_LOAD_CMAP` - load the cmap table.
+
 ### Group bit values
 
 The following macros are defined for loading groups of tables:
@@ -296,6 +336,10 @@ Inside the `muttFont` struct is all of the loaded information from when it was l
 * `muttGlyf* glyf` - a pointer to the glyf table.
 
 * `muttResult glyf_res` - the result of loading the member `glyf`.
+
+* `muttCmap* cmap` - a pointer to the cmap table.
+
+* `muttResult cmap_res` - the result of loading the member `cmap`.
 
 * `muByte* mem` - the inner allocated memory used for holding necessary data.
 
@@ -1372,6 +1416,111 @@ The following macros are defined for bitmasking a flag value in the component gl
 
 * [0x1000] - `MUTT_UNSCALED_COMPONENT_OFFSET`
 
+## Cmap information
+
+The struct `muttCmap` is used to represent the cmap table provided by a TrueType font, stored in the struct `muttFont` as `muttFont->cmap`, and loaded with the flag `MUTT_LOAD_CMAP` (the flag `MUTT_LOAD_MAXP` also needs to be set for cmap to load successfully).
+
+It has the following members:
+
+* `uint16_m version` - equivalent to "version" in the cmap header.
+
+* `uint16_m num_tables` - equivalent to "numTables" in the cmap header.
+
+* `muttEncodingRecord* encoding_records` - the encoding records. If `num_tables` equals 0, the value of this member is undefined.
+
+The union `muttCmapFormats` holds pointers to the cmap formats supported by mutt. It has the following members:
+
+* `muttCmapFormat0* f0` - format 0 cmap subtable.
+
+* `muttCmapFormat4* f4` - format 4 cmap subtable.
+
+* `muttCmapFormat12* f12` - format 12 cmap subtable.
+
+The struct `muttEncodingRecord` represents a cmap encoding record. It has the following members:
+
+* `uint16_m platform_id` - equivalent to "platformID" in the cmap encoding record.
+
+* `uint16_m encoding_id` - equivalent to "encodingID" in the cmap encoding record.
+
+* `uint16_m format` - equivalent to "format" in the cmap format subtable.
+
+* `muttCmapFormats formats` - container for the pointer to the format-specific data. If `format` is a format not supported by mutt (AKA doesn't have a handle in `muttCmapFormats`), the contents of this member are undefined.
+
+### Format 0
+
+The function `mutt_get_glyph_id_0` returns a glyph ID based on a given codepoint for a format 0 cmap subtable, defined below: 
+
+```c
+MUDEF uint8_m mutt_get_glyph_id_0(muttCmapFormat0* f0, uint8_m codepoint);
+```
+
+
+The struct `muttCmapFormat0` represents cmap format 0. It has the following members:
+
+* `uint16_m language` - equivalent to "language" in cmap format 0.
+
+* `uint8_m glyph_ids[256]` - equivalent to "glyphIdArray" in cmap format 0.
+
+### Format 4
+
+The function `mutt_get_glyph_id_4` returns a glyph ID based on a given codepoint for a format 4 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_get_glyph_id_4(muttCmapFormat4* f4, uint16_m codepoint);
+```
+
+
+This function returns 0 (which is always a valid glyph ID) if the `codepoint` value given has no corresponding glyph ID.
+
+The struct `muttCmapFormat4` represents cmap format 4. It has the following members:
+
+* `uint16_m language` - equivalent to "language" in cmap format 4.
+
+* `uint16_m seg_count` - equivalent to "segCount" in cmap format 4. If this member equals 0, all members past `range_shift` have undefined contents.
+
+* `uint16_m search_range` - equivalent to "searchRange" in cmap format 4.
+
+* `uint16_m entry_selector` - equivalent to "entrySelector" in cmap format 4.
+
+* `uint16_m range_shift` - equivalent to "rangeShift" in cmap format 4.
+
+* `uint16_m* end_code` - equivalent to "endCode" in cmap format 4.
+
+* `uint16_m* start_code` - equivalent to "startCode" in cmap format 4.
+
+* `int16_m* id_delta` - equivalent to "idDelta" in cmap format 4.
+
+* `uint16_m* id_range_offset` - equivalent to "idRangeOffset" in cmap format 4.
+
+* `uint16_m* glyph_id_array` - equivalent to "glyphIdArray" in cmap format 4.
+
+### Format 12
+
+The function `mutt_get_glyph_id_12` returns a glyph ID based on a given codepoint for a format 12 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_get_glyph_id_12(muttCmapFormat12* f12, uint32_m codepoint);
+```
+
+
+This function returns 0 (which is always a valid glyph ID) if the `codepoint` value given has no corresponding glyph ID.
+
+The struct `muttCmapFormat12` represents cmap format 12. It has the following members:
+
+* `uint32_m language` - equivalent to "language" in cmap format 12.
+
+* `uint32_m num_groups` - equivalent to "numGroups" in cmap format 12. If the value of this member equals 0, the contents of `groups` is undefined.
+
+* `muttCmapFormat12Map* groups` - an array of `muttCmapFormat12Map` structs that represents "groups" in cmap format 12.
+
+The struct `muttCmapFormat12Map` represents a SequentialMapGroup record in the cmap subtable format 12. It has the following members:
+
+* `uint32_m start_char_code` - equivalent to "startCharCode" in the SequentialMapGroup record in cmap format 12.
+
+* `uint32_m end_char_code` - equivalent to "endCharCode" in the SequentialMapGroup record in cmap format 12.
+
+* `uint32_m start_glyph_id` - equivalent to "startGlyphID" in the SequentialMapGroup record in cmap format 12.
+
 ## Miscellaneous inner utility functions
 
 The following functions are miscellaneous functions used for reading values from a TrueType file.
@@ -1382,6 +1531,15 @@ The macro function "MUTT_F2DOT14" creates an expression for a float equivalent o
 
 ```c
 #define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
+```
+
+
+### idDelta logic
+
+The logic behind adding an idDelta value to a glyph id retrieved in certain cmap formats can be confusing; the function `mutt_id_delta` calculates this, defined below: 
+
+```c
+MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 ```
 
 
