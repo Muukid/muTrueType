@@ -990,10 +990,14 @@ mutt is developed primarily off of these sources of documentation:
 				uint16_m num_glyphs;
 				// @DOCLINE * `@NLFT* glyph_name_index` - equivalent to "glyphNameIndex" in version 2.0 of the post subtable.
 				uint16_m* glyph_name_index;
+				// @DOCLINE * `@NLFT* glyph_name_offset` - offsets in `string_data` for each glyph; length is `num_glyphs`.
+				uint32_m* glyph_name_offset;
 				// @DOCLINE * `@NLFT* string_data` - equivalent to "stringData" in version 2.0 of the post subtable.
 				uint8_m* string_data;
 			};
 			typedef struct muttPost20 muttPost20;
+
+			// @DOCLINE Note that the strings are Pascal strings, meaning the first byte is interpreted as the length of the string.
 
 			// @DOCLINE ### Version 2.5 post subtable
 			// @DOCLINE The struct `muttPost25` represents a version 2.5 post subtable. It has the following members:
@@ -1709,6 +1713,8 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE This function requires the maxp and head table to be loaded successfully.
 
 			// @DOCLINE Note that due to the fact that checks are not fully performed when `data` is 0 (id est checks are only performed that are relevant to the memory requirements of the glyph; full checks are performed if `data` is not 0), `mutt_simple_glyph_get_data` can return `MUTT_SUCCESS` when `data` is 0 and then return a failure value when it is called again with a valid data pointer.
+
+			// @DOCLINE Note that due to common fonts signaling to use the "last coordinate value" on the first listed coordinate, it is allowed to do such despite being against the specification; in such a case, the value is assumed to be 0.
 
 			typedef struct muttSimpleGlyphPoint muttSimpleGlyphPoint;
 
@@ -3347,6 +3353,10 @@ mutt is developed primarily off of these sources of documentation:
 				}
 				length -= (34 + (2*post->subtable.v20.num_glyphs));
 
+				if (length == 0) {
+					return MUTT_INVALID_POST_LENGTH;
+				}
+
 				// glyphNameIndex allocation
 				post->subtable.v20.glyph_name_index = (uint16_m*)&font->mem[font->memcur];
 				mutt_get_mem(font, 2*post->subtable.v20.num_glyphs);
@@ -3358,6 +3368,24 @@ mutt is developed primarily off of these sources of documentation:
 				// Copy stringData over
 				mu_memcpy(post->subtable.v20.string_data, &data[2*post->subtable.v20.num_glyphs], length);
 
+				// Make an array to store all of the offsets for each string
+				post->subtable.v20.glyph_name_offset = (uint32_m*)&font->mem[font->memcur];
+
+				// Loop through each string and gather the length and offset (also verifying data)
+				uint32_m string_offset_len = 0;
+				for (uint32_m offset = 0; offset < length;) {
+					post->subtable.v20.glyph_name_offset[string_offset_len] = offset;
+
+					uint16_m string_length = post->subtable.v20.string_data[offset] + 1;
+					if (offset+string_length > length) {
+						return MUTT_INVALID_POST_GLYPH_NAME_INDEX;
+					}
+					offset += string_length;
+					string_offset_len += 1;
+				}
+
+				mutt_get_mem(font, string_offset_len*4);
+
 				// Loop through each number in glyphNameIndex
 				for (uint16_m i = 0; i < post->subtable.v20.num_glyphs; i++) {
 					// glyphNameIndex[i]
@@ -3365,16 +3393,8 @@ mutt is developed primarily off of these sources of documentation:
 
 					// Verify index
 					if (post->subtable.v20.glyph_name_index[i] >= 258) {
-						uint16_m index = post->subtable.v20.glyph_name_index[i]-258;
-						uint8_m* string_data = post->subtable.v20.string_data;
-						uint32_m string_length = 0;
-
-						for (uint16_m c = 0; c < index; c++) {
-							string_length += string_data[0] + 1;
-							if (string_length > length) {
-								return MUTT_INVALID_POST_GLYPH_NAME_INDEX;
-							}
-							string_data += string_data[0] + 1;
+						if ((uint32_m)(post->subtable.v20.glyph_name_index[i]-258) >= string_offset_len) {
+							return MUTT_INVALID_POST_GLYPH_NAME_INDEX;
 						}
 					}
 
@@ -3819,14 +3839,15 @@ mutt is developed primarily off of these sources of documentation:
 				glyph->points[pi].flags = flags;
 
 				// Verify that flag doesn't rely on prior values if this is the first flag
-				if (pi == 0) {
+				// (Some common fonts get this messed up; we're assuming 0 in these cases)
+				/*if (pi == 0) {
 					if (!(flags & MUTT_X_SHORT_VECTOR) && (flags & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
 						return MUTT_INVALID_GLYF_FLAGS;
 					}
 					if (!(flags & MUTT_Y_SHORT_VECTOR) && (flags & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
 						return MUTT_INVALID_GLYF_FLAGS;
 					}
-				}
+				}*/
 
 				// Get implied length of x- and y-coordinates based on flag
 				uint8_m coord_length = 0;
@@ -3911,7 +3932,11 @@ mutt is developed primarily off of these sources of documentation:
 				} else {
 					if (flags & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
 						// Repeated x-coordinate
-						glyph->points[pi].x = glyph->points[pi-1].x;
+						if (pi != 0) {
+							glyph->points[pi].x = glyph->points[pi-1].x;
+						} else {
+							glyph->points[pi].x = 0;
+						}
 						pi += 1;
 						continue;
 					} else {
@@ -3960,7 +3985,11 @@ mutt is developed primarily off of these sources of documentation:
 				} else {
 					if (flags & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
 						// Repeated y-coordinate
-						glyph->points[pi].y = glyph->points[pi-1].y;
+						if (pi != 0) {
+							glyph->points[pi].y = glyph->points[pi-1].y;
+						} else {
+							glyph->points[pi].y = 0;
+						}
 						pi += 1;
 						continue;
 					} else {
@@ -4584,7 +4613,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// : Verify valid range
 				if (group->start_glyph_id >= font->maxp->num_glyphs ||
-					group->start_glyph_id+(group->end_char_code-group->start_char_code)+1 >= font->maxp->num_glyphs
+					group->start_glyph_id+(group->end_char_code-group->start_char_code) >= font->maxp->num_glyphs
 				) {
 					return MUTT_INVALID_CMAP_FORMAT12_START_GLYPH_ID;
 				}

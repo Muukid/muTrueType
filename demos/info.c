@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-08
+LAST UPDATED:       2024-07-09
 
 ============================================================
                         DEMO PURPOSE
@@ -31,7 +31,6 @@ More explicit license information at the end of file.
 	// Include muTrueType
 
 	#define MUTT_NAMES // (for name functions)
-	#define MUTT_PRINT_MEMORY_USAGE
 	#define MUTT_IMPLEMENTATION
 	#include "muTrueType.h"
 	
@@ -344,7 +343,7 @@ else
 	printf("Failed to load: %s\n", mutt_result_get_name(font.loca_res));
 }
 
-printf("\n");
+printf("\n\n");
 
 /* Print post info */
 
@@ -370,7 +369,7 @@ if (font.post)
 		printf("numGlyphs: %" PRIu16 "\n", font.post->subtable.v20.num_glyphs);
 
 		// Print various glyph name indexes
-		for (uint16_m i = 0; i < font.post->subtable.v20.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+		for (uint16_m i = 0; i < font.post->subtable.v20.num_glyphs && i < (uint16_m)((i+1)*2); i *= 2) {
 			uint16_m name_index = font.post->subtable.v20.glyph_name_index[i];
 			printf("#%" PRIu16 ": %" PRIu16 "", i, name_index);
 
@@ -378,17 +377,13 @@ if (font.post)
 			if (name_index >= 258) {
 				name_index -= 258;
 
-				// Increment by length until string is reached
-				uint8_m* string_data = font.post->subtable.v20.string_data;
-				for (uint32_m c = 0; c < name_index; c++) {
-					string_data += string_data[0] + 1;
-				}
-				uint8_m length = string_data[0];
+				uint32_m offset = font.post->subtable.v20.glyph_name_offset[name_index];
+				uint8_m length = font.post->subtable.v20.string_data[offset];
 
 				// Print each character
 				printf(" (");
 				for (uint16_m i = 1; i <= length; i++) {
-					printf("%c", string_data[i]);
+					printf("%c", font.post->subtable.v20.string_data[offset+i]);
 				}
 				printf(")\n");
 			} else {
@@ -408,7 +403,7 @@ if (font.post)
 		printf("numGlyphs: %" PRIu16 "\n", font.post->subtable.v25.num_glyphs);
 
 		// Print various glyph offsets
-		for (uint16_m i = 0; i < font.post->subtable.v25.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+		for (uint16_m i = 0; i < font.post->subtable.v25.num_glyphs && i < (uint16_m)((i+1)*2); i *= 2) {
 			printf("#%" PRIu16 ": %" PRIi8 "\n", i, font.post->subtable.v25.offset[i]);
 
 			if (i == 0) {
@@ -521,19 +516,27 @@ if (font.glyf)
 	uint32_m composite_max = mutt_composite_glyph_get_maximum_size(&font);
 	printf("Maximum bytes for composite glyph: %" PRIu32 "\n", composite_max);
 
-	muByte* simple_mem = (muByte*)malloc(simple_max);
-	if (!simple_mem) {
-		goto out_glyf;
+	muByte* simple_mem = 0;
+	if (simple_max > 0) {
+		simple_mem = (muByte*)malloc(simple_max);
+		if (!simple_mem) {
+			printf("Failed to allocate simple memory for glyf; skipping\n");
+			goto out_glyf;
+		}
 	}
 
-	muByte* composite_mem = (muByte*)malloc(composite_max);
-	if (!composite_mem) {
-		free(simple_mem);
-		goto out_glyf;
+	muByte* composite_mem = 0;
+	if (composite_max > 0) {
+		composite_mem = (muByte*)malloc(composite_max);
+		if (!composite_mem) {
+			printf("Failed to allocate composite memory for glyf; skipping\n");
+			free(simple_mem);
+			goto out_glyf;
+		}
 	}
 
 	// Go through various glyph IDs
-	for (uint16_m i = 0; i < font.post->subtable.v20.num_glyphs && i < (uint32_m)((i+1)*2); i *= 2) {
+	for (uint16_m i = 0; i < font.maxp->num_glyphs && i < (uint16_m)((i+1)*2); i *= 2) {
 		printf("[%" PRIu16 "]\n", i);
 
 		// Get header
@@ -682,8 +685,12 @@ if (font.glyf)
 		}
 	}
 
-	free(simple_mem);
-	free(composite_mem);
+	if (simple_mem) {
+		free(simple_mem);
+	}
+	if (composite_mem) {
+		free(composite_mem);
+	}
 }
 else
 {
@@ -759,6 +766,8 @@ if (font.cmap)
 					}
 				} break;
 			}
+		} else {
+			got_chars = MU_FALSE;
 		}
 
 		if (got_chars) {

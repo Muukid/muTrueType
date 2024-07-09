@@ -553,7 +553,11 @@ The struct `muttPost20` represents a version 2.0 post subtable. It has the follo
 
 * `uint16_m* glyph_name_index` - equivalent to "glyphNameIndex" in version 2.0 of the post subtable.
 
+* `uint32_m* glyph_name_offset` - offsets in `string_data` for each glyph; length is `num_glyphs`.
+
 * `uint8_m* string_data` - equivalent to "stringData" in version 2.0 of the post subtable.
+
+Note that the strings are Pascal strings, meaning the first byte is interpreted as the length of the string.
 
 ### Version 2.5 post subtable
 
@@ -1298,6 +1302,8 @@ If the return value of this function is not `MUTT_SUCCESS`, the contents of `*gl
 This function requires the maxp and head table to be loaded successfully.
 
 Note that due to the fact that checks are not fully performed when `data` is 0 (id est checks are only performed that are relevant to the memory requirements of the glyph; full checks are performed if `data` is not 0), `mutt_simple_glyph_get_data` can return `MUTT_SUCCESS` when `data` is 0 and then return a failure value when it is called again with a valid data pointer.
+
+Note that due to common fonts signaling to use the "last coordinate value" on the first listed coordinate, it is allowed to do such despite being against the specification; in such a case, the value is assumed to be 0.
 
 The struct `muttSimpleGlyph` has the following members:
 
