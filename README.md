@@ -19,6 +19,10 @@ More information about the general structure of a mu library is provided at [the
 
 The documentation for this library is rather explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
 
+## External dependencies
+
+mutt has no external dependencies; all contents are stored within the file. However, some of the demos rely on [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h) (v1.16); the file is included in the demos folder, and should be in the include directory of whatever compilation system is being used if the demos are being compiled.
+
 # Licensing
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
@@ -55,6 +59,8 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 * `MUTT_FAILED_REALLOC` - a call to realloc failled; memory was insufficient to perform the operation.
 
 * `MUTT_UNFOUND_TABLE` - the table could not be located within the data.
+
+* `MUTT_UNKNOWN_RENDER_FORMAT` - a given `muttRenderFormat` value had an unrecognized value.
 
 * `MUTT_DUPLICATE_TABLE` - another table with the same tag was found.
 
@@ -293,7 +299,18 @@ The following macros are defined for loading groups of tables:
 
 * [0xFFFFFFFF] `MUTT_LOAD_ALL` - loads everything; sets all flags.
 
-# Reading low-level information from a TrueType font
+## Checking for loading status
+
+To quickly check what tables successfully loaded and which ones didn't, the function `mutt_get_load_results` returns flags for all of the tables that didn't load successfully, defined below: 
+
+```c
+MUDEF uint32_m mutt_get_load_results(muttFont* font);
+```
+
+
+This function will return a "load flags" value, in which a flag is set for each table that was requested for loading but failed to load.
+
+# Reading low-level information
 
 ## The `muttFont` struct
 
@@ -1231,17 +1248,17 @@ Only the raw binary data is stored due to the fact that verifying the data would
 
 ### Glyph memory maximums
 
-The function `mutt_simple_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a simple glyph in the struct `muttSimpleGlyph`, defined below: 
+The function `mutt_simple_glyph_get_max_size` returns the maximum manually-allocated bytes needed to hold the data of a simple glyph in the struct `muttSimpleGlyph`, defined below: 
 
 ```c
-MUDEF uint32_m mutt_simple_glyph_get_maximum_size(muttFont* font);
+MUDEF uint32_m mutt_simple_glyph_get_max_size(muttFont* font);
 ```
 
 
-The function `mutt_composite_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a composite glyph in the struct `muttCompositeGlyph`, defined below: 
+The function `mutt_composite_glyph_get_max_size` returns the maximum manually-allocated bytes needed to hold the data of a composite glyph in the struct `muttCompositeGlyph`, defined below: 
 
 ```c
-MUDEF uint32_m mutt_composite_glyph_get_maximum_size(muttFont* font);
+MUDEF uint32_m mutt_composite_glyph_get_max_size(muttFont* font);
 ```
 
 
@@ -1548,6 +1565,187 @@ The logic behind adding an idDelta value to a glyph id retrieved in certain cmap
 MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 ```
 
+
+# Reading high-level information
+
+The prior section dealt with reading information from a TrueType font very closely to how the TrueType font specifies said data. This section deals with functions that internally use that API to get requested information from the TrueType font in a much higher level, requiring less work from the user at the cost of less explicitness and customizability.
+
+## Convert codepoint to glyph ID
+
+The function `mutt_codepoint_to_glyph_id` converts a given codepoint value to a glyph ID, defined below: 
+
+```c
+MUDEF uint16_m mutt_codepoint_to_glyph_id(muttFont* font, uint32_m codepoint);
+```
+
+
+The value `codepoint` has to be a valid Unicode codepoint value. If no corresponding glyph ID exists for the given codepoint value within any cmap format readable by mutt specified in the font, this function returns 0, which corresponds to the missing character glyph of any TrueType font.
+
+As of right now, this function only works with Unicode encoding; this, more explicitly, means platform ID 0 (encoding IDs 3 and 4) and platform ID 3 (encoding IDs 1 and 10).
+
+## Font-unit data to pixel-unit data
+
+This section covers the conversion of glyph-related data to pixel-based data, which is used for rendering glyphs.
+
+### Font-units to pixel-units
+
+The function `mutt_funits_to_punits` converts a font-unit value to a pixel-unit value, defined below: 
+
+```c
+MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi);
+```
+
+
+`funits` is the font-unit value to be converted, expressed not as a 16-bit unsigned integer (which can express all valid font units as per the TrueType specification) but as a float in order to be able to do calculations on transformations in composite glyphs, with such a case implying non-integer font units.
+
+`point_size` and `ppi` are both physical measurements; `point_size` being the physical [point](https://en.wikipedia.org/wiki/Point_(typography)) at which the font is being displayed, and `ppi` being the physical [pixels per inch](https://en.wikipedia.org/wiki/Dots_per_inch) of the display, which is usually 72 or 96 PPI.
+
+### Pixel glyph data
+
+mutt uses pixel glyph data to render simple and composite glyphs, converting each point defined in the glyph to pixel units for rendering.
+
+#### Struct
+
+The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the following members:
+
+* `uint16_m point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags` and `coords` are undefined.
+
+* `uint32_m min_width` - the minimum width, in pixels, that this glyph can be rendered in.
+
+* `uint32_m min_height` - the minimum height, in pixels, that this glyph can be rendered in.
+
+* `uint8_m* flags` - the flag of each point, with a total array length of `point_count`.
+
+* `float* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array length of `point_count * 2`.
+
+The following macros are defined for bitmasking the flags in a pixel glyph:
+
+* [0x01] - `MUTT_POINT_ON_GLYPH` if this bit is set, the point is on the curve; if not, it is off the curve.
+
+* [0x02] - `MUTT_POINT_LAST_CONTOUR_POINT` if this bit is set, the point is the last point of the current contour.
+
+#### Maximum size
+
+The function `mutt_pixel_glyph_get_max_size` returns the maximum size, in bytes, that a pixel glyph's dynamically allocated data (data for `flags` and `coords`) can take up for a given font, defined below: 
+
+```c
+MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font);
+```
+
+
+#### Get pixel glyph via glyph data
+
+The function `mutt_pixel_glyph_get_simple_data` retrieves pixel glyph data from a simple glyph description, defined below: 
+
+```c
+MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+```
+
+
+The function `mutt_pixel_glyph_get_composite_data` retrieves pixel glyph data from a composite glyph description, defined below: 
+
+```c
+MUDEF muttResult mutt_pixel_glyph_get_composite_data(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+```
+
+
+The following notes apply to both of the functions listed above:
+
+`header` and `glyph` have to be valid descriptions of a simple/composite glyph retrieved from the font prior.
+
+If the function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
+
+If `data` is 0, `written` is dereferenced and set to how much memory this specific pixel glyph needs, and `pglyph` is not dereferenced. The maximum size of a pixel glyph can be queried with the function `mutt_pixel_glyph_get_max_size`.
+
+If `data` is not 0, it is expected to be a pointer to memory sufficient in length for the pixel glyph to be defined, and if `written` is not 0, `written` will be dereferenced and set to how much memory was used, in bytes.
+
+`point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
+
+#### Get pixel glyph via glyph ID
+
+The function `mutt_pixel_glyph_get_data` retrieves pixel glyph data from a given glyph ID, defined below: 
+
+```c
+MUDEF muttResult mutt_pixel_glyph_get_data(muttFont* font, uint16_m glyph_id, muByte* glyph_data, uint32_m* glyph_written, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* pglyph_data, uint32_m* pglyph_written);
+```
+
+
+`glyph_id` must be a valid glyph ID (AKA less than `font->maxp->num_glyphs`).
+
+`glyph_data` must be a pointer to memory sufficient in length for the glyph description to be defined. Maximums for simple and composite glyphs can be found in the section "Glyph memory maximums" (specifically functions `mutt_simple_glyph_get_max_size` and `mutt_composite_glyph_get_max_size`). If `glyph_written` is not 0, `glyph_written` is dereferenced and set to the amount of memory that was used in `glyph_data`, in bytes.
+
+`pglyph_data` must be a pointer to memory sufficient in length for the pixel glyph to be defined. Maximums for pixel glyphs can be queried with the function `mutt_pixel_glyph_get_max_size`. If `pglyph_written` is not 0, `pglyph_written` is dereferenced and set to the amount of memory that was used in `pglyph_data`, in bytes.
+
+If this function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
+
+`point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
+
+# Rendering a glyph
+
+This section deals with the rendering of glyphs in the mutt API.
+
+## Rendering formats
+
+The enumerator `muttRenderFormat` represents a rendering format that mutt is able to render in. It has the following defined values:
+
+* `MUTT_BW_FULL_PIXEL_BI_LEVEL_R` - black & white full-pixel bi-level rendering, with the output corresponding to one color channel.
+
+* `MUTT_BW_FULL_PIXEL_BI_LEVEL_RGB` - black & white full-pixel bi-level rendering, with the output corresponding to three color channels (red, green, and blue).
+
+* `MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA` - black & white full-pixel bi-level rendering, with the output corresponding to four color channels (red, green, blue, and alpha).
+
+Black and white rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa.
+
+All channels in these formats use the data type `uint8_m`, and are expected to be laid one after the other. For example, RGB data being filled in is expected to be an array of `uint8_m`s, with index 0 being the red channel, index 1 being the green channel, index 2 being the blue channel, index 3 being the red channel again, and so on and so forth.
+
+"Full-pixel" means that a pixel is treated as one singular monochrome value, with darker meaning that the pixel is less in the glyph, and brighter meaning that the pixel is more in the glyph; exactly how much the pixel is or isn't inside the glyph is deemed per-pixel in a monochrome fashion.
+
+"Sub-pixel" means that a pixel is split up into more elements when rendering somehow, like separating how much the pixel is or isn't inside the glyph by channels, which can result in a non-monochrome output.
+
+"Bi-level" means that a pixel is simply in or out of the glyph, with no possibility of intermediate values.
+
+"Anti-aliasing" means that multiple samples are taken for each pixel and then averaged for the pixel's brightness, meaning that there are now pixels that are partially inside or outside of the glyph.
+
+Most of the terms in this section like "full-pixel" are taken from [The Raster Tragedy](http://rastertragedy.com/RTRCh2.htm); more information is available at that source.
+
+## Render functions
+
+This section covers the functions related to rendering a glyph to a set of pixels.
+
+Pixels are expected to be laid out horizontally by index; that is, `pixels[0], pixels[1], ..., pixels[width-1]` is expected to be the first row of pixels, `pixels[height], pixels[height+1]...` is expected to be the second row, `pixels[height*2], pixels[height*2+1]...` is expected to be the third row, etc.
+
+### Render pixel glyph
+
+The function `mutt_render_pixel_glyph` renders a pixel glyph, defined below: 
+
+```c
+MUDEF muttResult mutt_render_pixel_glyph(muttFont* font, muttPixelGlyph* glyph, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
+```
+
+
+The color channel formatting of `pixels` is expected to be provided by the value `format`.
+
+### Render glyph ID
+
+The function `mutt_render_glyph_id` renders a glyph ID, defined below: 
+
+```c
+MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem);
+```
+
+
+`mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` / `mutt_composite_glyph_get_max_size`) and the pixel glyph (`mutt_pixel_glyph_get_max_size`) of the respective glyph ID to be stored.
+
+## Maximum dimensions
+
+The function `mutt_maximum_glyph_render_dimensions` retrieves the maximum pixel dimensions needed to render a pixel glyph, defined below: 
+
+```c
+MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height);
+```
+
+
+`max_width` and `max_height` will be individually dereferenced (if not equal to 0) and set to the maximum pixel dimensions.
 
 # Version macros
 

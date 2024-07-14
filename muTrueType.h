@@ -8,6 +8,8 @@ More explicit license information at the end of file.
 
 @TODO Add more individual error results (for example, if a single entry in cmap fails due to some unsupported encoding or something, don't shut off the WHOLE cmap table, just shut off that one entry. It's annoying, but needs to be done)
 @TODO Save memory by not including certain redundant numbers (like versions, or numbers regarding offsets)
+@TODO Add more format options, like BGR/BGRA, higher/lower bit-depth, etc.
+@TODO Verify 2 points or more per contour (?).
 
 @DOCBEGIN
 
@@ -29,6 +31,10 @@ More information about the general structure of a mu library is provided at [the
 # Demos
 
 The documentation for this library is rather explicit/hard to read and get a good overview of the library in the process. For this, demos that quickly show the gist of the library and how it works are available in the `demos` folder.
+
+## External dependencies
+
+mutt has no external dependencies; all contents are stored within the file. However, some of the demos rely on [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h) (v1.16); the file is included in the demos folder, and should be in the include directory of whatever compilation system is being used if the demos are being compiled.
 
 # Licensing
 
@@ -434,6 +440,8 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_FAILED_REALLOC,
 			// @DOCLINE * `@NLFT` - the table could not be located within the data.
 			MUTT_UNFOUND_TABLE,
+			// @DOCLINE * `@NLFT` - a given `muttRenderFormat` value had an unrecognized value.
+			MUTT_UNKNOWN_RENDER_FORMAT,
 			// @DOCLINE * `@NLFT` - another table with the same tag was found.
 			MUTT_DUPLICATE_TABLE,
 			// @DOCLINE * `@NLFT` - the length of the given TrueType data is not enough for the table directory. Likely the length is incorrect or the data given is not TrueType data.
@@ -691,7 +699,14 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE * [0xFFFFFFFF] `MUTT_LOAD_ALL` - loads everything; sets all flags.
 				#define MUTT_LOAD_ALL 0xFFFFFFFF
 
-	// @DOCLINE # Reading low-level information from a TrueType font
+		// @DOCLINE ## Checking for loading status
+
+			// @DOCLINE To quickly check what tables successfully loaded and which ones didn't, the function `mutt_get_load_results` returns flags for all of the tables that didn't load successfully, defined below: @NLNT
+			MUDEF uint32_m mutt_get_load_results(muttFont* font);
+
+			// @DOCLINE This function will return a "load flags" value, in which a flag is set for each table that was requested for loading but failed to load.
+
+	// @DOCLINE # Reading low-level information
 
 		// @DOCLINE ## The `muttFont` struct
 
@@ -1652,11 +1667,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE ### Glyph memory maximums
 
-			// @DOCLINE The function `mutt_simple_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a simple glyph in the struct `muttSimpleGlyph`, defined below: @NLNT
-			MUDEF uint32_m mutt_simple_glyph_get_maximum_size(muttFont* font);
+			// @DOCLINE The function `mutt_simple_glyph_get_max_size` returns the maximum manually-allocated bytes needed to hold the data of a simple glyph in the struct `muttSimpleGlyph`, defined below: @NLNT
+			MUDEF uint32_m mutt_simple_glyph_get_max_size(muttFont* font);
 
-			// @DOCLINE The function `mutt_composite_glyph_get_maximum_size` returns the maximum manually-allocated bytes needed to hold the data of a composite glyph in the struct `muttCompositeGlyph`, defined below: @NLNT
-			MUDEF uint32_m mutt_composite_glyph_get_maximum_size(muttFont* font);
+			// @DOCLINE The function `mutt_composite_glyph_get_max_size` returns the maximum manually-allocated bytes needed to hold the data of a composite glyph in the struct `muttCompositeGlyph`, defined below: @NLNT
+			MUDEF uint32_m mutt_composite_glyph_get_max_size(muttFont* font);
 
 			// @DOCLINE The maximums returned by these functions are not the maximum size that a glyph WILL take up, but the maximum size a glyph CAN take up, based on the values in the maxp table; there may not be a glyph that meets the maximum size.
 
@@ -1983,6 +1998,157 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE The logic behind adding an idDelta value to a glyph id retrieved in certain cmap formats can be confusing; the function `mutt_id_delta` calculates this, defined below: @NLNT
 				MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 
+	// @DOCLINE # Reading high-level information
+
+		// @DOCLINE The prior section dealt with reading information from a TrueType font very closely to how the TrueType font specifies said data. This section deals with functions that internally use that API to get requested information from the TrueType font in a much higher level, requiring less work from the user at the cost of less explicitness and customizability.
+
+		// @DOCLINE ## Convert codepoint to glyph ID
+
+			// @DOCLINE The function `mutt_codepoint_to_glyph_id` converts a given codepoint value to a glyph ID, defined below: @NLNT
+			MUDEF uint16_m mutt_codepoint_to_glyph_id(muttFont* font, uint32_m codepoint);
+
+			// @DOCLINE The value `codepoint` has to be a valid Unicode codepoint value. If no corresponding glyph ID exists for the given codepoint value within any cmap format readable by mutt specified in the font, this function returns 0, which corresponds to the missing character glyph of any TrueType font.
+
+			// @DOCLINE As of right now, this function only works with Unicode encoding; this, more explicitly, means platform ID 0 (encoding IDs 3 and 4) and platform ID 3 (encoding IDs 1 and 10).
+
+		// @DOCLINE ## Font-unit data to pixel-unit data
+
+			// @DOCLINE This section covers the conversion of glyph-related data to pixel-based data, which is used for rendering glyphs.
+
+			// @DOCLINE ### Font-units to pixel-units
+
+				// @DOCLINE The function `mutt_funits_to_punits` converts a font-unit value to a pixel-unit value, defined below: @NLNT
+				MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi);
+
+				// @DOCLINE `funits` is the font-unit value to be converted, expressed not as a 16-bit unsigned integer (which can express all valid font units as per the TrueType specification) but as a float in order to be able to do calculations on transformations in composite glyphs, with such a case implying non-integer font units.
+
+				// @DOCLINE `point_size` and `ppi` are both physical measurements; `point_size` being the physical [point](https://en.wikipedia.org/wiki/Point_(typography)) at which the font is being displayed, and `ppi` being the physical [pixels per inch](https://en.wikipedia.org/wiki/Dots_per_inch) of the display, which is usually 72 or 96 PPI.
+
+			// @DOCLINE ### Pixel glyph data
+
+				// @DOCLINE mutt uses pixel glyph data to render simple and composite glyphs, converting each point defined in the glyph to pixel units for rendering.
+
+				// @DOCLINE #### Struct
+
+				// @DOCLINE The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the following members:
+				struct muttPixelGlyph {
+					// @DOCLINE * `@NLFT point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags` and `coords` are undefined.
+					uint16_m point_count;
+					// @DOCLINE * `@NLFT min_width` - the minimum width, in pixels, that this glyph can be rendered in.
+					uint32_m min_width;
+					// @DOCLINE * `@NLFT min_height` - the minimum height, in pixels, that this glyph can be rendered in.
+					uint32_m min_height;
+					// @DOCLINE * `@NLFT* flags` - the flag of each point, with a total array length of `point_count`.
+					uint8_m* flags;
+					// @DOCLINE * `@NLFT* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array length of `point_count * 2`.
+					float* coords;
+				};
+				typedef struct muttPixelGlyph muttPixelGlyph;
+
+				// @DOCLINE The following macros are defined for bitmasking the flags in a pixel glyph:
+
+				// @DOCLINE * [0x01] - `MUTT_POINT_ON_GLYPH` if this bit is set, the point is on the curve; if not, it is off the curve.
+				#define MUTT_POINT_ON_GLYPH 0x01
+				// @DOCLINE * [0x02] - `MUTT_POINT_LAST_CONTOUR_POINT` if this bit is set, the point is the last point of the current contour.
+				#define MUTT_POINT_LAST_CONTOUR_POINT 0x02
+
+				// @DOCLINE #### Maximum size
+
+				// @DOCLINE The function `mutt_pixel_glyph_get_max_size` returns the maximum size, in bytes, that a pixel glyph's dynamically allocated data (data for `flags` and `coords`) can take up for a given font, defined below: @NLNT
+				MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font);
+
+				// @DOCLINE #### Get pixel glyph via glyph data
+
+				// @DOCLINE The function `mutt_pixel_glyph_get_simple_data` retrieves pixel glyph data from a simple glyph description, defined below: @NLNT
+				MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// @DOCLINE The function `mutt_pixel_glyph_get_composite_data` retrieves pixel glyph data from a composite glyph description, defined below: @NLNT
+				MUDEF muttResult mutt_pixel_glyph_get_composite_data(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// @DOCLINE The following notes apply to both of the functions listed above:
+
+				// @DOCLINE `header` and `glyph` have to be valid descriptions of a simple/composite glyph retrieved from the font prior.
+
+				// @DOCLINE If the function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
+
+				// @DOCLINE If `data` is 0, `written` is dereferenced and set to how much memory this specific pixel glyph needs, and `pglyph` is not dereferenced. The maximum size of a pixel glyph can be queried with the function `mutt_pixel_glyph_get_max_size`.
+
+				// @DOCLINE If `data` is not 0, it is expected to be a pointer to memory sufficient in length for the pixel glyph to be defined, and if `written` is not 0, `written` will be dereferenced and set to how much memory was used, in bytes.
+
+				// @DOCLINE `point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
+
+				// @DOCLINE #### Get pixel glyph via glyph ID
+
+				// @DOCLINE The function `mutt_pixel_glyph_get_data` retrieves pixel glyph data from a given glyph ID, defined below: @NLNT
+				MUDEF muttResult mutt_pixel_glyph_get_data(muttFont* font, uint16_m glyph_id, muByte* glyph_data, uint32_m* glyph_written, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* pglyph_data, uint32_m* pglyph_written);
+
+				// @DOCLINE `glyph_id` must be a valid glyph ID (AKA less than `font->maxp->num_glyphs`).
+
+				// @DOCLINE `glyph_data` must be a pointer to memory sufficient in length for the glyph description to be defined. Maximums for simple and composite glyphs can be found in the section "Glyph memory maximums" (specifically functions `mutt_simple_glyph_get_max_size` and `mutt_composite_glyph_get_max_size`). If `glyph_written` is not 0, `glyph_written` is dereferenced and set to the amount of memory that was used in `glyph_data`, in bytes.
+
+				// @DOCLINE `pglyph_data` must be a pointer to memory sufficient in length for the pixel glyph to be defined. Maximums for pixel glyphs can be queried with the function `mutt_pixel_glyph_get_max_size`. If `pglyph_written` is not 0, `pglyph_written` is dereferenced and set to the amount of memory that was used in `pglyph_data`, in bytes.
+
+				// @DOCLINE If this function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
+
+				// @DOCLINE `point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
+
+	// @DOCLINE # Rendering a glyph
+
+		// @DOCLINE This section deals with the rendering of glyphs in the mutt API.
+
+		// @DOCLINE ## Rendering formats
+
+			// @DOCLINE The enumerator `muttRenderFormat` represents a rendering format that mutt is able to render in. It has the following defined values:
+			MU_ENUM(muttRenderFormat,
+				// @DOCLINE * `@NLFT` - black & white full-pixel bi-level rendering, with the output corresponding to one color channel.
+				MUTT_BW_FULL_PIXEL_BI_LEVEL_R,
+				// @DOCLINE * `@NLFT` - black & white full-pixel bi-level rendering, with the output corresponding to three color channels (red, green, and blue).
+				MUTT_BW_FULL_PIXEL_BI_LEVEL_RGB,
+				// @DOCLINE * `@NLFT` - black & white full-pixel bi-level rendering, with the output corresponding to four color channels (red, green, blue, and alpha).
+				MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA,
+			)
+
+			// @DOCLINE Black and white rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa.
+
+			// @DOCLINE All channels in these formats use the data type `uint8_m`, and are expected to be laid one after the other. For example, RGB data being filled in is expected to be an array of `uint8_m`s, with index 0 being the red channel, index 1 being the green channel, index 2 being the blue channel, index 3 being the red channel again, and so on and so forth.
+
+			// @DOCLINE "Full-pixel" means that a pixel is treated as one singular monochrome value, with darker meaning that the pixel is less in the glyph, and brighter meaning that the pixel is more in the glyph; exactly how much the pixel is or isn't inside the glyph is deemed per-pixel in a monochrome fashion.
+
+			// @DOCLINE "Sub-pixel" means that a pixel is split up into more elements when rendering somehow, like separating how much the pixel is or isn't inside the glyph by channels, which can result in a non-monochrome output.
+
+			// @DOCLINE "Bi-level" means that a pixel is simply in or out of the glyph, with no possibility of intermediate values.
+
+			// @DOCLINE "Anti-aliasing" means that multiple samples are taken for each pixel and then averaged for the pixel's brightness, meaning that there are now pixels that are partially inside or outside of the glyph.
+
+			// @DOCLINE Most of the terms in this section like "full-pixel" are taken from [The Raster Tragedy](http://rastertragedy.com/RTRCh2.htm); more information is available at that source.
+
+		// @DOCLINE ## Render functions
+
+			// @DOCLINE This section covers the functions related to rendering a glyph to a set of pixels.
+
+			// @DOCLINE Pixels are expected to be laid out horizontally by index; that is, `pixels[0], pixels[1], ..., pixels[width-1]` is expected to be the first row of pixels, `pixels[height], pixels[height+1]...` is expected to be the second row, `pixels[height*2], pixels[height*2+1]...` is expected to be the third row, etc.
+
+			// @DOCLINE ### Render pixel glyph
+
+				// @DOCLINE The function `mutt_render_pixel_glyph` renders a pixel glyph, defined below: @NLNT
+				MUDEF muttResult mutt_render_pixel_glyph(muttFont* font, muttPixelGlyph* glyph, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
+
+				// @DOCLINE The color channel formatting of `pixels` is expected to be provided by the value `format`.
+
+			// @DOCLINE ### Render glyph ID
+
+				// @DOCLINE The function `mutt_render_glyph_id` renders a glyph ID, defined below: @NLNT
+				MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem);
+
+				// @DOCLINE `mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` / `mutt_composite_glyph_get_max_size`) and the pixel glyph (`mutt_pixel_glyph_get_max_size`) of the respective glyph ID to be stored.
+
+		// @DOCLINE ## Maximum dimensions
+
+			// @DOCLINE The function `mutt_maximum_glyph_render_dimensions` retrieves the maximum pixel dimensions needed to render a pixel glyph, defined below: @NLNT
+			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height);
+
+			// @DOCLINE `max_width` and `max_height` will be individually dereferenced (if not equal to 0) and set to the maximum pixel dimensions.
+
 	// @DOCLINE # Version macros
 
 		// @DOCLINE mutt defines three macros to define the version of mutt: `MUTT_VERSION_MAJOR`, `MUTT_VERSION_MINOR`, and `MUTT_VERSION_PATCH`, following the format of `vMAJOR.MINOR.PATCH`.
@@ -2060,6 +2226,7 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_FAILED_MALLOC: return "MUTT_FAILED_MALLOC"; break;
 			case MUTT_FAILED_REALLOC: return "MUTT_FAILED_REALLOC"; break;
 			case MUTT_UNFOUND_TABLE: return "MUTT_UNFOUND_TABLE"; break;
+			case MUTT_UNKNOWN_RENDER_FORMAT: return "MUTT_UNKNOWN_RENDER_FORMAT"; break;
 			case MUTT_DUPLICATE_TABLE: return "MUTT_DUPLICATE_TABLE"; break;
 			case MUTT_INVALID_TABLE_DIRECTORY_LENGTH: return "MUTT_INVALID_TABLE_DIRECTORY_LENGTH"; break;
 			case MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION: return "MUTT_INVALID_TABLE_DIRECTORY_SFNT_VERSION"; break;
@@ -3614,7 +3781,7 @@ mutt is developed primarily off of these sources of documentation:
 			return MUTT_SUCCESS;
 		}
 
-		MUDEF uint32_m mutt_simple_glyph_get_maximum_size(muttFont* font) {
+		MUDEF uint32_m mutt_simple_glyph_get_max_size(muttFont* font) {
 			return
 				// endPtsOfContours
 				(2*font->maxp->max_contours)
@@ -3625,7 +3792,7 @@ mutt is developed primarily off of these sources of documentation:
 			;
 		}
 
-		MUDEF uint32_m mutt_composite_glyph_get_maximum_size(muttFont* font) {
+		MUDEF uint32_m mutt_composite_glyph_get_max_size(muttFont* font) {
 			return
 				// Components (muttComponentGlyph, muttComponentGlyph.scales)
 				font->maxp->max_component_elements*(sizeof(muttComponentGlyph)+(sizeof(float)*4))
@@ -3759,7 +3926,7 @@ mutt is developed primarily off of these sources of documentation:
 				uint16_m instruction_length = mu_rbe_uint16(gdata);
 				min_size += instruction_length;
 
-				if (min_size > mutt_simple_glyph_get_maximum_size(font)) {
+				if (min_size > mutt_simple_glyph_get_max_size(font)) {
 					return MUTT_INVALID_GLYF_DESCRIPTION_SIZE;
 				}
 				*written = min_size;
@@ -4078,7 +4245,7 @@ mutt is developed primarily off of these sources of documentation:
 					}
 				}
 
-				if (written_amt > mutt_composite_glyph_get_maximum_size(font)) {
+				if (written_amt > mutt_composite_glyph_get_max_size(font)) {
 					return MUTT_INVALID_GLYF_DESCRIPTION_SIZE;
 				}
 				*written = written_amt;
@@ -5091,6 +5258,337 @@ mutt is developed primarily off of these sources of documentation:
 			}
 			return (uint16_m)big_id;
 		}
+
+/* High-level info */
+
+	/* Misc. */
+
+		MUDEF uint32_m mutt_get_load_results(muttFont* font) {
+			uint32_m flags = 0;
+
+			if (font->load_flags & MUTT_LOAD_MAXP && font->maxp_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_MAXP; }
+			if (font->load_flags & MUTT_LOAD_HEAD && font->head_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_HEAD; }
+			if (font->load_flags & MUTT_LOAD_HHEA && font->hhea_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_HHEA; }
+			if (font->load_flags & MUTT_LOAD_HMTX && font->hmtx_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_HMTX; }
+			if (font->load_flags & MUTT_LOAD_LOCA && font->loca_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_LOCA; }
+			if (font->load_flags & MUTT_LOAD_POST && font->post_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_POST; }
+			if (font->load_flags & MUTT_LOAD_NAME && font->name_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_NAME; }
+			if (font->load_flags & MUTT_LOAD_GLYF && font->glyf_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_GLYF; }
+			if (font->load_flags & MUTT_LOAD_CMAP && font->cmap_res != MUTT_SUCCESS) { flags |= MUTT_LOAD_CMAP; }
+
+			return flags;
+		}
+
+		MUDEF uint16_m mutt_codepoint_to_glyph_id(muttFont* font, uint32_m codepoint) {
+			// Loop through each table
+			for (uint16_m t = 0; t < font->cmap->num_tables; t++) {
+				// Get record info
+				muttEncodingRecord* record = &font->cmap->encoding_records[t];
+
+				// Unicode support:
+				if (record->platform_id == MUTT_PLATFORM_UNICODE) {
+					// Ignore if non-2.0
+					if (record->encoding_id != MUTT_UNICODE_ENCODING_2_0_BMP &&
+						record->encoding_id != MUTT_UNICODE_ENCODING_2_0_FULL) {
+						continue;
+					}
+				}
+
+				// Windows support:
+				else if (record->platform_id == MUTT_PLATFORM_WINDOWS) {
+					// Ignore if non-Unicode
+					if (record->encoding_id != MUTT_WINDOWS_ENCODING_UNICODE_BMP &&
+						record->encoding_id != MUTT_WINDOWS_ENCODING_UNICODE_FULL) {
+						continue;
+					}
+				}
+
+				// Something unsupported:
+				else {
+					continue;
+				}
+
+				// Get codepoint through format if supported
+				uint16_m glyph_id = 0;
+				switch (record->format) {
+					default: break;
+
+					// Format 0:
+					case 0: {
+						if (codepoint < 256) {
+							glyph_id = mutt_get_glyph_id_0(record->formats.f0, codepoint);
+						}
+					} break;
+
+					// Format 4:
+					case 4: {
+						if (codepoint < 65536) {
+							glyph_id = mutt_get_glyph_id_4(record->formats.f4, codepoint);
+						}
+					} break;
+
+					// Format 12:
+					case 12: {
+						glyph_id = mutt_get_glyph_id_12(record->formats.f12, codepoint);
+					} break;
+				}
+
+				// Return glyph ID if non-zero
+				if (glyph_id != 0) {
+					return glyph_id;
+				}
+			}
+
+			// No good format could be font / no good format provided non-missing glyph.
+			return 0;
+		}
+
+	/* Font unit data to pixel unit data */
+
+		MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi) {
+			return point_size * funits * ppi / (72.f * font->head->units_per_em);
+		}
+
+		MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font) {
+			uint16_m max_points = font->maxp->max_points;
+			if (font->maxp->max_composite_points > max_points) {
+				max_points = font->maxp->max_composite_points;
+			}
+
+			return (uint32_m)(max_points * (sizeof(float)+sizeof(uint8_m)));
+		}
+
+		MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written) {
+			// Get amount of points
+			uint16_m points = 0;
+			if (header->number_of_contours > 0) {
+				points = glyph->end_pts_of_contours[header->number_of_contours-1] + 1;
+			}
+
+			// For written:
+			if (written) {
+				*written = (uint32_m)(points*(sizeof(float)+sizeof(uint8_m)));
+			}
+			// If we don't have data, this is all we need to do
+			if (!data) {
+				return MUTT_SUCCESS;
+			}
+
+			pglyph->point_count = points;
+
+			// Convert min/max values
+			pglyph->min_width = mutt_funits_to_punits(font, (float)(header->x_max-header->x_min), point_size, ppi) + 6.f;
+			pglyph->min_height = mutt_funits_to_punits(font, (float)(header->y_max-header->y_min), point_size, ppi) + 6.f;
+
+			// Return if no points are given
+			if (points == 0) {
+				return MUTT_SUCCESS;
+			}
+
+			// Allocate flags and coords
+			pglyph->flags = (uint8_m*)data;
+			pglyph->coords = (float*)(data+points);
+
+			// Loop through each point
+			uint16_m contour_id = 0;
+			for (uint16_m p = 0; p < points; p++) {
+				// Get simple glyph point
+				muttSimpleGlyphPoint* point = &glyph->points[p];
+
+				// Set flags
+				pglyph->flags[p] = 0;
+				// - On/Off curve
+				if (point->flags & MUTT_ON_CURVE_POINT) {
+					pglyph->flags[p] |= MUTT_POINT_ON_GLYPH;
+				}
+				// - Next contour
+				if (p == glyph->end_pts_of_contours[contour_id]) {
+					pglyph->flags[p] |= MUTT_POINT_LAST_CONTOUR_POINT;
+					contour_id += 1;
+				}
+
+				// x- and y-coordinates
+				pglyph->coords[p*2] =     mutt_funits_to_punits(font, (float)(point->x-header->x_min), point_size, ppi) + 3.f;
+				pglyph->coords[(p*2)+1] = mutt_funits_to_punits(font, (float)(point->y-header->y_min), point_size, ppi) + 3.f;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+		// @TODO Composite glyph...
+
+		MUDEF muttResult mutt_pixel_glyph_get_data(muttFont* font, uint16_m glyph_id, muByte* glyph_data, uint32_m* glyph_written, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* pglyph_data, uint32_m* pglyph_written) {
+			muttResult res;
+
+			// Get header
+			muttGlyphHeader header;
+			res = mutt_glyph_get_header(font, glyph_id, &header);
+			if (res != MUTT_SUCCESS) {
+				return res;
+			}
+
+			// Simple glyph:
+			if (header.number_of_contours >= 0) {
+				// Get simple glyph data
+				muttSimpleGlyph glyph;
+				res = mutt_simple_glyph_get_data(font, &header, &glyph, glyph_data, glyph_written);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				// Convert to pixel glyph
+				res = mutt_pixel_glyph_get_simple_data(font, &header, &glyph, pglyph, point_size, ppi, pglyph_data, pglyph_written);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+			}
+			// Composite glyph:
+			else {
+				// @TODO Composite glyph handling...
+				return MUTT_INVALID_CMAP_FORMAT_LENGTH;
+			}
+
+			return MUTT_SUCCESS;
+		}
+
+	/* Rendering */
+
+		/* Math functions */
+
+			// Later used for segment calculations (https://stackoverflow.com/a/9997374)
+			static inline muBool mutt_ccw(float x0, float y0, float x1, float y1, float x2, float y2) {
+				return (y2-y0) * (x1-x0) > (y1-y0) * (x2-x0);
+			}
+
+			// Calculates if two segments (defined by points [(x0,y0),(x1,y1)], [(x2,y2),(x3,y3)]) intersect (https://stackoverflow.com/a/9997374)
+			static inline muBool mutt_segments_cross(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3) {
+				return mutt_ccw(x0, y0, x2, y2, x3, y3) != mutt_ccw(x1, y1, x2, y2, x3, y3) &&
+					mutt_ccw(x0, y0, x1, y1, x2, y2) != mutt_ccw(x0, y0, x1, y1, x3, y3);
+			}
+
+		/* Format rendering functions */
+
+			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
+				// Loop through each height
+				uint32_m offset = 0;
+				for (uint32_m lh = 0; lh < height; lh++) {
+					// Calculate appropriate height value (inverse cuz bottom left)
+					uint32_m h = height - lh;
+					uint8_m fill = 0;
+
+					// Loop through each horizontal row of pixels
+					for (uint32_m w = 0; w < width; w++) {
+						// Only do calculations if pixel is WITHIN pixel glyph boundaries
+						if (w <= pglyph->min_width && h <= pglyph->min_height) {
+							// Calculate pixel line segment
+							float pix_x0 = (float)w, pix_y0 = (float)(h) + .5f;
+							float pix_x1 = pix_x0 + 1.f/*, pix_y1 = pix_y0*/;
+
+							// Loop through each point
+							uint16_m first_contour_point = 0;
+							for (uint16_m p = 1; p < pglyph->point_count; p++) {
+								// Calculate point line segment
+								float px0 = pglyph->coords[(p-1)*2], py0 = pglyph->coords[((p-1)*2)+1];
+								float px1 = pglyph->coords[p*2],     py1 = pglyph->coords[(p*2)+1];
+
+								// Calculate if pixel and point line segments cross
+								if (mutt_segments_cross(pix_x0, pix_y0, pix_x1, pix_y0, px0, py0, px1, py1)) {
+									// Switch filling color if they crossed
+									fill = ~fill;
+								}
+
+								// + Calculate for looping back to first point of contour on the last point
+								if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
+									px0 = pglyph->coords[first_contour_point*2];
+									py0 = pglyph->coords[(first_contour_point*2)+1];
+									p += 1;
+									first_contour_point = p;
+
+									if (mutt_segments_cross(pix_x0, pix_y0, pix_x1, pix_y0, px0, py0, px1, py1)) {
+										fill = ~fill;
+									}
+								}
+							}
+
+							// Fill with filling color
+							pixels[offset+w] = fill;
+						}
+						// If pixel is not in bounds of pixel glyph, we can just set to 0
+						else {
+							pixels[offset+w] = 0;
+						}
+					}
+					offset += width;
+				}
+
+				return MUTT_SUCCESS;
+			}
+
+		/* High-level rendering functions */
+
+			MUDEF muttResult mutt_render_pixel_glyph(muttFont* font, muttPixelGlyph* pglyph, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
+				// Find function based on format
+				switch (format) {
+					default: return MUTT_UNKNOWN_RENDER_FORMAT; break;
+
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: return mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(pglyph, pixels, width, height); break;
+				}
+
+				// (To avoid warnings)
+				if (font) {}
+			}
+
+			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem) {
+				muttResult res;
+
+				// Get header
+				muttGlyphHeader header;
+				res = mutt_glyph_get_header(font, glyph_id, &header);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				muttPixelGlyph pglyph;
+
+				// Simple glyph:
+				if (header.number_of_contours >= 0) {
+					uint32_m written;
+					// Get glyph data
+					muttSimpleGlyph glyph;
+					res = mutt_simple_glyph_get_data(font, &header, &glyph, mem, &written);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+					mem += written;
+
+					// Get pixel glyph data
+					res = mutt_pixel_glyph_get_simple_data(font, &header, &glyph, &pglyph, point_size, ppi, mem, &written);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+					// mem += written;
+				}
+				// Composite glyph:
+				else {
+					// @TODO Composite glyph handling...
+					return MUTT_INVALID_CMAP_FORMAT_LENGTH;
+				}
+
+				return mutt_render_pixel_glyph(font, &pglyph, format, pixels, width, height);
+			}
+
+			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height) {
+				if (max_width) {
+					*max_width = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(font->head->x_max-font->head->x_min), point_size, ppi)
+					) + 6;
+				}
+				if (max_height) {
+					*max_height = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(font->head->y_max-font->head->y_min), point_size, ppi)
+					) + 6;
+				}
+			}
 
 #ifdef MUTT_IMPLEMENTATION
 

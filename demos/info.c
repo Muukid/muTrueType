@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-02
-LAST UPDATED:       2024-07-09
+LAST UPDATED:       2024-07-10
 
 ============================================================
                         DEMO PURPOSE
@@ -511,9 +511,9 @@ if (font.glyf)
 {	
 	// Allocation
 
-	uint32_m simple_max = mutt_simple_glyph_get_maximum_size(&font);
+	uint32_m simple_max = mutt_simple_glyph_get_max_size(&font);
 	printf("Maximum bytes for simple glyph: %" PRIu32 "\n", simple_max);
-	uint32_m composite_max = mutt_composite_glyph_get_maximum_size(&font);
+	uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
 	printf("Maximum bytes for composite glyph: %" PRIu32 "\n", composite_max);
 
 	muByte* simple_mem = 0;
