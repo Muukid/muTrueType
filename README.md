@@ -1324,7 +1324,7 @@ Note that due to common fonts signaling to use the "last coordinate value" on th
 
 The struct `muttSimpleGlyph` has the following members:
 
-* `uint16_m* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table. If `muttGlyphDescription->numberOfContours` equals 0, the value of this member is undefined.
+* `uint16_m* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table. If `muttGlyphHeader->number_of_contours` equals 0, the value of this member is undefined.
 
 * `uint16_m instruction_length` - equivalent to "instructionLength" in the simple glyph table.
 
@@ -1608,15 +1608,17 @@ mutt uses pixel glyph data to render simple and composite glyphs, converting eac
 
 The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the following members:
 
-* `uint16_m point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags` and `coords` are undefined.
+* `uint16_m point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags`, `coords`, and `intersection` are undefined.
 
 * `uint32_m min_width` - the minimum width, in pixels, that this glyph can be rendered in.
 
 * `uint32_m min_height` - the minimum height, in pixels, that this glyph can be rendered in.
 
-* `uint8_m* flags` - the flag of each point, with a total array length of `point_count`.
+* `uint8_m* flags` - the flag of each point, with a total array count of `point_count`.
 
-* `float* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array length of `point_count * 2`.
+* `float* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
+
+* `float* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
 
 The following macros are defined for bitmasking the flags in a pixel glyph:
 
@@ -1762,6 +1764,8 @@ mutt has several C standard library dependencies not provided by its other libra
 * `mu_free` - equivalent to `free`.
 
 * `mu_realloc` - equivalent to `realloc`.
+
+* `mu_qsort` - equivalent to `qsort`.
 
 ## `string.h` dependencies
 

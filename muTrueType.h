@@ -1735,7 +1735,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE The struct `muttSimpleGlyph` has the following members:
 			struct muttSimpleGlyph {
-				// @DOCLINE * `@NLFT* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table. If `muttGlyphDescription->numberOfContours` equals 0, the value of this member is undefined.
+				// @DOCLINE * `@NLFT* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table. If `muttGlyphHeader->number_of_contours` equals 0, the value of this member is undefined.
 				uint16_m* end_pts_of_contours;
 				// @DOCLINE * `@NLFT instruction_length` - equivalent to "instructionLength" in the simple glyph table.
 				uint16_m instruction_length;
@@ -2032,16 +2032,18 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the following members:
 				struct muttPixelGlyph {
-					// @DOCLINE * `@NLFT point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags` and `coords` are undefined.
+					// @DOCLINE * `@NLFT point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags`, `coords`, and `intersection` are undefined.
 					uint16_m point_count;
 					// @DOCLINE * `@NLFT min_width` - the minimum width, in pixels, that this glyph can be rendered in.
 					uint32_m min_width;
 					// @DOCLINE * `@NLFT min_height` - the minimum height, in pixels, that this glyph can be rendered in.
 					uint32_m min_height;
-					// @DOCLINE * `@NLFT* flags` - the flag of each point, with a total array length of `point_count`.
+					// @DOCLINE * `@NLFT* flags` - the flag of each point, with a total array count of `point_count`.
 					uint8_m* flags;
-					// @DOCLINE * `@NLFT* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array length of `point_count * 2`.
+					// @DOCLINE * `@NLFT* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
 					float* coords;
+					// @DOCLINE * `@NLFT* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
+					float* intersections;
 				};
 				typedef struct muttPixelGlyph muttPixelGlyph;
 
@@ -2163,7 +2165,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		#if !defined(mu_malloc) || \
 			!defined(mu_free) || \
-			!defined(mu_realloc)
+			!defined(mu_realloc) || \
+			!defined(mu_qsort)
 
 			// @DOCLINE ## `stdlib.h` dependencies
 			#include <stdlib.h>
@@ -2181,6 +2184,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_realloc` - equivalent to `realloc`.
 			#ifndef mu_realloc
 				#define mu_realloc realloc
+			#endif
+
+			// @DOCLINE * `mu_qsort` - equivalent to `qsort`.
+			#ifndef mu_qsort
+				#define mu_qsort qsort
 			#endif
 
 		#endif
@@ -5350,12 +5358,24 @@ mutt is developed primarily off of these sources of documentation:
 		}
 
 		MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font) {
+			// Get max amount of points
 			uint16_m max_points = font->maxp->max_points;
 			if (font->maxp->max_composite_points > max_points) {
 				max_points = font->maxp->max_composite_points;
 			}
 
-			return (uint32_m)(max_points * (sizeof(float)+sizeof(uint8_m)));
+			// Get max amount of contours
+			uint16_m max_contours = font->maxp->max_contours;
+			if (font->maxp->max_composite_contours > max_contours) {
+				max_contours = font->maxp->max_composite_contours;
+			}
+
+			return (uint32_m)(
+				// Per-point data (flags and coords)
+				(max_points * (sizeof(float)+sizeof(uint8_m)))
+				// Intersections (max_contours because of looping back to first point)
+				+ ((max_points + max_contours) * sizeof(float))
+			);
 		}
 
 		MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written) {
@@ -5367,7 +5387,10 @@ mutt is developed primarily off of these sources of documentation:
 
 			// For written:
 			if (written) {
-				*written = (uint32_m)(points*(sizeof(float)+sizeof(uint8_m)));
+				// Return bytes that would be written
+				// - sizeof(float)*3 is for coords (x & y) as well as intersections
+				// - sizeof(uint8_m) is for flags
+				*written = (uint32_m)(points*((sizeof(float)*3)+sizeof(uint8_m)));
 			}
 			// If we don't have data, this is all we need to do
 			if (!data) {
@@ -5385,9 +5408,10 @@ mutt is developed primarily off of these sources of documentation:
 				return MUTT_SUCCESS;
 			}
 
-			// Allocate flags and coords
+			// Allocate flags, coords, and intersections
 			pglyph->flags = (uint8_m*)data;
 			pglyph->coords = (float*)(data+points);
+			pglyph->intersections = (float*)(&pglyph->coords[points*2]);
 
 			// Loop through each point
 			uint16_m contour_id = 0;
@@ -5455,70 +5479,145 @@ mutt is developed primarily off of these sources of documentation:
 
 		/* Math functions */
 
-			// Later used for segment calculations (https://stackoverflow.com/a/9997374)
-			static inline muBool mutt_ccw(float x0, float y0, float x1, float y1, float x2, float y2) {
-				return (y2-y0) * (x1-x0) > (y1-y0) * (x2-x0);
-			}
+			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
+			// (Returns negative if no intersection is found; this function only works for positive x-values) 
+			float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
+				// Check if they intersect at all (there is probably a better way to do this)
+				if (!((ry >= y0 && ry <= y1) || (ry >= y1 && ry <= y0))) {
+					// Return -1 for no intersection
+					return -1.f;
+				}
 
-			// Calculates if two segments (defined by points [(x0,y0),(x1,y1)], [(x2,y2),(x3,y3)]) intersect (https://stackoverflow.com/a/9997374)
-			static inline muBool mutt_segments_cross(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3) {
-				return mutt_ccw(x0, y0, x2, y2, x3, y3) != mutt_ccw(x1, y1, x2, y2, x3, y3) &&
-					mutt_ccw(x0, y0, x1, y1, x2, y2) != mutt_ccw(x0, y0, x1, y1, x3, y3);
+				// Calculate x-value based on y-value for line segment
+				// (https://math.stackexchange.com/a/2297532)
+				return x0 + (
+					((ry-y0) * (x1-x0))
+					/
+					(y1-y0)
+				);
 			}
 
 		/* Format rendering functions */
 
+			// Float comparison function for qsort
+			int mutt_compare_floats(const void* p, const void* q) {
+				float f0 = *(const float*)p, f1 = *(const float*)q;
+				if (f0 < f1) {
+					return -1;
+				} else if (f0 > f1) {
+					return 1;
+				}
+				return 0;
+			}
+
+			// Rendering for MUTT_BW_FULL_PIXEL_BI_LEVEL_R
 			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
-				// Loop through each height
-				uint32_m offset = 0;
+				// Loop through each horizontal pixel strip
+				uint32_m hpix_offset = 0;
 				for (uint32_m lh = 0; lh < height; lh++) {
-					// Calculate appropriate height value (inverse cuz bottom left)
+					// Calculate appropriate height value (inverse cuz bottom left I THINK)
 					uint32_m h = height - lh;
-					uint8_m fill = 0;
 
-					// Loop through each horizontal row of pixels
-					for (uint32_m w = 0; w < width; w++) {
-						// Only do calculations if pixel is WITHIN pixel glyph boundaries
-						if (w <= pglyph->min_width && h <= pglyph->min_height) {
-							// Calculate pixel line segment
-							float pix_x0 = (float)w, pix_y0 = (float)(h) + .5f;
-							float pix_x1 = pix_x0 + 1.f/*, pix_y1 = pix_y0*/;
+					// Just fill all x-values with zero if the height is now outside of the glyph range
+					if (h >= pglyph->min_height) {
+						for (uint32_m w = 0; w < width; w++) {
+							pixels[hpix_offset+w] = 0;
+						}
+						hpix_offset += width;
+						continue;
+					}
 
-							// Loop through each point
-							uint16_m first_contour_point = 0;
-							for (uint16_m p = 1; p < pglyph->point_count; p++) {
-								// Calculate point line segment
-								float px0 = pglyph->coords[(p-1)*2], py0 = pglyph->coords[((p-1)*2)+1];
-								float px1 = pglyph->coords[p*2],     py1 = pglyph->coords[(p*2)+1];
+					// Calculate y-value of ray
+					float ray_y = (float)(h);
 
-								// Calculate if pixel and point line segments cross
-								if (mutt_segments_cross(pix_x0, pix_y0, pix_x1, pix_y0, px0, py0, px1, py1)) {
-									// Switch filling color if they crossed
-									fill = ~fill;
+					// Initialize intersection list length
+					uint16_m intersection_count = 0;
+
+					// Loop through each line segment point-by-point
+					uint16_m first_contour_point = 0;
+					for (uint16_m p = 1; p < pglyph->point_count; p++) {
+						// Calculate ray intersection with line segment
+						float ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, 
+							pglyph->coords[(p-1)*2], pglyph->coords[((p-1)*2)+1], // (Point 1)
+							pglyph->coords[p*2],     pglyph->coords[(p*2)+1] // (Point 2)
+						);
+
+						// If intersection found, add to list of intersections
+						if (ray_x >= 0.f) {
+							// Exclude intersection if it's the same point as before AND
+							// we're not grazing it (told by a differing in vector sign)
+							if (intersection_count > 0 && pglyph->intersections[intersection_count-1] == ray_x) {
+								float prev_y0 = pglyph->coords[((p-2)*2)+1];
+								float prev_y1 = pglyph->coords[((p-1)*2)+1];
+								//float curr_y0 = pglyph->coords[((p-1)*2)+1];
+								float curr_y1 = pglyph->coords[(p*2)+1];
+								if ((prev_y1-prev_y0)*(curr_y1-prev_y1) < 0.f) {
+									pglyph->intersections[intersection_count] = ray_x;
+									intersection_count += 1;
 								}
+							} else {
+								pglyph->intersections[intersection_count] = ray_x;
+								intersection_count += 1;
+							}
+						}
 
-								// + Calculate for looping back to first point of contour on the last point
-								if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
-									px0 = pglyph->coords[first_contour_point*2];
-									py0 = pglyph->coords[(first_contour_point*2)+1];
-									p += 1;
-									first_contour_point = p;
-
-									if (mutt_segments_cross(pix_x0, pix_y0, pix_x1, pix_y0, px0, py0, px1, py1)) {
-										fill = ~fill;
-									}
+						// + Do same logic for looping back to first point of contour
+						if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
+							ray_x = mutt_y_ray_line_segment_intersection_x(ray_y,
+								pglyph->coords[first_contour_point*2], pglyph->coords[(first_contour_point*2)+1],
+								pglyph->coords[p*2],                   pglyph->coords[(p*2)+1]
+							);
+							if (ray_x >= 0.f) {
+								if (intersection_count > 0 && pglyph->intersections[intersection_count-1] == ray_x) {
+									// pglyph->intersections[intersection_count] = ray_x;
+									// intersection_count += 1;
+								} else {
+									pglyph->intersections[intersection_count] = ray_x;
+									intersection_count += 1;
 								}
 							}
 
-							// Fill with filling color
-							pixels[offset+w] = fill;
-						}
-						// If pixel is not in bounds of pixel glyph, we can just set to 0
-						else {
-							pixels[offset+w] = 0;
+							p += 1;
+							first_contour_point = p;
 						}
 					}
-					offset += width;
+
+					// Sort intersection array in increasing order
+					mu_qsort(pglyph->intersections, intersection_count, sizeof(float), mutt_compare_floats);
+
+					// Loop through each x-value in this horizontal pixel strip
+					uint16_m upcoming_intersection = 0;
+					uint8_m fill_color = 0;
+					for (uint32_m w = 0; w < width; w++) {
+						// Just fill all x-values with zero if width is now outside of glyph range
+						if (w >= pglyph->min_width) {
+							while (w < width) {
+								pixels[hpix_offset+w] = 0;
+								w++;
+							}
+							break;
+						}
+
+						// Calculate x-coordinate
+						float x = (float)(w);
+
+						// If we've passed or met the upcoming intersection
+						// (and our intersection is valid):
+						while (upcoming_intersection < intersection_count && 
+							x >= pglyph->intersections[upcoming_intersection]
+						) {
+							// Flip the fill color
+							fill_color = ~fill_color;
+							// Increment our intersection index
+							upcoming_intersection += 1;
+						}
+
+						// Fill pixel with appropriate fill color
+						pixels[hpix_offset+w] = fill_color;
+					}
+
+					// Add offset after this strip
+					hpix_offset += width;
 				}
 
 				return MUTT_SUCCESS;
