@@ -9,7 +9,9 @@ More explicit license information at the end of file.
 @TODO Add more individual error results (for example, if a single entry in cmap fails due to some unsupported encoding or something, don't shut off the WHOLE cmap table, just shut off that one entry. It's annoying, but needs to be done)
 @TODO Save memory by not including certain redundant numbers (like versions, or numbers regarding offsets)
 @TODO Add more format options, like BGR/BGRA, higher/lower bit-depth, etc.
-@TODO Verify 2 points or more per contour (?).
+@TODO Verify 2 points or more per contour.
+@TODO Verify all contours start on an on-curve point.
+@TODO Simplify rendering code (largely by snipping redundant repeated code).
 
 @DOCBEGIN
 
@@ -2205,7 +2207,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		#endif
 
-		#if !defined(mu_pow)
+		#if !defined(mu_pow) || \
+			!defined(mu_sqrt)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2213,6 +2216,16 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_pow` - equivalent to `pow`.
 			#ifndef mu_pow
 				#define mu_pow pow
+			#endif
+
+			// @DOCLINE * `mu_sqrtf` - equivalent to `sqrtf`.
+			#ifndef mu_sqrtf
+				#define mu_sqrtf sqrtf
+			#endif
+
+			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
+			#ifndef mu_fabsf
+				#define mu_fabsf fabsf
 			#endif
 
 		#endif
@@ -5481,7 +5494,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
 			// (Returns negative if no intersection is found; this function only works for positive x-values) 
-			float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
+			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
 				// Check if they intersect at all (there is probably a better way to do this)
 				if (!((ry >= y0 && ry <= y1) || (ry >= y1 && ry <= y0))) {
 					// Return -1 for no intersection
@@ -5495,6 +5508,82 @@ mutt is developed primarily off of these sources of documentation:
 					/
 					(y1-y0)
 				);
+			}
+
+			// Calculates the x-value intersection(s) of a horizontal ray [ry] and
+			// a quadratic  Bezier curve  [x0, y0, x1, y1, x2, y2],  returning the
+			// result by dereferencing the two possible x intersections [rx0, rx1]
+			// (Sets negative  for no intersection;  this only works for positive)
+			static inline void mutt_y_ray_quad_bezier_intersection_x(float ry,
+				float x0, float y0, float x1, float y1, float x2, float y2,
+				float* rx0, float* rx1
+			) {
+				// Calculate t-values for first and second intersection
+
+				// - Equation for solving for the t-value looks like:
+				//
+				//       d +- sqrt(ry*a + g)
+				//   t = ------------------
+				//             a
+				//
+				//   where d = y0-y1
+				//         g = y1*y1 - y0*y2
+				//     and a = y0 - 2*y1 + y2
+				//
+				//   If (ry*a + g) is negative or !{ 0 <= t <= 1 },
+				//   no intersections are found.
+
+				// - Calculate variables
+				float d = y0-y1;
+				float g = (y1*y1) - (y0*y2);
+				float a = y0 - (2.f*y1) + y2;
+				// -- Exclude division by ~0
+				if (mu_fabsf(a) < .001f) {
+					*rx0 = -1.f;
+					*rx1 = -1.f;
+					return;
+				}
+
+				// - Calcuate sqrt part (s)
+				float s = (ry*a) + g;
+				// -- Exclude negative square roots
+				if (s < 0.f) {
+					*rx0 = -1.f;
+					*rx1 = -1.f;
+					return;
+				}
+				s = mu_sqrtf(s);
+
+				// - Calculate t-values
+				float rt0 = (d + s) / a;
+				float rt1 = (d - s) / a;
+
+				// Calculate x-value intersections based on t-values
+
+				// - Equation for x-value given t looks like:
+				//
+				//   (v*v)*x0 + 2*v*t*x1 + (t*t)*x2
+				//
+				//   where v = 1-t
+
+				// - Do calculations for first intersection if t-value for it is valid
+				if (rt0 >= 0.f && rt0 <= 1.f) {
+					// Calculate variable
+					float v = 1.f-rt0;
+					// Solve equation for x-value
+					*rx0 = ((v*v)*x0) + (2.f*v*rt0*x1) + ((rt0*rt0)*x2);
+				} else {
+					// (Set invalid value if t-value is invalid, AKA no intersection)
+					*rx0 = -1.f;
+				}
+
+				// - Same for second intersection
+				if (rt1 >= 0.f && rt1 <= 1.f) {
+					float v = 1.f-rt1;
+					*rx1 = ((v*v)*x0) + (2.f*v*rt1*x1) + ((rt1*rt1)*x2);
+				} else {
+					*rx1 = -1.f;
+				}
 			}
 
 		/* Format rendering functions */
@@ -5512,6 +5601,22 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Rendering for MUTT_BW_FULL_PIXEL_BI_LEVEL_R
 			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
+				/*memset(pixels, 75, width*height);
+				for (uint16_m p = 0; p < pglyph->point_count; p++) {
+					float px = pglyph->coords[p*2], py = pglyph->coords[(p*2)+1];
+					int ipx = (int)px, ipy = (int)py;
+					ipy = height - ipy;
+
+					float p_prog = (float)(p) / (float)(pglyph->point_count);
+					if (pglyph->flags[p] & MUTT_POINT_ON_GLYPH) {
+						pixels[(ipy*width)+ipx] = 200 + (55*p_prog);
+					} else {
+						pixels[(ipy*width)+ipx] = 0 + (55*p_prog);
+					}
+				}
+
+				return MUTT_SUCCESS;*/
+
 				// Loop through each horizontal pixel strip
 				uint32_m hpix_offset = 0;
 				for (uint32_m lh = 0; lh < height; lh++) {
@@ -5533,53 +5638,152 @@ mutt is developed primarily off of these sources of documentation:
 					// Initialize intersection list length
 					uint16_m intersection_count = 0;
 
-					// Loop through each line segment point-by-point
-					uint16_m first_contour_point = 0;
-					for (uint16_m p = 1; p < pglyph->point_count; p++) {
-						// Calculate ray intersection with line segment
-						float ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, 
-							pglyph->coords[(p-1)*2], pglyph->coords[((p-1)*2)+1], // (Point 1)
-							pglyph->coords[p*2],     pglyph->coords[(p*2)+1] // (Point 2)
-						);
+					// Loop through each point
+					uint16_m first_contour_point = 0; // (tracker for the first point of the contour we're on)
+					for (uint16_m p = 0; p < pglyph->point_count;) {
+						// The current point is marked by index 'p'
 
-						// If intersection found, add to list of intersections
-						if (ray_x >= 0.f) {
-							// Exclude intersection if it's the same point as before AND
-							// we're not grazing it (told by a differing in vector sign)
-							if (intersection_count > 0 && pglyph->intersections[intersection_count-1] == ray_x) {
-								float prev_y0 = pglyph->coords[((p-2)*2)+1];
-								float prev_y1 = pglyph->coords[((p-1)*2)+1];
-								//float curr_y0 = pglyph->coords[((p-1)*2)+1];
-								float curr_y1 = pglyph->coords[(p*2)+1];
-								if ((prev_y1-prev_y0)*(curr_y1-prev_y1) < 0.f) {
+						// The previous point is 'p-1' (its OK to do this at p=0 because it shouldn't be used)
+						// It's also OK to leave it as this even when it's the first point of the contour, since
+						// the previous point should be being checked in the first place.
+						uint16_m pn1 = p-1;
+
+						// The next next point is 'p+2'
+						uint16_m p2 = p+2;
+						// ...unless the next point is the last point of the contour
+						if (p+1 < pglyph->point_count && pglyph->flags[p+1] & MUTT_POINT_LAST_CONTOUR_POINT) {
+							// ...in which case the next next point is looped back to the first contour point
+							p2 = first_contour_point;
+							// Only change "first_contour_point" if we aren't gonna process the next point
+							// (since the p+1 logic depends on it staying consistent).
+							// The cases where we process p+1 after this are ON[0]-ON, OFF-OFF[0]-OFF, and OFF-OFF[0]-ON
+							if (!(
+								// (ON[0]-ON)
+								(pglyph->flags[p] & MUTT_POINT_ON_GLYPH && pglyph->flags[p+1] & MUTT_POINT_ON_GLYPH)
+								// OFF-OFF[0]-OFF and OFF-OFF[0]-ON
+								|| (p > 0 && !(pglyph->flags[p-1] & MUTT_POINT_ON_GLYPH) && !(pglyph->flags[p] & MUTT_POINT_ON_GLYPH))
+							)) {
+								first_contour_point = p+2;
+							}
+						}
+						
+						// The next point is 'p+1'
+						uint16_m p1 = p+1;
+						// ...unless this is the last point of the contour
+						if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
+							// ...in which case, the next point is looped back to the first contour point
+							p1 = first_contour_point;
+							// ...and the next next point is the point after that
+							p2 = p1+1;
+							// After this, the "first contour point" is the next point since we're moving
+							// to the next contour after this.
+							first_contour_point = p+1;
+						}
+
+						// If the point is ON the curve (ON[0]...):
+						if (pglyph->flags[p] & MUTT_POINT_ON_GLYPH) {
+							// The first point is the coordinates of this point no matter what
+							float px0 = pglyph->coords[p*2], py0 = pglyph->coords[(p*2)+1];
+
+							// If the next point is ON the curve (ON[0]-ON)
+							if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
+								// Simple line segment;
+								// second point is the next point.
+								float px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
+
+								// Check for intersection and add if valid
+								float ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, px0, py0, px1, py1);
+								if (ray_x >= 0.f) {
 									pglyph->intersections[intersection_count] = ray_x;
 									intersection_count += 1;
 								}
-							} else {
-								pglyph->intersections[intersection_count] = ray_x;
+
+								// Increment by 1 and move on.
+								p += 1;
+								continue;
+							}
+
+							// If we're here, the next point is OFF the curve (ON[0]-OFF...)
+							// We're forming a Bezier then;
+							// our second point is the next point no matter what
+							float px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
+
+							// Our third point depends on the next next point's flag
+							float px2, py2;
+							// If the next next point is ON the curve:
+							if (pglyph->flags[p2] & MUTT_POINT_ON_GLYPH) {
+								// The third point is simply the next point
+								px2 = pglyph->coords[p2*2];
+								py2 = pglyph->coords[(p2*2)+1];
+							}
+							// If not, our next next point is OFF the curve:
+							else {
+								// In which case, the third point is the midpoint
+								// between the next & next next point.
+								px2 = (px1 + pglyph->coords[p2*2    ]) / 2.f;
+								py2 = (py1 + pglyph->coords[(p2*2)+1]) / 2.f;
+							}
+
+							// Calculate intersection with Bezier and add if valid
+							float rx0, rx1;
+							mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
+							if (rx0 >= 0.f) {
+								pglyph->intersections[intersection_count] = rx0;
 								intersection_count += 1;
 							}
-						}
-
-						// + Do same logic for looping back to first point of contour
-						if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
-							ray_x = mutt_y_ray_line_segment_intersection_x(ray_y,
-								pglyph->coords[first_contour_point*2], pglyph->coords[(first_contour_point*2)+1],
-								pglyph->coords[p*2],                   pglyph->coords[(p*2)+1]
-							);
-							if (ray_x >= 0.f) {
-								if (intersection_count > 0 && pglyph->intersections[intersection_count-1] == ray_x) {
-									// pglyph->intersections[intersection_count] = ray_x;
-									// intersection_count += 1;
-								} else {
-									pglyph->intersections[intersection_count] = ray_x;
-									intersection_count += 1;
-								}
+							if (rx1 >= 0.f) {
+								pglyph->intersections[intersection_count] = rx1;
+								intersection_count += 1;
 							}
 
-							p += 1;
-							first_contour_point = p;
+							// Increment by 2 and move on.
+							p += 2;
+							continue;
 						}
+
+						// If we're here, the point is OFF the curve (OFF[0]...)
+						// This means that the previous point has to also be OFF
+						// the curve (OFF-OFF[0]...).
+
+						// This means that the current point will be the "off" point
+						// of the Bezier:
+						float px1 = pglyph->coords[p*2], py1 = pglyph->coords[(p*2)+1];
+
+						// And since the previous point is off, the prior point is
+						// the midpoint between the previous point and the current point.
+						float px0 = (pglyph->coords[pn1*2    ] + px1) / 2.f;
+						float py0 = (pglyph->coords[(pn1*2)+1] + py1) / 2.f;
+
+						// The third point depends on the next point's flags.
+						float px2, py2;
+						// If the next point is ON the curve (OFF-OFF[0]-ON)
+						if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
+							// The third point is simply the next point
+							px2 = pglyph->coords[p1*2];
+							py2 = pglyph->coords[(p1*2)+1];
+						}
+						// If not, the next point is OFF the curve (OFF-OFF[0]-OFF)
+						else {
+							// The third point is then the midpoint between the current
+							// point and the next point
+							px2 = (px1 + pglyph->coords[p1*2    ]) / 2.f;
+							py2 = (py1 + pglyph->coords[(p1*2)+1]) / 2.f;
+						}
+
+						// Calculate intersection with Bezier and add if valid
+						float rx0, rx1;
+						mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
+						if (rx0 >= 0.f) {
+							pglyph->intersections[intersection_count] = rx0;
+							intersection_count += 1;
+						}
+						if (rx1 >= 0.f) {
+							pglyph->intersections[intersection_count] = rx1;
+							intersection_count += 1;
+						}
+
+						// Increment by 1 and move on.
+						p += 1;
 					}
 
 					// Sort intersection array in increasing order

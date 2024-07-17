@@ -1774,3 +1774,7 @@ mutt has several C standard library dependencies not provided by its other libra
 ## `math.h` dependencies
 
 * `mu_pow` - equivalent to `pow`.
+
+* `mu_sqrtf` - equivalent to `sqrtf`.
+
+* `mu_fabsf` - equivalent to `fabsf`.
