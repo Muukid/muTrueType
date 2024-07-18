@@ -5537,9 +5537,10 @@ mutt is developed primarily off of these sources of documentation:
 				float d = y0-y1;
 				float g = (y1*y1) - (y0*y2);
 				float a = y0 - (2.f*y1) + y2;
-				// -- Exclude division by ~0
-				if (mu_fabsf(a) < .001f) {
-					*rx0 = -1.f;
+				// - Return a line segment approximation if divisor is too small.
+				//   This is a hack around floating point imprecision.
+				if (a == 0.f) {
+					*rx0 = mutt_y_ray_line_segment_intersection_x(ry, x0, y0, x2, y2);
 					*rx1 = -1.f;
 					return;
 				}
@@ -5710,13 +5711,13 @@ mutt is developed primarily off of these sources of documentation:
 
 							// Our third point depends on the next next point's flag
 							float px2, py2;
-							// If the next next point is ON the curve:
+							// If the next next point is ON the curve (ON[0]-OFF-ON):
 							if (pglyph->flags[p2] & MUTT_POINT_ON_GLYPH) {
 								// The third point is simply the next point
 								px2 = pglyph->coords[p2*2];
 								py2 = pglyph->coords[(p2*2)+1];
 							}
-							// If not, our next next point is OFF the curve:
+							// If not, our next next point is OFF the curve (ON[0]-OFF-OFF):
 							else {
 								// In which case, the third point is the midpoint
 								// between the next & next next point.
