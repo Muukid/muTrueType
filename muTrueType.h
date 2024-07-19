@@ -5601,13 +5601,20 @@ mutt is developed primarily off of these sources of documentation:
 				return 0;
 			}
 
-			// Macro for adding an intersection to the intersection list
-			#define MUTT_ADD_INTERSECTION(rx, prevy, curry, nexty) \
+			// Macro for adding any intersection to the intersection list
+			#define MUTT_ADD_INTERSECTION(rx) \
+				/* Make sure it's valid (AKA positive) */ \
+				if (rx >= 0.0) { \
+					pglyph->intersections[intersection_count] = rx; \
+					intersection_count += 1; \
+				} \
+
+			// Macro for adding line segment intersections to the intersectino list
+			#define MUTT_ADD_LS_INTERSECTION(rx, prevy, curry, nexty) \
 				/* Make sure it's valid (AKA positive) */ \
 				if (rx >= 0.0) { \
 					/* If the intersection is very similar to the previous intersection */ \
 					if (intersection_count > 0 \
-						&& last_intersection_p == p-1 /* (last intersection was last point) */ \
 						&& mu_fabs(pglyph->intersections[intersection_count-1]-rx) <= 0.001 \
 					) { \
 						/* In this situation, we want to exclude double-intersections that go directly \
@@ -5617,24 +5624,62 @@ mutt is developed primarily off of these sources of documentation:
 						** sections are going in different directions, marked by the sign of y1-y0 for \
 						** each line segment involved, which should in theory only include the double- \
 						** intersections for corners. */ \
-						double dir_prev = curry - prevy; \
-						double dir_curr = nexty - curry; \
-						/* (Ensure they have differing signs, AKA different directions) */ \
-						if (dir_prev*dir_curr < 0.0) { \
+						if ((curry-prevy)*(nexty-curry) < 0.0) { \
 							pglyph->intersections[intersection_count] = rx; \
 							intersection_count += 1; \
-							last_intersection_p = p; \
 						} \
 					} \
 					/* If it's not similar, just add it */ \
 					else { \
 						pglyph->intersections[intersection_count] = rx; \
 						intersection_count += 1; \
-						last_intersection_p = p; \
+					} \
+				}
+
+			// Macro for adding simple quadratic Bezier curve intersections
+			#define MUTT_ADD_SQB_INTERSECTION(rx0, rx1, x0, y0, x1, y1, x2, y2, prevy) \
+				/* Check if at least either are valid */ \
+				if (rx0 >= 0.0 || rx1 >= 0.0) { \
+					/* Verify proper duplicate intersection for first intersection */ \
+					if (intersection_count > 0) { \
+						if (rx0 >= 0.0 && mu_fabs(pglyph->intersections[intersection_count-1]-rx0) <= 0.001) { \
+							if ((y0-prevy)*(y1-y0) < 0.0) { \
+								pglyph->intersections[intersection_count] = rx0; \
+								intersection_count += 1; \
+							} \
+						} \
+						else if (rx0 >= 0.0) { \
+							pglyph->intersections[intersection_count] = rx0; \
+							intersection_count += 1; \
+						} \
+						/* Verify proper duplicate intersection for second intersection */ \
+						if (rx1 >= 0.0 && mu_fabs(pglyph->intersections[intersection_count-1]-rx1) <= 0.001) { \
+							if ((y0-prevy)*(y1-y0) < 0.0) { \
+								pglyph->intersections[intersection_count] = rx1; \
+								intersection_count += 1; \
+							} \
+						} \
+						else if (rx1 >= 0.0) { \
+							pglyph->intersections[intersection_count] = rx1; \
+							intersection_count += 1; \
+						} \
+					} \
+					/* Just add them if these are the first intersections */ \
+					else { \
+						if (rx0 >= 0.0) { \
+							pglyph->intersections[intersection_count] = rx0; \
+							intersection_count += 1; \
+						} \
+						if (rx1 >= 0.0) { \
+							pglyph->intersections[intersection_count] = rx1; \
+							intersection_count += 1; \
+						} \
 					} \
 				}
 
 			// Rendering for MUTT_BW_FULL_PIXEL_BI_LEVEL_R
+			int mistake_counter = 0;
+			int index = -1;
 			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
 				/*memset(pixels, 75, width*height);
 				for (uint16_m p = 0; p < pglyph->point_count; p++) {
@@ -5651,6 +5696,8 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				return MUTT_SUCCESS;*/
+
+				index += 1;
 
 				// Loop through each horizontal pixel strip
 				uint32_m hpix_offset = 0;
@@ -5675,7 +5722,6 @@ mutt is developed primarily off of these sources of documentation:
 
 					// Loop through each point
 					uint16_m first_contour_point = 0; // (tracker for the first point of the contour we're on)
-					uint16_m last_intersection_p = 0; // (tracker for the index of the last point intersected)
 					for (uint16_m p = 0; p < pglyph->point_count;) {
 						// The current point is marked by index 'p'
 
@@ -5729,7 +5775,7 @@ mutt is developed primarily off of these sources of documentation:
 
 								// Check for intersection and add if valid
 								double ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, px0, py0, px1, py1);
-								MUTT_ADD_INTERSECTION(ray_x, pglyph->coords[(pn1*2)+1], py0, py1)
+								MUTT_ADD_LS_INTERSECTION(ray_x, pglyph->coords[(pn1*2)+1], py0, py1)
 
 								// Increment by 1 and move on.
 								p += 1;
@@ -5760,8 +5806,9 @@ mutt is developed primarily off of these sources of documentation:
 							// Calculate intersection with Bezier and add if valid
 							double rx0, rx1;
 							mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-							MUTT_ADD_INTERSECTION(rx0, pglyph->coords[(pn1*2)+1], py0, py1)
-							MUTT_ADD_INTERSECTION(rx1, pglyph->coords[(pn1*2)+1], py0, py1)
+							//MUTT_ADD_INTERSECTION(rx0)
+							//MUTT_ADD_INTERSECTION(rx1)
+							MUTT_ADD_SQB_INTERSECTION(rx0, rx1, px0, py0, px1, py1, px2, py2, pglyph->coords[(pn1*2)+1])
 
 							// Increment by 2 and move on.
 							p += 2;
@@ -5800,8 +5847,9 @@ mutt is developed primarily off of these sources of documentation:
 						// Calculate intersection with Bezier and add if valid
 						double rx0, rx1;
 						mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-						MUTT_ADD_INTERSECTION(rx0, py0, py1, py2)
-						MUTT_ADD_INTERSECTION(rx1, py0, py1, py2)
+						//MUTT_ADD_INTERSECTION(rx0)
+						//MUTT_ADD_INTERSECTION(rx1)
+						MUTT_ADD_SQB_INTERSECTION(rx0, rx1, px0, py0, px1, py1, px2, py2, py0)
 
 						// Increment by 1 and move on.
 						p += 1;
@@ -5816,6 +5864,14 @@ mutt is developed primarily off of these sources of documentation:
 					for (uint32_m w = 0; w < width; w++) {
 						// Just fill all x-values with zero if width is now outside of glyph range
 						if (w >= pglyph->min_width) {
+							if (fill_color != 0) {
+								printf("mistake on #%i on y=%i; counted %i intersections { ", index, (int)lh, (int)intersection_count);
+								for (uint16_m i = 0; i < intersection_count; i++) {
+									printf("%f, ", pglyph->intersections[i]);
+								}
+								printf("}\n");
+								mistake_counter += 1;
+							}
 							while (w < width) {
 								pixels[hpix_offset+w] = 0;
 								w++;
