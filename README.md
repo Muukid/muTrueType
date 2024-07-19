@@ -1616,9 +1616,9 @@ The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the fo
 
 * `uint8_m* flags` - the flag of each point, with a total array count of `point_count`.
 
-* `float* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
+* `double* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
 
-* `float* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
+* `double* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
 
 The following macros are defined for bitmasking the flags in a pixel glyph:
 
@@ -1775,6 +1775,6 @@ mutt has several C standard library dependencies not provided by its other libra
 
 * `mu_pow` - equivalent to `pow`.
 
-* `mu_sqrtf` - equivalent to `sqrtf`.
+* `mu_sqrt` - equivalent to `sqrt`.
 
-* `mu_fabsf` - equivalent to `fabsf`.
+* `mu_fabs` - equivalent to `fabs`.

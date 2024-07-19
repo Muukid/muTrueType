@@ -2043,9 +2043,9 @@ mutt is developed primarily off of these sources of documentation:
 					// @DOCLINE * `@NLFT* flags` - the flag of each point, with a total array count of `point_count`.
 					uint8_m* flags;
 					// @DOCLINE * `@NLFT* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
-					float* coords;
+					double* coords;
 					// @DOCLINE * `@NLFT* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
-					float* intersections;
+					double* intersections;
 				};
 				typedef struct muttPixelGlyph muttPixelGlyph;
 
@@ -2208,7 +2208,8 @@ mutt is developed primarily off of these sources of documentation:
 		#endif
 
 		#if !defined(mu_pow) || \
-			!defined(mu_sqrt)
+			!defined(mu_sqrt) || \
+			!defined(mu_fabs)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2218,14 +2219,14 @@ mutt is developed primarily off of these sources of documentation:
 				#define mu_pow pow
 			#endif
 
-			// @DOCLINE * `mu_sqrtf` - equivalent to `sqrtf`.
-			#ifndef mu_sqrtf
-				#define mu_sqrtf sqrtf
+			// @DOCLINE * `mu_sqrt` - equivalent to `sqrt`.
+			#ifndef mu_sqrt
+				#define mu_sqrt sqrt
 			#endif
 
-			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
-			#ifndef mu_fabsf
-				#define mu_fabsf fabsf
+			// @DOCLINE * `mu_fabs` - equivalent to `fabs`.
+			#ifndef mu_fabs
+				#define mu_fabs fabs
 			#endif
 
 		#endif
@@ -5385,9 +5386,9 @@ mutt is developed primarily off of these sources of documentation:
 
 			return (uint32_m)(
 				// Per-point data (flags and coords)
-				(max_points * (sizeof(float)+sizeof(uint8_m)))
+				(max_points * (sizeof(double)+sizeof(uint8_m)))
 				// Intersections (max_contours because of looping back to first point)
-				+ ((max_points + max_contours) * sizeof(float))
+				+ ((max_points + max_contours) * sizeof(double))
 			);
 		}
 
@@ -5401,9 +5402,9 @@ mutt is developed primarily off of these sources of documentation:
 			// For written:
 			if (written) {
 				// Return bytes that would be written
-				// - sizeof(float)*3 is for coords (x & y) as well as intersections
+				// - sizeof(double)*3 is for coords (x & y) as well as intersections
 				// - sizeof(uint8_m) is for flags
-				*written = (uint32_m)(points*((sizeof(float)*3)+sizeof(uint8_m)));
+				*written = (uint32_m)(points*((sizeof(double)*3)+sizeof(uint8_m)));
 			}
 			// If we don't have data, this is all we need to do
 			if (!data) {
@@ -5413,8 +5414,8 @@ mutt is developed primarily off of these sources of documentation:
 			pglyph->point_count = points;
 
 			// Convert min/max values
-			pglyph->min_width = mutt_funits_to_punits(font, (float)(header->x_max-header->x_min), point_size, ppi) + 6.f;
-			pglyph->min_height = mutt_funits_to_punits(font, (float)(header->y_max-header->y_min), point_size, ppi) + 6.f;
+			pglyph->min_width = mutt_funits_to_punits(font, (double)(header->x_max-header->x_min), point_size, ppi) + 6.0;
+			pglyph->min_height = mutt_funits_to_punits(font, (double)(header->y_max-header->y_min), point_size, ppi) + 6.0;
 
 			// Return if no points are given
 			if (points == 0) {
@@ -5423,8 +5424,8 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Allocate flags, coords, and intersections
 			pglyph->flags = (uint8_m*)data;
-			pglyph->coords = (float*)(data+points);
-			pglyph->intersections = (float*)(&pglyph->coords[points*2]);
+			pglyph->coords = (double*)(data+points);
+			pglyph->intersections = (double*)(&pglyph->coords[points*2]);
 
 			// Loop through each point
 			uint16_m contour_id = 0;
@@ -5445,8 +5446,8 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// x- and y-coordinates
-				pglyph->coords[p*2] =     mutt_funits_to_punits(font, (float)(point->x-header->x_min), point_size, ppi) + 3.f;
-				pglyph->coords[(p*2)+1] = mutt_funits_to_punits(font, (float)(point->y-header->y_min), point_size, ppi) + 3.f;
+				pglyph->coords[p*2] =     mutt_funits_to_punits(font, (double)(point->x-header->x_min), point_size, ppi) + 3.0;
+				pglyph->coords[(p*2)+1] = mutt_funits_to_punits(font, (double)(point->y-header->y_min), point_size, ppi) + 3.0;
 			}
 
 			return MUTT_SUCCESS;
@@ -5494,11 +5495,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
 			// (Returns negative if no intersection is found; this function only works for positive x-values) 
-			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
+			static inline double mutt_y_ray_line_segment_intersection_x(double ry, double x0, double y0, double x1, double y1) {
 				// Check if they intersect at all (there is probably a better way to do this)
 				if (!((ry >= y0 && ry <= y1) || (ry >= y1 && ry <= y0))) {
 					// Return -1 for no intersection
-					return -1.f;
+					return -1.0;
 				}
 
 				// Calculate x-value based on y-value for line segment
@@ -5514,9 +5515,9 @@ mutt is developed primarily off of these sources of documentation:
 			// a quadratic  Bezier curve  [x0, y0, x1, y1, x2, y2],  returning the
 			// result by dereferencing the two possible x intersections [rx0, rx1]
 			// (Sets negative  for no intersection;  this only works for positive)
-			static inline void mutt_y_ray_quad_bezier_intersection_x(float ry,
-				float x0, float y0, float x1, float y1, float x2, float y2,
-				float* rx0, float* rx1
+			static inline void mutt_y_ray_quad_bezier_intersection_x(double ry,
+				double x0, double y0, double x1, double y1, double x2, double y2,
+				double* rx0, double* rx1
 			) {
 				// Calculate t-values for first and second intersection
 
@@ -5534,30 +5535,30 @@ mutt is developed primarily off of these sources of documentation:
 				//   no intersections are found.
 
 				// - Calculate variables
-				float d = y0-y1;
-				float g = (y1*y1) - (y0*y2);
-				float a = y0 - (2.f*y1) + y2;
+				double d = y0-y1;
+				double g = (y1*y1) - (y0*y2);
+				double a = y0 - (2.0*y1) + y2;
 				// - Return a line segment approximation if divisor is too small.
 				//   This is a hack around floating point imprecision.
-				if (a == 0.f) {
-					*rx0 = mutt_y_ray_line_segment_intersection_x(ry, x0, y0, x2, y2);
-					*rx1 = -1.f;
+				if (a == 0.0) {
+					*rx0 = mutt_y_ray_line_segment_intersection_x(ry, x0, y0, x1, y1);
+					*rx1 = mutt_y_ray_line_segment_intersection_x(ry, x1, y1, x2, y2);
 					return;
 				}
 
 				// - Calcuate sqrt part (s)
-				float s = (ry*a) + g;
+				double s = (ry*a) + g;
 				// -- Exclude negative square roots
-				if (s < 0.f) {
-					*rx0 = -1.f;
-					*rx1 = -1.f;
+				if (s < 0.0) {
+					*rx0 = -1.0;
+					*rx1 = -1.0;
 					return;
 				}
-				s = mu_sqrtf(s);
+				s = mu_sqrt(s);
 
 				// - Calculate t-values
-				float rt0 = (d + s) / a;
-				float rt1 = (d - s) / a;
+				double rt0 = (d + s) / a;
+				double rt1 = (d - s) / a;
 
 				// Calculate x-value intersections based on t-values
 
@@ -5568,30 +5569,30 @@ mutt is developed primarily off of these sources of documentation:
 				//   where v = 1-t
 
 				// - Do calculations for first intersection if t-value for it is valid
-				if (rt0 >= 0.f && rt0 <= 1.f) {
+				if (rt0 >= 0.0 && rt0 <= 1.0) {
 					// Calculate variable
-					float v = 1.f-rt0;
+					double v = 1.0-rt0;
 					// Solve equation for x-value
-					*rx0 = ((v*v)*x0) + (2.f*v*rt0*x1) + ((rt0*rt0)*x2);
+					*rx0 = ((v*v)*x0) + (2.0*v*rt0*x1) + ((rt0*rt0)*x2);
 				} else {
 					// (Set invalid value if t-value is invalid, AKA no intersection)
-					*rx0 = -1.f;
+					*rx0 = -1.0;
 				}
 
 				// - Same for second intersection
-				if (rt1 >= 0.f && rt1 <= 1.f) {
-					float v = 1.f-rt1;
-					*rx1 = ((v*v)*x0) + (2.f*v*rt1*x1) + ((rt1*rt1)*x2);
+				if (rt1 >= 0.0 && rt1 <= 1.0) {
+					double v = 1.0-rt1;
+					*rx1 = ((v*v)*x0) + (2.0*v*rt1*x1) + ((rt1*rt1)*x2);
 				} else {
-					*rx1 = -1.f;
+					*rx1 = -1.0;
 				}
 			}
 
 		/* Format rendering functions */
 
 			// Float comparison function for qsort
-			int mutt_compare_floats(const void* p, const void* q) {
-				float f0 = *(const float*)p, f1 = *(const float*)q;
+			int mutt_compare_doubles(const void* p, const void* q) {
+				double f0 = *(const double*)p, f1 = *(const double*)q;
 				if (f0 < f1) {
 					return -1;
 				} else if (f0 > f1) {
@@ -5599,6 +5600,39 @@ mutt is developed primarily off of these sources of documentation:
 				}
 				return 0;
 			}
+
+			// Macro for adding an intersection to the intersection list
+			#define MUTT_ADD_INTERSECTION(rx, prevy, curry, nexty) \
+				/* Make sure it's valid (AKA positive) */ \
+				if (rx >= 0.0) { \
+					/* If the intersection is very similar to the previous intersection */ \
+					if (intersection_count > 0 \
+						&& last_intersection_p == p-1 /* (last intersection was last point) */ \
+						&& mu_fabs(pglyph->intersections[intersection_count-1]-rx) <= 0.001 \
+					) { \
+						/* In this situation, we want to exclude double-intersections that go directly \
+						** through the glyph while excluding intersections that double-intersect by \
+						** grazing by a corner. \
+						** A way to achieve this is to only add the double-intersection if both inter- \
+						** sections are going in different directions, marked by the sign of y1-y0 for \
+						** each line segment involved, which should in theory only include the double- \
+						** intersections for corners. */ \
+						double dir_prev = curry - prevy; \
+						double dir_curr = nexty - curry; \
+						/* (Ensure they have differing signs, AKA different directions) */ \
+						if (dir_prev*dir_curr < 0.0) { \
+							pglyph->intersections[intersection_count] = rx; \
+							intersection_count += 1; \
+							last_intersection_p = p; \
+						} \
+					} \
+					/* If it's not similar, just add it */ \
+					else { \
+						pglyph->intersections[intersection_count] = rx; \
+						intersection_count += 1; \
+						last_intersection_p = p; \
+					} \
+				}
 
 			// Rendering for MUTT_BW_FULL_PIXEL_BI_LEVEL_R
 			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
@@ -5634,13 +5668,14 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					// Calculate y-value of ray
-					float ray_y = (float)(h);
+					double ray_y = (double)(h);
 
 					// Initialize intersection list length
 					uint16_m intersection_count = 0;
 
 					// Loop through each point
 					uint16_m first_contour_point = 0; // (tracker for the first point of the contour we're on)
+					uint16_m last_intersection_p = 0; // (tracker for the index of the last point intersected)
 					for (uint16_m p = 0; p < pglyph->point_count;) {
 						// The current point is marked by index 'p'
 
@@ -5684,20 +5719,17 @@ mutt is developed primarily off of these sources of documentation:
 						// If the point is ON the curve (ON[0]...):
 						if (pglyph->flags[p] & MUTT_POINT_ON_GLYPH) {
 							// The first point is the coordinates of this point no matter what
-							float px0 = pglyph->coords[p*2], py0 = pglyph->coords[(p*2)+1];
+							double px0 = pglyph->coords[p*2], py0 = pglyph->coords[(p*2)+1];
 
 							// If the next point is ON the curve (ON[0]-ON)
 							if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
 								// Simple line segment;
 								// second point is the next point.
-								float px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
+								double px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
 
 								// Check for intersection and add if valid
-								float ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, px0, py0, px1, py1);
-								if (ray_x >= 0.f) {
-									pglyph->intersections[intersection_count] = ray_x;
-									intersection_count += 1;
-								}
+								double ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, px0, py0, px1, py1);
+								MUTT_ADD_INTERSECTION(ray_x, pglyph->coords[(pn1*2)+1], py0, py1)
 
 								// Increment by 1 and move on.
 								p += 1;
@@ -5707,10 +5739,10 @@ mutt is developed primarily off of these sources of documentation:
 							// If we're here, the next point is OFF the curve (ON[0]-OFF...)
 							// We're forming a Bezier then;
 							// our second point is the next point no matter what
-							float px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
+							double px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
 
 							// Our third point depends on the next next point's flag
-							float px2, py2;
+							double px2, py2;
 							// If the next next point is ON the curve (ON[0]-OFF-ON):
 							if (pglyph->flags[p2] & MUTT_POINT_ON_GLYPH) {
 								// The third point is simply the next point
@@ -5721,21 +5753,15 @@ mutt is developed primarily off of these sources of documentation:
 							else {
 								// In which case, the third point is the midpoint
 								// between the next & next next point.
-								px2 = (px1 + pglyph->coords[p2*2    ]) / 2.f;
-								py2 = (py1 + pglyph->coords[(p2*2)+1]) / 2.f;
+								px2 = (px1 + pglyph->coords[p2*2    ]) / 2.0;
+								py2 = (py1 + pglyph->coords[(p2*2)+1]) / 2.0;
 							}
 
 							// Calculate intersection with Bezier and add if valid
-							float rx0, rx1;
+							double rx0, rx1;
 							mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-							if (rx0 >= 0.f) {
-								pglyph->intersections[intersection_count] = rx0;
-								intersection_count += 1;
-							}
-							if (rx1 >= 0.f) {
-								pglyph->intersections[intersection_count] = rx1;
-								intersection_count += 1;
-							}
+							MUTT_ADD_INTERSECTION(rx0, pglyph->coords[(pn1*2)+1], py0, py1)
+							MUTT_ADD_INTERSECTION(rx1, pglyph->coords[(pn1*2)+1], py0, py1)
 
 							// Increment by 2 and move on.
 							p += 2;
@@ -5748,15 +5774,15 @@ mutt is developed primarily off of these sources of documentation:
 
 						// This means that the current point will be the "off" point
 						// of the Bezier:
-						float px1 = pglyph->coords[p*2], py1 = pglyph->coords[(p*2)+1];
+						double px1 = pglyph->coords[p*2], py1 = pglyph->coords[(p*2)+1];
 
 						// And since the previous point is off, the prior point is
 						// the midpoint between the previous point and the current point.
-						float px0 = (pglyph->coords[pn1*2    ] + px1) / 2.f;
-						float py0 = (pglyph->coords[(pn1*2)+1] + py1) / 2.f;
+						double px0 = (pglyph->coords[pn1*2    ] + px1) / 2.0;
+						double py0 = (pglyph->coords[(pn1*2)+1] + py1) / 2.0;
 
 						// The third point depends on the next point's flags.
-						float px2, py2;
+						double px2, py2;
 						// If the next point is ON the curve (OFF-OFF[0]-ON)
 						if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
 							// The third point is simply the next point
@@ -5767,28 +5793,22 @@ mutt is developed primarily off of these sources of documentation:
 						else {
 							// The third point is then the midpoint between the current
 							// point and the next point
-							px2 = (px1 + pglyph->coords[p1*2    ]) / 2.f;
-							py2 = (py1 + pglyph->coords[(p1*2)+1]) / 2.f;
+							px2 = (px1 + pglyph->coords[p1*2    ]) / 2.0;
+							py2 = (py1 + pglyph->coords[(p1*2)+1]) / 2.0;
 						}
 
 						// Calculate intersection with Bezier and add if valid
-						float rx0, rx1;
+						double rx0, rx1;
 						mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-						if (rx0 >= 0.f) {
-							pglyph->intersections[intersection_count] = rx0;
-							intersection_count += 1;
-						}
-						if (rx1 >= 0.f) {
-							pglyph->intersections[intersection_count] = rx1;
-							intersection_count += 1;
-						}
+						MUTT_ADD_INTERSECTION(rx0, py0, py1, py2)
+						MUTT_ADD_INTERSECTION(rx1, py0, py1, py2)
 
 						// Increment by 1 and move on.
 						p += 1;
 					}
 
 					// Sort intersection array in increasing order
-					mu_qsort(pglyph->intersections, intersection_count, sizeof(float), mutt_compare_floats);
+					mu_qsort(pglyph->intersections, intersection_count, sizeof(double), mutt_compare_doubles);
 
 					// Loop through each x-value in this horizontal pixel strip
 					uint16_m upcoming_intersection = 0;
@@ -5804,7 +5824,7 @@ mutt is developed primarily off of these sources of documentation:
 						}
 
 						// Calculate x-coordinate
-						float x = (float)(w);
+						double x = (double)(w);
 
 						// If we've passed or met the upcoming intersection
 						// (and our intersection is valid):
