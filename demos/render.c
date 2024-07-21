@@ -5,7 +5,7 @@
 DEMO NAME:          render.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-12
-LAST UPDATED:       2024-07-14
+LAST UPDATED:       2024-07-21
 
 ============================================================
                         DEMO PURPOSE
@@ -28,119 +28,110 @@ More explicit license information at the end of file.
 */
 
 /* Including */
-    
-    // Include muTrueType
+	
+	// Include muTrueType
 
-    #define MUTT_NAMES // (for name functions)
-    #define MUTT_PRINT_MEMORY_USAGE
-    #define MUTT_IMPLEMENTATION
-    #include "muTrueType.h"
+	#define MUTT_NAMES // (for name functions)
+	#define MUTT_IMPLEMENTATION
+	#include "muTrueType.h"
 
-    // Include stb_image_write for writing results
-    #define STB_IMAGE_WRITE_IMPLEMENTATION
-    #include "stb_image_write.h"
-        
-    // For printing:
-    #include <stdio.h>
+	// Include stb_image_write for writing results
+	#define STB_IMAGE_WRITE_IMPLEMENTATION
+	#include "stb_image_write.h"
+		
+	// For printing:
+	#include <stdio.h>
 
-    // For print types:
-    #include <inttypes.h>
+	// For print types:
+	#include <inttypes.h>
 
-    // For allocation:
-    #include <stdlib.h>
+	// For allocation:
+	#include <stdlib.h>
 
 /* Global variables */
-    
-    // Font information holder:
-    muttFont font;
+	
+	// Font information holder:
+	muttFont font;
 
-    // Result value:
-    muttResult result = MUTT_SUCCESS;
+	// Result value:
+	muttResult result = MUTT_SUCCESS;
 
-    // Test characters:
-    uint32_m test_chars[] = {
-        // A B C
-        0x41, 0x42, 0x43,
-        // a b c
-        0x61, 0x62, 0x63,
-        // & ? %
-        0x26, 0x3f, 0x25,
-        // a (with acute, circumflex, and tilde)
-        0xE1, 0xE2, 0xE3,
-        // Various unified ideographs
-        0x4e57, 0x4ea4, 0x4ebf
-    };
+	// Test characters:
+	uint32_m test_chars[] = {
+		'A','B','C','D','E','F','G','H','I','J','K','L','M',
+		'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+		'a','b','c','d','e','f','g','h','i','j','k','l','m',
+		'n','o','p','q','r','s','t','u','v','w','x','y','z',
+	};
 
-    // Test character length
-    #define TEST_CHAR_LEN (sizeof(test_chars)/sizeof(uint32_m))
+	// Test character length
+	#define TEST_CHAR_LEN (sizeof(test_chars)/sizeof(uint32_m))
 
-    // To-be-filled glyph IDs for test characters
-    uint16_m glyph_ids[TEST_CHAR_LEN] = {0};
+	// To-be-filled glyph IDs for test characters
+	uint16_m glyph_ids[TEST_CHAR_LEN] = {0};
 
-    // Point size to be rendered at
-    float point_size = 500.f;
+	// Point size to be rendered at
+	float point_size = 500.f;
 
-    // Pixels per inch
-    float ppi = 72.f;
+	// Pixels per inch
+	float ppi = 72.f;
 
-    // Rendering format
-    muttRenderFormat format = MUTT_BW_FULL_PIXEL_BI_LEVEL_R;
+	// Rendering format
+	muttRenderFormat format = MUTT_BW_FULL_PIXEL_BI_LEVEL_R;
 
 int main(void) {
 
 /* Load font */
 
 {
-    // Open file in binary
+	FILE* fptr = fopen("font.ttf", "rb");
 
-    FILE* fptr = fopen("font.ttf", "rb");
+	if (!fptr) {
+		printf("Couldn't open 'font.ttf'\n");
+		return -1;
+	}
 
-    if (!fptr) {
-        printf("Couldn't open 'font.ttf'\n");
-        return -1;
-    }
+	// Get size
 
-    // Get size
+	fseek(fptr, 0L, SEEK_END);
+	size_m fptr_size = ftell(fptr);
+	fseek(fptr, 0L, SEEK_SET);
 
-    fseek(fptr, 0L, SEEK_END);
-    size_m fptr_size = ftell(fptr);
-    fseek(fptr, 0L, SEEK_SET);
+	// Load data into buffer
 
-    // Load data into buffer
+	muByte* data = (muByte*)malloc(fptr_size);
 
-    muByte* data = (muByte*)malloc(fptr_size);
+	if (!data) {
+		printf("Couldn't allocate data for file\n");
+		fclose(fptr);
+		return -1;
+	}
 
-    if (!data) {
-        printf("Couldn't allocate data for file\n");
-        fclose(fptr);
-        return -1;
-    }
+	fread(data, fptr_size, 1, fptr);
 
-    fread(data, fptr_size, 1, fptr);
+	// Close file
 
-    // Close file
+	fclose(fptr);
 
-    fclose(fptr);
+	// Load everything in the font
 
-    // Load everything in the font
+	result = mutt_load(data, fptr_size, &font, MUTT_LOAD_REQUIRED_TABLES & ~(
+		// (All the flags we don't need in the required table set)
+		MUTT_LOAD_NAME | MUTT_LOAD_POST | MUTT_LOAD_HMTX
+	));
+	free(data); // (We no longer need the original raw data)
 
-    result = mutt_load(data, fptr_size, &font, MUTT_LOAD_REQUIRED_TABLES & ~(
-        // (All the flags we don't need in the required table set)
-        MUTT_LOAD_NAME | MUTT_LOAD_POST | MUTT_LOAD_HMTX
-    ));
-    free(data); // (We no longer need the original raw data)
+	// Make sure result of loading font was good
+	if (result != MUTT_SUCCESS) {
+		printf("mutt_load returned %s\n", mutt_result_get_name(result));
+		return -1;
+	}
 
-    // Make sure result of loading font was good
-    if (result != MUTT_SUCCESS) {
-        printf("mutt_load returned %s\n", mutt_result_get_name(result));
-        return -1;
-    }
-
-    // Make sure all tables we requested loaded successfully
-    else if (mutt_get_load_results(&font) != 0) {
-        printf("not all requested tables loaded successfully\n");
-        return -1;
-    }
+	// Make sure all tables we requested loaded successfully
+	else if (mutt_get_load_results(&font) != 0) {
+		printf("not all requested tables loaded successfully\n");
+		return -1;
+	}
 }
 
 /* Grab characters */
@@ -148,17 +139,17 @@ int main(void) {
 printf("chars {");
 
 for (uint16_m i = 0; i < TEST_CHAR_LEN; i++)
-{   
-    // Print new lines and tabs occasionally
-    if (i%3 == 0) {
-        printf("\n\t");
-    }
+{	
+	// Print new lines and tabs occasionally
+	if (i%3 == 0) {
+		printf("\n\t");
+	}
 
-    // Get glyph ID for the character
-    glyph_ids[i] = mutt_codepoint_to_glyph_id(&font, test_chars[i]);
+	// Get glyph ID for the character
+	glyph_ids[i] = mutt_codepoint_to_glyph_id(&font, test_chars[i]);
 
-    // Print result
-    printf("[0x%04x] - %05" PRIu16 ", ", test_chars[i], glyph_ids[i]);
+	// Print result
+	printf("[0x%04x] - %05" PRIu16 ", ", test_chars[i], glyph_ids[i]);
 }
 
 printf("\n}\n");
@@ -173,8 +164,8 @@ printf("Image dimensions: %" PRIu32 "x%" PRIu32 "\n", width, height);
 // Allocate pixels based on dimensions
 uint8_m* pixels = (uint8_m*)malloc(width*height);
 if (!pixels) {
-    printf("Unable to allocate pixels\n");
-    goto fail_pixels;
+	printf("Unable to allocate pixels\n");
+	goto fail_pixels;
 }
 
 /* Render each glyph and output it */
@@ -185,58 +176,56 @@ muByte* glyph_mem;
 
 // - Simple/Composite memory:
 {
-    glyph_mem_len = mutt_simple_glyph_get_max_size(&font);
-    uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
-    if (composite_max > glyph_mem_len) {
-        glyph_mem_len = composite_max;
-    }
+	glyph_mem_len = mutt_simple_glyph_get_max_size(&font);
+	uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
+	if (composite_max > glyph_mem_len) {
+		glyph_mem_len = composite_max;
+	}
 }
-
-// - Pixel glyph memory
-glyph_mem_len += mutt_pixel_glyph_get_max_size(&font);
 
 // - Allocate
 glyph_mem = (muByte*)malloc(glyph_mem_len);
 if (!glyph_mem) {
-    printf("Unable to allocate glyph memory\n");
-    goto fail_glyph_mem;
+		printf("Unable to allocate glyph memory\n");
+		goto fail_glyph_mem;
 }
 
 // Loop through each glyph
 for (uint32_m i = 0; i < TEST_CHAR_LEN; i++) {
-    // Render glyph to pixels
-    result = mutt_render_glyph_id(&font, glyph_ids[i], point_size, ppi, format, pixels, width, height, glyph_mem);
-    if (result != MUTT_SUCCESS) {
-        printf("[Warning] Character #%" PRIu32 " failed to render: %s\n", i, mutt_result_get_name(result));
-    }
-
-    // Output as image
-    // - Generate filename based on index
-    char name[24] = {0};
-    sprintf(name, "%" PRIu32 ".png", i);
-    // - Output file using stb_image_write
-    stbi_write_png(name, width, height, 1, pixels, width);
+	// Render glyph to pixels
+	result = mutt_render_glyph_id(&font, glyph_ids[i], point_size, ppi, format, pixels, width, height, glyph_mem);
+	if (result != MUTT_SUCCESS) {
+			printf("[Warning] Character #%" PRIu32 " failed to render: %s\n", i, mutt_result_get_name(result));
+	} else {
+		// Output as image
+		// - Generate filename based on index
+		char name[24] = {0};
+		sprintf(name, "%" PRIu32 ".png", i);
+		printf("Written \"%" PRIu32 ".png\"\n", i);
+		// - Output file using stb_image_write
+		stbi_write_png(name, width, height, 1, pixels, width);
+	}
 }
 
 /* Deload */
 
 {
-    // Free glyph memory
-    free(glyph_mem);
-    fail_glyph_mem:
+	// Free glyph memory
+	free(glyph_mem);
+	fail_glyph_mem:
 
-    // Free pixels
-    free(pixels);
-    fail_pixels:
+	// Free pixels
+	free(pixels);
+	fail_pixels:
 
-    // Deload font
-    mutt_deload(&font);
+	// Deload font
+	mutt_deload(&font);
 
-    // Print success
-    printf("Successful\n");
+	// Print success
+	printf("Successful\n");
 }
 
-    return 0;
+	return 0;
 }
 
 /*

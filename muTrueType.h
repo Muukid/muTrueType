@@ -12,6 +12,7 @@ More explicit license information at the end of file.
 @TODO Verify 2 points or more per contour.
 @TODO Verify all contours start on an on-curve point.
 @TODO Simplify rendering code (largely by snipping redundant repeated code).
+@TODO Possible fluctuating edge precision.
 
 @DOCBEGIN
 
@@ -2026,76 +2027,6 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE `point_size` and `ppi` are both physical measurements; `point_size` being the physical [point](https://en.wikipedia.org/wiki/Point_(typography)) at which the font is being displayed, and `ppi` being the physical [pixels per inch](https://en.wikipedia.org/wiki/Dots_per_inch) of the display, which is usually 72 or 96 PPI.
 
-			// @DOCLINE ### Pixel glyph data
-
-				// @DOCLINE mutt uses pixel glyph data to render simple and composite glyphs, converting each point defined in the glyph to pixel units for rendering.
-
-				// @DOCLINE #### Struct
-
-				// @DOCLINE The struct used for holding pixel glyph data is `muttPixelGlyph`, and has the following members:
-				struct muttPixelGlyph {
-					// @DOCLINE * `@NLFT point_count` - the amount of points in the glyph. If the value of this member is equal to 0, the values of members `flags`, `coords`, and `intersection` are undefined.
-					uint16_m point_count;
-					// @DOCLINE * `@NLFT min_width` - the minimum width, in pixels, that this glyph can be rendered in.
-					uint32_m min_width;
-					// @DOCLINE * `@NLFT min_height` - the minimum height, in pixels, that this glyph can be rendered in.
-					uint32_m min_height;
-					// @DOCLINE * `@NLFT* flags` - the flag of each point, with a total array count of `point_count`.
-					uint8_m* flags;
-					// @DOCLINE * `@NLFT* coords` - the coordinates of each point; even index are x-coordinates and odd index values are y-coordinates, with a total array count of `point_count * 2`.
-					double* coords;
-					// @DOCLINE * `@NLFT* intersections` - an internally-used array for keeping tracks of intersections on a particular horizontal strip, with a total array count of `point_count`. The contents of each element in this array are undefined.
-					double* intersections;
-				};
-				typedef struct muttPixelGlyph muttPixelGlyph;
-
-				// @DOCLINE The following macros are defined for bitmasking the flags in a pixel glyph:
-
-				// @DOCLINE * [0x01] - `MUTT_POINT_ON_GLYPH` if this bit is set, the point is on the curve; if not, it is off the curve.
-				#define MUTT_POINT_ON_GLYPH 0x01
-				// @DOCLINE * [0x02] - `MUTT_POINT_LAST_CONTOUR_POINT` if this bit is set, the point is the last point of the current contour.
-				#define MUTT_POINT_LAST_CONTOUR_POINT 0x02
-
-				// @DOCLINE #### Maximum size
-
-				// @DOCLINE The function `mutt_pixel_glyph_get_max_size` returns the maximum size, in bytes, that a pixel glyph's dynamically allocated data (data for `flags` and `coords`) can take up for a given font, defined below: @NLNT
-				MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font);
-
-				// @DOCLINE #### Get pixel glyph via glyph data
-
-				// @DOCLINE The function `mutt_pixel_glyph_get_simple_data` retrieves pixel glyph data from a simple glyph description, defined below: @NLNT
-				MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
-
-				// @DOCLINE The function `mutt_pixel_glyph_get_composite_data` retrieves pixel glyph data from a composite glyph description, defined below: @NLNT
-				MUDEF muttResult mutt_pixel_glyph_get_composite_data(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written);
-
-				// @DOCLINE The following notes apply to both of the functions listed above:
-
-				// @DOCLINE `header` and `glyph` have to be valid descriptions of a simple/composite glyph retrieved from the font prior.
-
-				// @DOCLINE If the function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
-
-				// @DOCLINE If `data` is 0, `written` is dereferenced and set to how much memory this specific pixel glyph needs, and `pglyph` is not dereferenced. The maximum size of a pixel glyph can be queried with the function `mutt_pixel_glyph_get_max_size`.
-
-				// @DOCLINE If `data` is not 0, it is expected to be a pointer to memory sufficient in length for the pixel glyph to be defined, and if `written` is not 0, `written` will be dereferenced and set to how much memory was used, in bytes.
-
-				// @DOCLINE `point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
-
-				// @DOCLINE #### Get pixel glyph via glyph ID
-
-				// @DOCLINE The function `mutt_pixel_glyph_get_data` retrieves pixel glyph data from a given glyph ID, defined below: @NLNT
-				MUDEF muttResult mutt_pixel_glyph_get_data(muttFont* font, uint16_m glyph_id, muByte* glyph_data, uint32_m* glyph_written, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* pglyph_data, uint32_m* pglyph_written);
-
-				// @DOCLINE `glyph_id` must be a valid glyph ID (AKA less than `font->maxp->num_glyphs`).
-
-				// @DOCLINE `glyph_data` must be a pointer to memory sufficient in length for the glyph description to be defined. Maximums for simple and composite glyphs can be found in the section "Glyph memory maximums" (specifically functions `mutt_simple_glyph_get_max_size` and `mutt_composite_glyph_get_max_size`). If `glyph_written` is not 0, `glyph_written` is dereferenced and set to the amount of memory that was used in `glyph_data`, in bytes.
-
-				// @DOCLINE `pglyph_data` must be a pointer to memory sufficient in length for the pixel glyph to be defined. Maximums for pixel glyphs can be queried with the function `mutt_pixel_glyph_get_max_size`. If `pglyph_written` is not 0, `pglyph_written` is dereferenced and set to the amount of memory that was used in `pglyph_data`, in bytes.
-
-				// @DOCLINE If this function returns `MUTT_SUCCESS`, `pglyph` is dereferenced and filled with valid data. If this function does not return `MUTT_SUCCESS`, the contents of `*pglyph` are undefined.
-
-				// @DOCLINE `point_size` and `ppi` are used in the conversion from font-units to pixel-units; see more information in the "Font-units to pixel-units" section.
-
 	// @DOCLINE # Rendering a glyph
 
 		// @DOCLINE This section deals with the rendering of glyphs in the mutt API.
@@ -2130,28 +2061,37 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE This section covers the functions related to rendering a glyph to a set of pixels.
 
-			// @DOCLINE Pixels are expected to be laid out horizontally by index; that is, `pixels[0], pixels[1], ..., pixels[width-1]` is expected to be the first row of pixels, `pixels[height], pixels[height+1]...` is expected to be the second row, `pixels[height*2], pixels[height*2+1]...` is expected to be the third row, etc.
+			// @DOCLINE Pixels are expected to be laid out horizontally by index; that is, `pixels[0], pixels[1], ..., pixels[width-1]` is expected to be the first row (highest in y-level) of pixels, `pixels[height], pixels[height+1]...` is expected to be the second row, `pixels[height*2], pixels[height*2+1]...` is expected to be the third row, etc.
 
-			// @DOCLINE ### Render pixel glyph
+			// @DOCLINE ### Render simple glyph
 
-				// @DOCLINE The function `mutt_render_pixel_glyph` renders a pixel glyph, defined below: @NLNT
-				MUDEF muttResult mutt_render_pixel_glyph(muttFont* font, muttPixelGlyph* glyph, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
+				// @DOCLINE The function `mutt_render_simple_glyph` renders a simple glyph, defined below: @NLNT
+				MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
 
-				// @DOCLINE The color channel formatting of `pixels` is expected to be provided by the value `format`.
+				// @DOCLINE The color channel formatting of `pixels` is provided by the value `format`.
 
 			// @DOCLINE ### Render glyph ID
 
 				// @DOCLINE The function `mutt_render_glyph_id` renders a glyph ID, defined below: @NLNT
 				MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem);
 
-				// @DOCLINE `mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` / `mutt_composite_glyph_get_max_size`) and the pixel glyph (`mutt_pixel_glyph_get_max_size`) of the respective glyph ID to be stored.
+				// @DOCLINE `mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` or `mutt_composite_glyph_get_max_size`, whichever is greater) of the respective glyph ID to be stored.
 
-		// @DOCLINE ## Maximum dimensions
+		// @DOCLINE ## Glyph rendering dimensions
 
-			// @DOCLINE The function `mutt_maximum_glyph_render_dimensions` retrieves the maximum pixel dimensions needed to render a pixel glyph, defined below: @NLNT
+			// @DOCLINE ### Maximum
+
+			// @DOCLINE The function `mutt_maximum_glyph_render_dimensions` retrieves the maximum pixel dimensions needed to render a glyph, defined below: @NLNT
 			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height);
 
-			// @DOCLINE `max_width` and `max_height` will be individually dereferenced (if not equal to 0) and set to the maximum pixel dimensions.
+			// @DOCLINE `max_width` and `max_height` will be individually dereferenced (if not equal to 0) and set to the maximum dimensions.
+
+			// @DOCLINE ### Individual glyph
+
+			// @DOCLINE The function `mutt_glyph_render_dimensions` retrieves the dimensions needed to render an individual glyph based on its header, defined below: @NLNT
+			MUDEF void mutt_glyph_render_dimensions(muttFont* font, muttGlyphHeader* header, float point_size, float ppi, uint32_m* width, uint32_m* height);
+
+			// @DOCLINE `max_width` and `max_height` will be individually dereferenced (if not equal to 0) and set to the required dimensions.
 
 	// @DOCLINE # Version macros
 
@@ -5371,135 +5311,45 @@ mutt is developed primarily off of these sources of documentation:
 			return point_size * funits * ppi / (72.f * font->head->units_per_em);
 		}
 
-		MUDEF uint32_m mutt_pixel_glyph_get_max_size(muttFont* font) {
-			// Get max amount of points
-			uint16_m max_points = font->maxp->max_points;
-			if (font->maxp->max_composite_points > max_points) {
-				max_points = font->maxp->max_composite_points;
-			}
-
-			// Get max amount of contours
-			uint16_m max_contours = font->maxp->max_contours;
-			if (font->maxp->max_composite_contours > max_contours) {
-				max_contours = font->maxp->max_composite_contours;
-			}
-
-			return (uint32_m)(
-				// Per-point data (flags and coords)
-				(max_points * (sizeof(double)+sizeof(uint8_m)))
-				// Intersections (max_contours because of looping back to first point)
-				+ ((max_points + max_contours) * sizeof(double))
-			);
-		}
-
-		MUDEF muttResult mutt_pixel_glyph_get_simple_data(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* data, uint32_m* written) {
-			// Get amount of points
-			uint16_m points = 0;
-			if (header->number_of_contours > 0) {
-				points = glyph->end_pts_of_contours[header->number_of_contours-1] + 1;
-			}
-
-			// For written:
-			if (written) {
-				// Return bytes that would be written
-				// - sizeof(double)*3 is for coords (x & y) as well as intersections
-				// - sizeof(uint8_m) is for flags
-				*written = (uint32_m)(points*((sizeof(double)*3)+sizeof(uint8_m)));
-			}
-			// If we don't have data, this is all we need to do
-			if (!data) {
-				return MUTT_SUCCESS;
-			}
-
-			pglyph->point_count = points;
-
-			// Convert min/max values
-			pglyph->min_width = mutt_funits_to_punits(font, (double)(header->x_max-header->x_min), point_size, ppi) + 6.0;
-			pglyph->min_height = mutt_funits_to_punits(font, (double)(header->y_max-header->y_min), point_size, ppi) + 6.0;
-
-			// Return if no points are given
-			if (points == 0) {
-				return MUTT_SUCCESS;
-			}
-
-			// Allocate flags, coords, and intersections
-			pglyph->flags = (uint8_m*)data;
-			pglyph->coords = (double*)(data+points);
-			pglyph->intersections = (double*)(&pglyph->coords[points*2]);
-
-			// Loop through each point
-			uint16_m contour_id = 0;
-			for (uint16_m p = 0; p < points; p++) {
-				// Get simple glyph point
-				muttSimpleGlyphPoint* point = &glyph->points[p];
-
-				// Set flags
-				pglyph->flags[p] = 0;
-				// - On/Off curve
-				if (point->flags & MUTT_ON_CURVE_POINT) {
-					pglyph->flags[p] |= MUTT_POINT_ON_GLYPH;
-				}
-				// - Next contour
-				if (p == glyph->end_pts_of_contours[contour_id]) {
-					pglyph->flags[p] |= MUTT_POINT_LAST_CONTOUR_POINT;
-					contour_id += 1;
-				}
-
-				// x- and y-coordinates
-				pglyph->coords[p*2] =     mutt_funits_to_punits(font, (double)(point->x-header->x_min), point_size, ppi) + 3.0;
-				pglyph->coords[(p*2)+1] = mutt_funits_to_punits(font, (double)(point->y-header->y_min), point_size, ppi) + 3.0;
-			}
-
-			return MUTT_SUCCESS;
-		}
-
-		// @TODO Composite glyph...
-
-		MUDEF muttResult mutt_pixel_glyph_get_data(muttFont* font, uint16_m glyph_id, muByte* glyph_data, uint32_m* glyph_written, muttPixelGlyph* pglyph, float point_size, float ppi, muByte* pglyph_data, uint32_m* pglyph_written) {
-			muttResult res;
-
-			// Get header
-			muttGlyphHeader header;
-			res = mutt_glyph_get_header(font, glyph_id, &header);
-			if (res != MUTT_SUCCESS) {
-				return res;
-			}
-
-			// Simple glyph:
-			if (header.number_of_contours >= 0) {
-				// Get simple glyph data
-				muttSimpleGlyph glyph;
-				res = mutt_simple_glyph_get_data(font, &header, &glyph, glyph_data, glyph_written);
-				if (res != MUTT_SUCCESS) {
-					return res;
-				}
-
-				// Convert to pixel glyph
-				res = mutt_pixel_glyph_get_simple_data(font, &header, &glyph, pglyph, point_size, ppi, pglyph_data, pglyph_written);
-				if (res != MUTT_SUCCESS) {
-					return res;
-				}
-			}
-			// Composite glyph:
-			else {
-				// @TODO Composite glyph handling...
-				return MUTT_INVALID_CMAP_FORMAT_LENGTH;
-			}
-
-			return MUTT_SUCCESS;
-		}
-
 	/* Rendering */
+
+		/* Dimensions */
+
+			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height) {
+				if (max_width) {
+					*max_width = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(font->head->x_max-font->head->x_min), point_size, ppi)
+					) + 6;
+				}
+				if (max_height) {
+					*max_height = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(font->head->y_max-font->head->y_min), point_size, ppi)
+					) + 6;
+				}
+			}
+
+			MUDEF void mutt_glyph_render_dimensions(muttFont* font, muttGlyphHeader* header, float point_size, float ppi, uint32_m* width, uint32_m* height) {
+				if (width) {
+					*width = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(header->x_max-header->x_min), point_size, ppi)
+					) + 6;
+				}
+				if (height) {
+					*height = (uint32_m)(
+						mutt_funits_to_punits(font, (float)(header->y_max-header->y_min), point_size, ppi)
+					) + 6;
+				}
+			}
 
 		/* Math functions */
 
 			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
 			// (Returns negative if no intersection is found; this function only works for positive x-values) 
-			static inline double mutt_y_ray_line_segment_intersection_x(double ry, double x0, double y0, double x1, double y1) {
+			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
 				// Check if they intersect at all (there is probably a better way to do this)
 				if (!((ry >= y0 && ry <= y1) || (ry >= y1 && ry <= y0))) {
 					// Return -1 for no intersection
-					return -1.0;
+					return -1.f;
 				}
 
 				// Calculate x-value based on y-value for line segment
@@ -5515,9 +5365,9 @@ mutt is developed primarily off of these sources of documentation:
 			// a quadratic  Bezier curve  [x0, y0, x1, y1, x2, y2],  returning the
 			// result by dereferencing the two possible x intersections [rx0, rx1]
 			// (Sets negative  for no intersection;  this only works for positive)
-			static inline void mutt_y_ray_quad_bezier_intersection_x(double ry,
-				double x0, double y0, double x1, double y1, double x2, double y2,
-				double* rx0, double* rx1
+			static inline void mutt_y_ray_quad_bezier_intersection_x(float ry,
+				float x0, float y0, float x1, float y1, float x2, float y2,
+				float* rx0, float* rx1
 			) {
 				// Calculate t-values for first and second intersection
 
@@ -5535,30 +5385,30 @@ mutt is developed primarily off of these sources of documentation:
 				//   no intersections are found.
 
 				// - Calculate variables
-				double d = y0-y1;
-				double g = (y1*y1) - (y0*y2);
-				double a = y0 - (2.0*y1) + y2;
+				float d = y0-y1;
+				float g = (y1*y1) - (y0*y2);
+				float a = y0 - (2.f*y1) + y2;
 				// - Return a line segment approximation if divisor is too small.
 				//   This is a hack around floating point imprecision.
-				if (a == 0.0) {
+				if (a == 0.f) {
 					*rx0 = mutt_y_ray_line_segment_intersection_x(ry, x0, y0, x1, y1);
 					*rx1 = mutt_y_ray_line_segment_intersection_x(ry, x1, y1, x2, y2);
 					return;
 				}
 
 				// - Calcuate sqrt part (s)
-				double s = (ry*a) + g;
+				float s = (ry*a) + g;
 				// -- Exclude negative square roots
-				if (s < 0.0) {
-					*rx0 = -1.0;
-					*rx1 = -1.0;
+				if (s < 0.f) {
+					*rx0 = -1.f;
+					*rx1 = -1.f;
 					return;
 				}
 				s = mu_sqrt(s);
 
 				// - Calculate t-values
-				double rt0 = (d + s) / a;
-				double rt1 = (d - s) / a;
+				float rt0 = (d + s) / a;
+				float rt1 = (d - s) / a;
 
 				// Calculate x-value intersections based on t-values
 
@@ -5569,30 +5419,36 @@ mutt is developed primarily off of these sources of documentation:
 				//   where v = 1-t
 
 				// - Do calculations for first intersection if t-value for it is valid
-				if (rt0 >= 0.0 && rt0 <= 1.0) {
+				if (rt0 >= 0.f && rt0 <= 1.f) {
 					// Calculate variable
-					double v = 1.0-rt0;
+					float v = 1.f-rt0;
 					// Solve equation for x-value
-					*rx0 = ((v*v)*x0) + (2.0*v*rt0*x1) + ((rt0*rt0)*x2);
+					*rx0 = ((v*v)*x0) + (2.f*v*rt0*x1) + ((rt0*rt0)*x2);
 				} else {
 					// (Set invalid value if t-value is invalid, AKA no intersection)
-					*rx0 = -1.0;
+					*rx0 = -1.f;
 				}
 
 				// - Same for second intersection
-				if (rt1 >= 0.0 && rt1 <= 1.0) {
-					double v = 1.0-rt1;
-					*rx1 = ((v*v)*x0) + (2.0*v*rt1*x1) + ((rt1*rt1)*x2);
+				if (rt1 >= 0.f && rt1 <= 1.f) {
+					float v = 1.f-rt1;
+					*rx1 = ((v*v)*x0) + (2.f*v*rt1*x1) + ((rt1*rt1)*x2);
 				} else {
-					*rx1 = -1.0;
+					*rx1 = -1.f;
 				}
 			}
 
-		/* Format rendering functions */
+			// Calculates the x- and y- value of a point on a Bezier curve given t.
+			static inline void mutt_get_bezier_point(float x0, float y0, float x1, float y1, float x2, float y2,
+				float t, float* x, float* y) {
+				// @TODO This can be optimized
+				*x = ((1.f-t)*(1.f-t)*x0) + (2.f*(1.f-t)*t*x1) + (t*t*x2);
+				*y = ((1.f-t)*(1.f-t)*y0) + (2.f*(1.f-t)*t*y1) + (t*t*y2);
+			}
 
 			// Float comparison function for qsort
-			int mutt_compare_doubles(const void* p, const void* q) {
-				double f0 = *(const double*)p, f1 = *(const double*)q;
+			int mutt_compare_floats(const void* p, const void* q) {
+				float f0 = *(const float*)p, f1 = *(const float*)q;
 				if (f0 < f1) {
 					return -1;
 				} else if (f0 > f1) {
@@ -5601,321 +5457,255 @@ mutt is developed primarily off of these sources of documentation:
 				return 0;
 			}
 
-			// Macro for adding any intersection to the intersection list
-			#define MUTT_ADD_INTERSECTION(rx) \
-				/* Make sure it's valid (AKA positive) */ \
-				if (rx >= 0.0) { \
-					pglyph->intersections[intersection_count] = rx; \
-					intersection_count += 1; \
-				} \
+		/* Format rendering */
 
-			// Macro for adding line segment intersections to the intersectino list
-			#define MUTT_ADD_LS_INTERSECTION(rx, prevy, curry, nexty) \
-				/* Make sure it's valid (AKA positive) */ \
-				if (rx >= 0.0) { \
-					/* If the intersection is very similar to the previous intersection */ \
-					if (intersection_count > 0 \
-						&& mu_fabs(pglyph->intersections[intersection_count-1]-rx) <= 0.001 \
-					) { \
-						/* In this situation, we want to exclude double-intersections that go directly \
-						** through the glyph while excluding intersections that double-intersect by \
-						** grazing by a corner. \
-						** A way to achieve this is to only add the double-intersection if both inter- \
-						** sections are going in different directions, marked by the sign of y1-y0 for \
-						** each line segment involved, which should in theory only include the double- \
-						** intersections for corners. */ \
-						if ((curry-prevy)*(nexty-curry) < 0.0) { \
-							pglyph->intersections[intersection_count] = rx; \
-							intersection_count += 1; \
-						} \
-					} \
-					/* If it's not similar, just add it */ \
-					else { \
-						pglyph->intersections[intersection_count] = rx; \
-						intersection_count += 1; \
-					} \
+			/* Structs */
+
+				// An 'edge' (aka line segment)
+				struct muttR_Edge {
+					// 0 is bottom, 1 is top
+					float x0;
+					float y0;
+					float x1;
+					float y1;
+				};
+				typedef struct muttR_Edge muttR_Edge;
+
+				// Sorts the edges in DECREASING order of top point
+				int mutt_compare_edges(const void* p, const void* q) {
+					muttR_Edge* e0 = (muttR_Edge*)p, * e1 = (muttR_Edge*)q;
+					if (e0->y1 < e1->y1) {
+						return 1;
+					} else if (e0->y1 > e1->y1) {
+						return -1;
+					}
+					return 0;
 				}
 
-			// Macro for adding simple quadratic Bezier curve intersections
-			#define MUTT_ADD_SQB_INTERSECTION(rx0, rx1, x0, y0, x1, y1, x2, y2, prevy) \
-				/* Check if at least either are valid */ \
-				if (rx0 >= 0.0 || rx1 >= 0.0) { \
-					/* Verify proper duplicate intersection for first intersection */ \
-					if (intersection_count > 0) { \
-						if (rx0 >= 0.0 && mu_fabs(pglyph->intersections[intersection_count-1]-rx0) <= 0.001) { \
-							if ((y0-prevy)*(y1-y0) < 0.0) { \
-								pglyph->intersections[intersection_count] = rx0; \
-								intersection_count += 1; \
-							} \
-						} \
-						else if (rx0 >= 0.0) { \
-							pglyph->intersections[intersection_count] = rx0; \
-							intersection_count += 1; \
-						} \
-						/* Verify proper duplicate intersection for second intersection */ \
-						if (rx1 >= 0.0 && mu_fabs(pglyph->intersections[intersection_count-1]-rx1) <= 0.001) { \
-							if ((y0-prevy)*(y1-y0) < 0.0) { \
-								pglyph->intersections[intersection_count] = rx1; \
-								intersection_count += 1; \
-							} \
-						} \
-						else if (rx1 >= 0.0) { \
-							pglyph->intersections[intersection_count] = rx1; \
-							intersection_count += 1; \
-						} \
-					} \
-					/* Just add them if these are the first intersections */ \
-					else { \
-						if (rx0 >= 0.0) { \
-							pglyph->intersections[intersection_count] = rx0; \
-							intersection_count += 1; \
-						} \
-						if (rx1 >= 0.0) { \
-							pglyph->intersections[intersection_count] = rx1; \
-							intersection_count += 1; \
-						} \
-					} \
+				// A shape defined by a series of edges
+				struct muttR_Shape {
+					// Note: implies a maximum of 4294967295 edges, hopefully enough!
+					uint32_m edge_count;
+					muttR_Edge* edges;
+				};
+				typedef struct muttR_Shape muttR_Shape;
+
+				void mutt_sort_shape_edges(muttR_Shape* shape) {
+					mu_qsort(shape->edges, shape->edge_count, sizeof(muttR_Edge), mutt_compare_edges);
 				}
 
-			// Rendering for MUTT_BW_FULL_PIXEL_BI_LEVEL_R
-			int mistake_counter = 0;
-			int index = -1;
-			static inline muttResult mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(muttPixelGlyph* pglyph, uint8_m* pixels, uint32_m width, uint32_m height) {
-				/*memset(pixels, 75, width*height);
-				for (uint16_m p = 0; p < pglyph->point_count; p++) {
-					float px = pglyph->coords[p*2], py = pglyph->coords[(p*2)+1];
-					int ipx = (int)px, ipy = (int)py;
-					ipy = height - ipy;
+			/* Processing shapes into edges */
 
-					float p_prog = (float)(p) / (float)(pglyph->point_count);
-					if (pglyph->flags[p] & MUTT_POINT_ON_GLYPH) {
-						pixels[(ipy*width)+ipx] = 200 + (55*p_prog);
+				static inline void mutt_line_segment_into_edge(muttR_Edge* edge, float x0, float y0, float x1, float y1) {
+					if (y0 < y1) {
+						edge->x0 = x0;
+						edge->y0 = y0;
+						edge->x1 = x1;
+						edge->y1 = y1;
 					} else {
-						pixels[(ipy*width)+ipx] = 0 + (55*p_prog);
+						edge->x0 = x1;
+						edge->y0 = y1;
+						edge->x1 = x0;
+						edge->y1 = y0;
 					}
 				}
 
-				return MUTT_SUCCESS;*/
+				// Must be at least 2 and below 0xFFFFFFFF
+				#define MUTT_BEZIER_EDGE_COUNT 50
+				#define MUTT_BEZIER_EDGE_COUNTN1 (MUTT_BEZIER_EDGE_COUNT+1)
+				static const float MUTT_BEZIER_INVERSE_BEC = 1.f / (float)MUTT_BEZIER_EDGE_COUNTN1;
 
-				index += 1;
+				static inline void mutt_bezier_into_edges(muttR_Edge* edges, float x0, float y0, float x1, float y1, float x2, float y2) {
+					for (uint32_m ti = 0; ti < MUTT_BEZIER_EDGE_COUNT; ti++) {
+						// Calculate Bezier for the first point
+						float t = (float)ti / (float)MUTT_BEZIER_EDGE_COUNTN1;
+						float bx0, by0;
+						mutt_get_bezier_point(x0, y0, x1, y1, x2, y2, t, &bx0, &by0);
+						// Second point
+						float bx1, by1;
+						mutt_get_bezier_point(x0, y0, x1, y1, x2, y2, t+MUTT_BEZIER_INVERSE_BEC, &bx1, &by1);
 
-				// Loop through each horizontal pixel strip
-				uint32_m hpix_offset = 0;
-				for (uint32_m lh = 0; lh < height; lh++) {
-					// Calculate appropriate height value (inverse cuz bottom left I THINK)
-					uint32_m h = height - lh;
-
-					// Just fill all x-values with zero if the height is now outside of the glyph range
-					if (h >= pglyph->min_height) {
-						for (uint32_m w = 0; w < width; w++) {
-							pixels[hpix_offset+w] = 0;
-						}
-						hpix_offset += width;
-						continue;
+						// Make edge based on this and go to next edge
+						mutt_line_segment_into_edge(edges, bx0, by0, bx1, by1);
+						++edges;
 					}
+				}
 
-					// Calculate y-value of ray
-					double ray_y = (double)(h);
+				// Returns edge count if edges is 0
+				// @TODO Too lazy right now, comment this later!
+				uint32_m mutt_simple_glyph_to_edges(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttR_Edge* edges, float point_size, float ppi) {
+					// General info needed (can this theoretically be a u32?)
+					uint16_m num_points = glyph->end_pts_of_contours[header->number_of_contours-1]+1;
+					muttR_Edge* orig_edges = edges;
 
-					// Initialize intersection list length
-					uint16_m intersection_count = 0;
+					uint16_m contour_id = 0;
+					for (uint16_m ip = 0; ip < num_points;) {
+						if (ip > glyph->end_pts_of_contours[contour_id]) {
+							contour_id += 1;
+						}
 
-					// Loop through each point
-					uint16_m first_contour_point = 0; // (tracker for the first point of the contour we're on)
-					for (uint16_m p = 0; p < pglyph->point_count;) {
-						// The current point is marked by index 'p'
+						muttSimpleGlyphPoint p = glyph->points[ip];
 
-						// The previous point is 'p-1' (its OK to do this at p=0 because it shouldn't be used)
-						// It's also OK to leave it as this even when it's the first point of the contour, since
-						// the previous point should be being checked in the first place.
-						uint16_m pn1 = p-1;
-
-						// The next next point is 'p+2'
-						uint16_m p2 = p+2;
-						// ...unless the next point is the last point of the contour
-						if (p+1 < pglyph->point_count && pglyph->flags[p+1] & MUTT_POINT_LAST_CONTOUR_POINT) {
-							// ...in which case the next next point is looped back to the first contour point
-							p2 = first_contour_point;
-							// Only change "first_contour_point" if we aren't gonna process the next point
-							// (since the p+1 logic depends on it staying consistent).
-							// The cases where we process p+1 after this are ON[0]-ON, OFF-OFF[0]-OFF, and OFF-OFF[0]-ON
-							if (!(
-								// (ON[0]-ON)
-								(pglyph->flags[p] & MUTT_POINT_ON_GLYPH && pglyph->flags[p+1] & MUTT_POINT_ON_GLYPH)
-								// OFF-OFF[0]-OFF and OFF-OFF[0]-ON
-								|| (p > 0 && !(pglyph->flags[p-1] & MUTT_POINT_ON_GLYPH) && !(pglyph->flags[p] & MUTT_POINT_ON_GLYPH))
-							)) {
-								first_contour_point = p+2;
+						if (p.flags & MUTT_ON_CURVE_POINT) {
+							uint16_m p1_id = ip+1;
+							if (p1_id > glyph->end_pts_of_contours[contour_id]) {
+								p1_id -= glyph->end_pts_of_contours[contour_id]+1;
+								if (contour_id > 0) {
+									p1_id += glyph->end_pts_of_contours[contour_id-1]+1;
+								}
 							}
-						}
-						
-						// The next point is 'p+1'
-						uint16_m p1 = p+1;
-						// ...unless this is the last point of the contour
-						if (pglyph->flags[p] & MUTT_POINT_LAST_CONTOUR_POINT) {
-							// ...in which case, the next point is looped back to the first contour point
-							p1 = first_contour_point;
-							// ...and the next next point is the point after that
-							p2 = p1+1;
-							// After this, the "first contour point" is the next point since we're moving
-							// to the next contour after this.
-							first_contour_point = p+1;
-						}
+							muttSimpleGlyphPoint p1 = glyph->points[p1_id];
 
-						// If the point is ON the curve (ON[0]...):
-						if (pglyph->flags[p] & MUTT_POINT_ON_GLYPH) {
-							// The first point is the coordinates of this point no matter what
-							double px0 = pglyph->coords[p*2], py0 = pglyph->coords[(p*2)+1];
-
-							// If the next point is ON the curve (ON[0]-ON)
-							if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
-								// Simple line segment;
-								// second point is the next point.
-								double px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
-
-								// Check for intersection and add if valid
-								double ray_x = mutt_y_ray_line_segment_intersection_x(ray_y, px0, py0, px1, py1);
-								MUTT_ADD_LS_INTERSECTION(ray_x, pglyph->coords[(pn1*2)+1], py0, py1)
-
-								// Increment by 1 and move on.
-								p += 1;
+							if (p1.flags & MUTT_ON_CURVE_POINT) {
+								if (orig_edges) {
+									mutt_line_segment_into_edge(edges,
+										mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f
+									);
+								}
+								++edges;
+								ip += 1;
 								continue;
 							}
 
-							// If we're here, the next point is OFF the curve (ON[0]-OFF...)
-							// We're forming a Bezier then;
-							// our second point is the next point no matter what
-							double px1 = pglyph->coords[p1*2], py1 = pglyph->coords[(p1*2)+1];
-
-							// Our third point depends on the next next point's flag
-							double px2, py2;
-							// If the next next point is ON the curve (ON[0]-OFF-ON):
-							if (pglyph->flags[p2] & MUTT_POINT_ON_GLYPH) {
-								// The third point is simply the next point
-								px2 = pglyph->coords[p2*2];
-								py2 = pglyph->coords[(p2*2)+1];
+							uint16_m p2_id = ip+2;
+							if (p2_id > glyph->end_pts_of_contours[contour_id]) {
+								p2_id -= glyph->end_pts_of_contours[contour_id]+1;
+								if (contour_id > 0) {
+									p2_id += glyph->end_pts_of_contours[contour_id-1]+1;
+								}
 							}
-							// If not, our next next point is OFF the curve (ON[0]-OFF-OFF):
-							else {
-								// In which case, the third point is the midpoint
-								// between the next & next next point.
-								px2 = (px1 + pglyph->coords[p2*2    ]) / 2.0;
-								py2 = (py1 + pglyph->coords[(p2*2)+1]) / 2.0;
+							muttSimpleGlyphPoint p2 = glyph->points[p2_id];
+
+							if (p2.flags & MUTT_ON_CURVE_POINT) {
+								if (orig_edges) {
+									mutt_bezier_into_edges(edges,
+										mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
+										mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f
+									);
+								}
+								edges += MUTT_BEZIER_EDGE_COUNT;
+								ip += 2;
+								continue;
 							}
 
-							// Calculate intersection with Bezier and add if valid
-							double rx0, rx1;
-							mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-							//MUTT_ADD_INTERSECTION(rx0)
-							//MUTT_ADD_INTERSECTION(rx1)
-							MUTT_ADD_SQB_INTERSECTION(rx0, rx1, px0, py0, px1, py1, px2, py2, pglyph->coords[(pn1*2)+1])
+							if (orig_edges) {
+								float px0 = mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+								      py0 = mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+								      px1 = mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+								      py1 = mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
+								      px2 = mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
+								      py2 = mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f;
+								px2 = (px1+px2) / 2.f;
+								py2 = (py1+py2) / 2.f;
 
-							// Increment by 2 and move on.
-							p += 2;
+								mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+							}
+
+							edges += MUTT_BEZIER_EDGE_COUNT;
+							ip += 2;
 							continue;
 						}
 
-						// If we're here, the point is OFF the curve (OFF[0]...)
-						// This means that the previous point has to also be OFF
-						// the curve (OFF-OFF[0]...).
+						if (orig_edges) {
+							uint16_m pn1_id = ip-1;
+							muttSimpleGlyphPoint pn1 = glyph->points[pn1_id];
 
-						// This means that the current point will be the "off" point
-						// of the Bezier:
-						double px1 = pglyph->coords[p*2], py1 = pglyph->coords[(p*2)+1];
-
-						// And since the previous point is off, the prior point is
-						// the midpoint between the previous point and the current point.
-						double px0 = (pglyph->coords[pn1*2    ] + px1) / 2.0;
-						double py0 = (pglyph->coords[(pn1*2)+1] + py1) / 2.0;
-
-						// The third point depends on the next point's flags.
-						double px2, py2;
-						// If the next point is ON the curve (OFF-OFF[0]-ON)
-						if (pglyph->flags[p1] & MUTT_POINT_ON_GLYPH) {
-							// The third point is simply the next point
-							px2 = pglyph->coords[p1*2];
-							py2 = pglyph->coords[(p1*2)+1];
-						}
-						// If not, the next point is OFF the curve (OFF-OFF[0]-OFF)
-						else {
-							// The third point is then the midpoint between the current
-							// point and the next point
-							px2 = (px1 + pglyph->coords[p1*2    ]) / 2.0;
-							py2 = (py1 + pglyph->coords[(p1*2)+1]) / 2.0;
-						}
-
-						// Calculate intersection with Bezier and add if valid
-						double rx0, rx1;
-						mutt_y_ray_quad_bezier_intersection_x(ray_y, px0, py0, px1, py1, px2, py2, &rx0, &rx1);
-						//MUTT_ADD_INTERSECTION(rx0)
-						//MUTT_ADD_INTERSECTION(rx1)
-						MUTT_ADD_SQB_INTERSECTION(rx0, rx1, px0, py0, px1, py1, px2, py2, py0)
-
-						// Increment by 1 and move on.
-						p += 1;
-					}
-
-					// Sort intersection array in increasing order
-					mu_qsort(pglyph->intersections, intersection_count, sizeof(double), mutt_compare_doubles);
-
-					// Loop through each x-value in this horizontal pixel strip
-					uint16_m upcoming_intersection = 0;
-					uint8_m fill_color = 0;
-					for (uint32_m w = 0; w < width; w++) {
-						// Just fill all x-values with zero if width is now outside of glyph range
-						if (w >= pglyph->min_width) {
-							if (fill_color != 0) {
-								printf("mistake on #%i on y=%i; counted %i intersections { ", index, (int)lh, (int)intersection_count);
-								for (uint16_m i = 0; i < intersection_count; i++) {
-									printf("%f, ", pglyph->intersections[i]);
+							uint16_m p1_id = ip+1;
+							if (p1_id > glyph->end_pts_of_contours[contour_id]) {
+								p1_id -= glyph->end_pts_of_contours[contour_id]+1;
+								if (contour_id > 0) {
+									p1_id += glyph->end_pts_of_contours[contour_id-1]+1;
 								}
-								printf("}\n");
-								mistake_counter += 1;
 							}
-							while (w < width) {
-								pixels[hpix_offset+w] = 0;
-								w++;
+							muttSimpleGlyphPoint p1 = glyph->points[p1_id];
+
+							float px0 = mutt_funits_to_punits(font, (float)(pn1.x-header->x_min), point_size, ppi)+3.f,
+							      py0 = mutt_funits_to_punits(font, (float)(pn1.y-header->y_min), point_size, ppi)+3.f,
+							      px1 = mutt_funits_to_punits(font, (float)(p  .x-header->x_min), point_size, ppi)+3.f,
+							      py1 = mutt_funits_to_punits(font, (float)(p  .y-header->y_min), point_size, ppi)+3.f,
+							      px2 = mutt_funits_to_punits(font, (float)(p1 .x-header->x_min), point_size, ppi)+3.f,
+							      py2 = mutt_funits_to_punits(font, (float)(p1 .y-header->y_min), point_size, ppi)+3.f;
+							px0 = (px0+px1) / 2.f;
+							py0 = (py0+py1) / 2.f;
+
+							// If the next point is OFF the curve (OFF-OFF[0]-OFF)
+							if (!(p1.flags & MUTT_ON_CURVE_POINT)) {
+								// The second point needs to be midpointed
+								px2 = (px1+px2) / 2.f;
+								py2 = (py1+py2) / 2.f;
 							}
-							break;
+
+							mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
 						}
 
-						// Calculate x-coordinate
-						double x = (double)(w);
-
-						// If we've passed or met the upcoming intersection
-						// (and our intersection is valid):
-						while (upcoming_intersection < intersection_count && 
-							x >= pglyph->intersections[upcoming_intersection]
-						) {
-							// Flip the fill color
-							fill_color = ~fill_color;
-							// Increment our intersection index
-							upcoming_intersection += 1;
-						}
-
-						// Fill pixel with appropriate fill color
-						pixels[hpix_offset+w] = fill_color;
+						edges += MUTT_BEZIER_EDGE_COUNT;
+						ip += 1;
+						//continue;
 					}
 
-					// Add offset after this strip
-					hpix_offset += width;
+					// Return the amount of edges added
+					// (Casting is weird because casting pointer directly to
+					// integer type causes many compilers to complain)
+					return *((size_m*)&edges) / sizeof(muttR_Edge);
 				}
 
-				return MUTT_SUCCESS;
-			}
+			/* Rendering format-by-format */
+
+				void mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+					memset(pixels, 0, width*height);
+
+					for (uint32_m e = 0; e < shape->edge_count; e++) {
+						int ipx = (int)shape->edges[e].x0;
+						int ipy = (int)shape->edges[e].y0;
+						ipy = height - ipy;
+						pixels[(ipy*width)+ipx] = 255;
+
+						ipx = (int)shape->edges[e].x1;
+						ipy = (int)shape->edges[e].y1;
+						ipy = height - ipy;
+						pixels[(ipy*width)+ipx] = 255;
+					}
+				}
 
 		/* High-level rendering functions */
 
-			MUDEF muttResult mutt_render_pixel_glyph(muttFont* font, muttPixelGlyph* pglyph, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
-				// Find function based on format
-				switch (format) {
-					default: return MUTT_UNKNOWN_RENDER_FORMAT; break;
+			MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
+				// Convert glyph to edges
+				muttR_Shape shape;
+				shape.edge_count = mutt_simple_glyph_to_edges(font, header, glyph, 0, point_size, ppi);
 
-					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: return mutt_render_pixel_glyph_bw_full_pixel_bi_level_r(pglyph, pixels, width, height); break;
+				if (shape.edge_count > 0) {
+					shape.edges = (muttR_Edge*)mu_malloc(sizeof(muttR_Edge)*shape.edge_count);
+					if (!shape.edges) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					mutt_simple_glyph_to_edges(font, header, glyph, shape.edges, point_size, ppi);
+					mutt_sort_shape_edges(&shape);
 				}
 
-				// (To avoid warnings)
-				if (font) {}
+				else {
+					shape.edges = 0;
+				}
+
+				// Render based on format
+				switch (format) {
+					default: return MUTT_UNKNOWN_RENDER_FORMAT; break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
+				}
+
+				// Free memory and return
+				if (shape.edges) {
+					mu_free(shape.edges);
+				}
+				return MUTT_SUCCESS;
 			}
 
 			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem) {
@@ -5928,45 +5718,19 @@ mutt is developed primarily off of these sources of documentation:
 					return res;
 				}
 
-				muttPixelGlyph pglyph;
-
 				// Simple glyph:
 				if (header.number_of_contours >= 0) {
-					uint32_m written;
-					// Get glyph data
 					muttSimpleGlyph glyph;
-					res = mutt_simple_glyph_get_data(font, &header, &glyph, mem, &written);
+					res = mutt_simple_glyph_get_data(font, &header, &glyph, mem, 0);
 					if (res != MUTT_SUCCESS) {
 						return res;
 					}
-					mem += written;
 
-					// Get pixel glyph data
-					res = mutt_pixel_glyph_get_simple_data(font, &header, &glyph, &pglyph, point_size, ppi, mem, &written);
-					if (res != MUTT_SUCCESS) {
-						return res;
-					}
-					// mem += written;
+					return mutt_render_simple_glyph(font, &header, &glyph, point_size, ppi, format, pixels, width, height);
 				}
-				// Composite glyph:
 				else {
-					// @TODO Composite glyph handling...
+					// @TODO Composite glyph handling
 					return MUTT_INVALID_CMAP_FORMAT_LENGTH;
-				}
-
-				return mutt_render_pixel_glyph(font, &pglyph, format, pixels, width, height);
-			}
-
-			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height) {
-				if (max_width) {
-					*max_width = (uint32_m)(
-						mutt_funits_to_punits(font, (float)(font->head->x_max-font->head->x_min), point_size, ppi)
-					) + 6;
-				}
-				if (max_height) {
-					*max_height = (uint32_m)(
-						mutt_funits_to_punits(font, (float)(font->head->y_max-font->head->y_min), point_size, ppi)
-					) + 6;
 				}
 			}
 
