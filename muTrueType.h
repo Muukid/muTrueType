@@ -2135,7 +2135,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		#endif
 
-		#if !defined(mu_memcpy)
+		#if !defined(mu_memcpy) || \
+			!defined(mu_memset)
 
 			// @DOCLINE ## `string.h` dependencies
 			#include <string.h>
@@ -2143,6 +2144,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_memcpy` - equivalent to `memcpy`.
 			#ifndef mu_memcpy
 				#define mu_memcpy memcpy
+			#endif
+
+			// @DOCLINE * `mu_memset` - equivalent to `memset`.
+			#ifndef mu_memset
+				#define mu_memset memset
 			#endif
 
 		#endif
@@ -5313,6 +5319,42 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Rendering */
 
+		/* Structs */
+
+				// An 'edge' (aka line segment)
+				struct muttR_Edge {
+					// 0 is bottom, 1 is top
+					float x0;
+					float y0;
+					float x1;
+					float y1;
+					float vec;
+				};
+				typedef struct muttR_Edge muttR_Edge;
+
+				// Sorts the edges in DECREASING order of top point
+				int mutt_compare_edges(const void* p, const void* q) {
+					muttR_Edge* e0 = (muttR_Edge*)p, * e1 = (muttR_Edge*)q;
+					if (e0->y1 < e1->y1) {
+						return 1;
+					} else if (e0->y1 > e1->y1) {
+						return -1;
+					}
+					return 0;
+				}
+
+				// A shape defined by a series of edges
+				struct muttR_Shape {
+					// Note: implies a maximum of 4294967295 edges, hopefully enough!
+					uint32_m edge_count;
+					muttR_Edge* edges;
+				};
+				typedef struct muttR_Shape muttR_Shape;
+
+				void mutt_sort_shape_edges(muttR_Shape* shape) {
+					mu_qsort(shape->edges, shape->edge_count, sizeof(muttR_Edge), mutt_compare_edges);
+				}
+
 		/* Dimensions */
 
 			MUDEF void mutt_maximum_glyph_render_dimensions(muttFont* font, float point_size, float ppi, uint32_m* max_width, uint32_m* max_height) {
@@ -5359,6 +5401,11 @@ mutt is developed primarily off of these sources of documentation:
 					/
 					(y1-y0)
 				);
+			}
+
+			// Does mutt_y_ray_line_segment_intersection_x for an edge
+			static inline float mutt_y_ray_edge_intersection_x(float ray_y, muttR_Edge edge) {
+				return mutt_y_ray_line_segment_intersection_x(ray_y, edge.x0, edge.y0, edge.x1, edge.y1);
 			}
 
 			// Calculates the x-value intersection(s) of a horizontal ray [ry] and
@@ -5446,53 +5493,7 @@ mutt is developed primarily off of these sources of documentation:
 				*y = ((1.f-t)*(1.f-t)*y0) + (2.f*(1.f-t)*t*y1) + (t*t*y2);
 			}
 
-			// Float comparison function for qsort
-			int mutt_compare_floats(const void* p, const void* q) {
-				float f0 = *(const float*)p, f1 = *(const float*)q;
-				if (f0 < f1) {
-					return -1;
-				} else if (f0 > f1) {
-					return 1;
-				}
-				return 0;
-			}
-
 		/* Format rendering */
-
-			/* Structs */
-
-				// An 'edge' (aka line segment)
-				struct muttR_Edge {
-					// 0 is bottom, 1 is top
-					float x0;
-					float y0;
-					float x1;
-					float y1;
-				};
-				typedef struct muttR_Edge muttR_Edge;
-
-				// Sorts the edges in DECREASING order of top point
-				int mutt_compare_edges(const void* p, const void* q) {
-					muttR_Edge* e0 = (muttR_Edge*)p, * e1 = (muttR_Edge*)q;
-					if (e0->y1 < e1->y1) {
-						return 1;
-					} else if (e0->y1 > e1->y1) {
-						return -1;
-					}
-					return 0;
-				}
-
-				// A shape defined by a series of edges
-				struct muttR_Shape {
-					// Note: implies a maximum of 4294967295 edges, hopefully enough!
-					uint32_m edge_count;
-					muttR_Edge* edges;
-				};
-				typedef struct muttR_Shape muttR_Shape;
-
-				void mutt_sort_shape_edges(muttR_Shape* shape) {
-					mu_qsort(shape->edges, shape->edge_count, sizeof(muttR_Edge), mutt_compare_edges);
-				}
 
 			/* Processing shapes into edges */
 
@@ -5508,17 +5509,17 @@ mutt is developed primarily off of these sources of documentation:
 						edge->x1 = x0;
 						edge->y1 = y0;
 					}
+					edge->vec = y1-y0;
 				}
 
 				// Must be at least 2 and below 0xFFFFFFFF
-				#define MUTT_BEZIER_EDGE_COUNT 50
-				#define MUTT_BEZIER_EDGE_COUNTN1 (MUTT_BEZIER_EDGE_COUNT+1)
-				static const float MUTT_BEZIER_INVERSE_BEC = 1.f / (float)MUTT_BEZIER_EDGE_COUNTN1;
+				#define MUTT_BEZIER_EDGE_COUNT 25
+				static const float MUTT_BEZIER_INVERSE_BEC = 1.f / (float)MUTT_BEZIER_EDGE_COUNT;
 
 				static inline void mutt_bezier_into_edges(muttR_Edge* edges, float x0, float y0, float x1, float y1, float x2, float y2) {
 					for (uint32_m ti = 0; ti < MUTT_BEZIER_EDGE_COUNT; ti++) {
 						// Calculate Bezier for the first point
-						float t = (float)ti / (float)MUTT_BEZIER_EDGE_COUNTN1;
+						float t = (float)ti / (float)MUTT_BEZIER_EDGE_COUNT;
 						float bx0, by0;
 						mutt_get_bezier_point(x0, y0, x1, y1, x2, y2, t, &bx0, &by0);
 						// Second point
@@ -5658,20 +5659,127 @@ mutt is developed primarily off of these sources of documentation:
 
 			/* Rendering format-by-format */
 
-				void mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
-					memset(pixels, 0, width*height);
+				// Intersection
+				struct muttR_Intersection {
+					// The x-value of the intersection
+					float x;
+					// The edge which it intersected with
+					uint32_m e;
+				};
+				typedef struct muttR_Intersection muttR_Intersection;
 
+				// Sorts intersections in order of increasing x-value
+				int mutt_compare_intersections(const void* p, const void* q) {
+					muttR_Intersection i0 = *(muttR_Intersection*)p, i1 = *(muttR_Intersection*)q;
+					if (i0.x < i1.x) {
+						return -1;
+					} else if (i0.x > i1.x) {
+						return 1;
+					}
+					return 0;
+				}
+
+				muttResult mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+					// Just fill black if no edges are specified
+					if (shape->edge_count == 0) {
+						mu_memset(pixels, 0, width*height);
+						return MUTT_SUCCESS;
+					}
+
+					/*mu_memset(pixels, 0, width*height);
 					for (uint32_m e = 0; e < shape->edge_count; e++) {
 						int ipx = (int)shape->edges[e].x0;
 						int ipy = (int)shape->edges[e].y0;
 						ipy = height - ipy;
 						pixels[(ipy*width)+ipx] = 255;
-
 						ipx = (int)shape->edges[e].x1;
 						ipy = (int)shape->edges[e].y1;
 						ipy = height - ipy;
 						pixels[(ipy*width)+ipx] = 255;
 					}
+					return MUTT_SUCCESS;*/
+
+					// Allocate intersection array
+					muttR_Intersection* intersections = (muttR_Intersection*)mu_malloc(shape->edge_count*sizeof(muttR_Intersection));
+					if (!intersections) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Loop through each horizontal strip
+					uint32_m hpix_offset = 0;
+					for (uint32_m lh = 0; lh < height; ++lh) {
+						// Calculate appropriate height value (inverse cuz buttom left I THINK)
+						uint32_m h = height - lh;
+
+						// Just fill all x-values with zero if the height is now outside of the glyph range
+						/*if (h >= pglyph->min_height) {
+							for (uint32_m w = 0; w < width; ++w) {
+								pixels[hpix_offset+w] = 0;
+							}
+							hpix_offset += width;
+							continue;
+						}*/
+
+						// Calculate y-value of ray
+						float ray_y = (float)(h);
+
+						// Initialize intersection list length
+						uint32_m is_count = 0;
+
+						// Loop through each edge
+						for (uint32_m e = 0; e < shape->edge_count; ++e) {
+							// Get intersection and add if valid
+							float ray_x = mutt_y_ray_edge_intersection_x(ray_y, shape->edges[e]);
+							if (ray_x >= 0.f) {
+								intersections[is_count  ].x = ray_x;
+								intersections[is_count++].e = e;
+							}
+						}
+
+						// Sort intersections
+						mu_qsort(intersections, is_count, sizeof(muttR_Intersection), mutt_compare_intersections);
+
+						// Loop through each x-value
+						uint8_m fill_color = 0;
+						uint32_m is = 0; // (Upcoming intersection)
+						for (uint32_m w = 0; w < width; ++w) {
+							// Just fill all x-values with zero if width is now outside of glyph range
+							/*if (w >= pglyph->min_width) {
+								while (w < width) {
+									pixels[hpix_offset+w++] = 0;
+								}
+								break;
+							}*/
+
+							// Calculate x-coordinate
+							float ray_x = (float)(w);
+
+							// Flip the fill color for each intersection we've passed
+							while (is < is_count && ray_x >= intersections[is].x) {
+								// If we're encountering a double-intersection:
+								if (is > 0 && fabs(intersections[is].x-intersections[is-1].x) <= .0001f) {
+									// Only count the intersection if the two edges differ in y-vector sign
+									// (AKA, we're grazing by)
+									if ((shape->edges[intersections[is].e].vec * shape->edges[intersections[is-1].e].vec) < 0.f) {
+										fill_color = ~fill_color;
+									}
+								}
+								// If it isn't a double-intersection, we can just flip
+								else {
+									fill_color = ~fill_color;
+								}
+								++is;
+							}
+
+							// Fill pixel with fill color
+							pixels[hpix_offset+w] = fill_color;
+						}
+
+						hpix_offset += width;
+					}
+
+					mu_free(intersections);
+					return MUTT_SUCCESS;
 				}
 
 		/* High-level rendering functions */
@@ -5688,7 +5796,7 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					mutt_simple_glyph_to_edges(font, header, glyph, shape.edges, point_size, ppi);
-					mutt_sort_shape_edges(&shape);
+					//mutt_sort_shape_edges(&shape);
 				}
 
 				else {
@@ -5696,16 +5804,18 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Render based on format
+				muttResult res;
+
 				switch (format) {
 					default: return MUTT_UNKNOWN_RENDER_FORMAT; break;
-					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
 				}
 
 				// Free memory and return
 				if (shape.edges) {
 					mu_free(shape.edges);
 				}
-				return MUTT_SUCCESS;
+				return res;
 			}
 
 			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem) {
