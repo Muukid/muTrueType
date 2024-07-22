@@ -5,12 +5,13 @@
 DEMO NAME:          render.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-12
-LAST UPDATED:       2024-07-21
+LAST UPDATED:       2024-07-22
 
 ============================================================
                         DEMO PURPOSE
 
-This demo tests the rendering capability of mutt.
+This demo tests the rendering capability of mutt by
+rendering a handful of glyphs from a given font.
 
 Note that the file 'font.ttf' should exist within the
 directory, and the file 'stb_image_write.h' should exist
@@ -48,6 +49,16 @@ More explicit license information at the end of file.
 	// For allocation:
 	#include <stdlib.h>
 
+/* Macros */
+	
+	// Define this if you want to clamp each glyph image to
+	// the exact constraints for that glyph, meaning that
+	// each glyph image is stored with no pixels to spare.
+	// This is defined to allow testing for if the high-
+	// level function "mutt_render_glyph_id" works.
+	// Undefine it if you want the opposite effect.
+	#define CLAMP_GLYPHS
+
 /* Global variables */
 	
 	// Font information holder:
@@ -56,25 +67,14 @@ More explicit license information at the end of file.
 	// Result value:
 	muttResult result = MUTT_SUCCESS;
 
-	// Test characters:
-	uint32_m test_chars[] = {
-		'A','B','C','D','E','F','G','H','I','J','K','L','M',
-		'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
-		'a','b','c','d','e','f','g','h','i','j','k','l','m',
-		'n','o','p','q','r','s','t','u','v','w','x','y','z',
-	};
-
-	// Test character length
-	#define TEST_CHAR_LEN (sizeof(test_chars)/sizeof(uint32_m))
-
-	// To-be-filled glyph IDs for test characters
-	uint16_m glyph_ids[TEST_CHAR_LEN] = {0};
+	// Amount of glyphs to render
+	uint16_m glyph_count = 50;
 
 	// Point size to be rendered at
-	float point_size = 500.f;
+	float point_size = 200.f;
 
 	// Pixels per inch
-	float ppi = 72.f;
+	float ppi = 96.f;
 
 	// Rendering format
 	muttRenderFormat format = MUTT_BW_FULL_PIXEL_BI_LEVEL_R;
@@ -84,6 +84,8 @@ int main(void) {
 /* Load font */
 
 {
+	// Load file
+
 	FILE* fptr = fopen("font.ttf", "rb");
 
 	if (!fptr) {
@@ -132,91 +134,177 @@ int main(void) {
 		printf("not all requested tables loaded successfully\n");
 		return -1;
 	}
+
+	// Cap glyph_count at the number of glyphs provided by the font
+	if (glyph_count > font.maxp->num_glyphs) {
+		glyph_count = font.maxp->num_glyphs;
+	}
 }
 
-/* Grab characters */
+/* Allocate pixel and glyph memory for non-clamp rendering */
 
-printf("chars {");
+#ifndef CLAMP_GLYPHS
 
-for (uint16_m i = 0; i < TEST_CHAR_LEN; i++)
-{	
-	// Print new lines and tabs occasionally
-	if (i%3 == 0) {
-		printf("\n\t");
+	// Get maximum dimensions needed for any glyph as our width and height
+	uint32_m width, height;
+	mutt_maximum_glyph_render_dimensions(&font, point_size, ppi, &width, &height);
+	printf("Image dimensions: %" PRIu32 "x%" PRIu32 "\n", width, height);
+
+	// Allocate pixels based on dimensions
+	uint8_m* pixels = (uint8_m*)malloc(width*height);
+	if (!pixels) {
+		printf("Unable to allocate pixels\n");
+		goto fail_pixels;
 	}
 
-	// Get glyph ID for the character
-	glyph_ids[i] = mutt_codepoint_to_glyph_id(&font, test_chars[i]);
+	// Allocate memory for the glyph stuff
+	uint32_m glyph_mem_len;
+	muByte* glyph_mem;
 
-	// Print result
-	printf("[0x%04x] - %05" PRIu16 ", ", test_chars[i], glyph_ids[i]);
-}
+	// - Simple/Composite memory:
+	{
+		glyph_mem_len = mutt_simple_glyph_get_max_size(&font);
+		uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
+		if (composite_max > glyph_mem_len) {
+			glyph_mem_len = composite_max;
+		}
+	}
 
-printf("\n}\n");
+	// - Allocate
+	glyph_mem = (muByte*)malloc(glyph_mem_len);
+	if (!glyph_mem) {
+			printf("Unable to allocate glyph memory\n");
+			goto fail_glyph_mem;
+	}
 
-/* Define pixels */
-
-// Get maximum dimensions needed for any glyph as our width and height
-uint32_m width, height;
-mutt_maximum_glyph_render_dimensions(&font, point_size, ppi, &width, &height);
-printf("Image dimensions: %" PRIu32 "x%" PRIu32 "\n", width, height);
-
-// Allocate pixels based on dimensions
-uint8_m* pixels = (uint8_m*)malloc(width*height);
-if (!pixels) {
-	printf("Unable to allocate pixels\n");
-	goto fail_pixels;
-}
+#endif
 
 /* Render each glyph and output it */
 
-// Allocate memory for the glyph stuff
-uint32_m glyph_mem_len;
-muByte* glyph_mem;
-
-// - Simple/Composite memory:
-{
-	glyph_mem_len = mutt_simple_glyph_get_max_size(&font);
-	uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
-	if (composite_max > glyph_mem_len) {
-		glyph_mem_len = composite_max;
-	}
-}
-
-// - Allocate
-glyph_mem = (muByte*)malloc(glyph_mem_len);
-if (!glyph_mem) {
-		printf("Unable to allocate glyph memory\n");
-		goto fail_glyph_mem;
-}
-
 // Loop through each glyph
-for (uint32_m i = 0; i < TEST_CHAR_LEN; i++) {
-	// Render glyph to pixels
-	result = mutt_render_glyph_id(&font, glyph_ids[i], point_size, ppi, format, pixels, width, height, glyph_mem);
-	if (result != MUTT_SUCCESS) {
-			printf("[Warning] Character #%" PRIu32 " failed to render: %s\n", i, mutt_result_get_name(result));
+for (uint32_m i = 0; i < glyph_count; i++) {
+	// Calculate corresponding glyph ID
+	uint16_m glyph_id = (uint16_m)((float)i / ((float)glyph_count / (float)font.maxp->num_glyphs));
+
+	// Non-clamped glyph rendering handling:
+	#ifndef CLAMP_GLYPHS
+
+		// Render glyph to pixels
+		result = mutt_render_glyph_id(&font, glyph_id, point_size, ppi, format, pixels, width, height, glyph_mem);
+		if (result != MUTT_SUCCESS) {
+				printf("[Warning] Glyph #%" PRIu16 " failed to render: %s\n", glyph_id, mutt_result_get_name(result));
+				continue;
+		}
+
+	// Clamped glyph rendering handling:
+	#else
+
+		// Get glyph header
+		muttGlyphHeader header;
+		result = mutt_glyph_get_header(&font, glyph_id, &header);
+		if (result != MUTT_SUCCESS) {
+			printf("[Warning] Failed to retrieve header for glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+			continue;
+		}
+
+		// Allocate pixel memory for glyph
+		uint32_m width, height;
+		mutt_glyph_render_dimensions(&font, &header, point_size, ppi, &width, &height);
+		uint8_m* pixels = (uint8_m*)malloc(width*height);
+		if (!pixels) {
+			printf("[Warning] Failed to allocate pixel data for glyph #%" PRIu16 " (%" PRIu32 "x%" PRIu32 ")\n", glyph_id, width, height);
+			continue;
+		}
+
+		// Allocate and retrieve glyph memory
+
+		muttSimpleGlyph sglyph;
+		//muttCompositeGlyph cglyph;
+		muByte* data;
+
+		// - Simple
+		if (header.number_of_contours > -1) {
+			// Retrieve amount of memory needed
+			uint32_m written;
+			result = mutt_simple_glyph_get_data(&font, &header, &sglyph, 0, &written);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to retrieve the memory requirements for glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				continue;
+			}
+
+			// Allocate memory
+			data = (muByte*)malloc(written);
+			if (!data) {
+				printf("[Warning] Failed to allocate glyph memory for glyph #%" PRIu16 " (%" PRIu32 " bytes)\n", glyph_id, written);
+				mu_free(pixels);
+				continue;
+			}
+
+			// Get data
+			result = mutt_simple_glyph_get_data(&font, &header, &sglyph, data, &written);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to retrieve the data for glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				mu_free(data);
+				continue;
+			}
+		}
+
+		// Render glyph and output result
+
+		// - Simple
+		if (header.number_of_contours > -1) {
+			// Render glyph
+			result = mutt_render_simple_glyph(&font, &header, &sglyph, point_size, ppi, format, pixels, width, height);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				mu_free(data);
+				continue;
+			}
+		}
+
+		// - Composite
+		else {
+			printf("[Warning] Glyph #%" PRIu16 " was a composite glyph, which is not supported for rendering yet\n", glyph_id);
+			continue;
+		}
+
+	#endif
+
+	// Output result as PNG
+	// - Generate filename based on glyph ID
+	char name[24] = {0};
+	sprintf(name, "%" PRIu16 ".png", glyph_id);
+	// - Output file using stb_image_write
+	if (stbi_write_png(name, width, height, 1, pixels, width) == 0) {
+		printf("[Warning] Failed to write \"%" PRIu16 ".png\"\n", glyph_id);
 	} else {
-		// Output as image
-		// - Generate filename based on index
-		char name[24] = {0};
-		sprintf(name, "%" PRIu32 ".png", i);
-		printf("Written \"%" PRIu32 ".png\"\n", i);
-		// - Output file using stb_image_write
-		stbi_write_png(name, width, height, 1, pixels, width);
+		printf("Written \"%" PRIu16 ".png\"\n", glyph_id);
 	}
+
+	// Free data on clamped glyph rendering
+	#ifdef CLAMP_GLYPHS
+		mu_free(pixels);
+		mu_free(data);
+	#endif
 }
 
 /* Deload */
 
 {
-	// Free glyph memory
-	free(glyph_mem);
-	fail_glyph_mem:
+	// Global memory that non-glyph clamping uses
 
-	// Free pixels
-	free(pixels);
-	fail_pixels:
+	#ifndef CLAMP_GLYPHS
+		// Free glyph memory
+		free(glyph_mem);
+		fail_glyph_mem:
+
+		// Free pixels
+		free(pixels);
+		fail_pixels:
+	#endif
 
 	// Deload font
 	mutt_deload(&font);

@@ -1266,7 +1266,7 @@ The maximums returned by these functions are not the maximum size that a glyph W
 
 Note that these functions require the maxp table to be successfully loaded.
 
-### Get glyph description
+### Get glyph header
 
 The function `mutt_glyph_get_header` retrieves the glyph header of a glyph, defined below: 
 
@@ -1702,10 +1702,12 @@ mutt has several C standard library dependencies not provided by its other libra
 
 * `mu_memcpy` - equivalent to `memcpy`.
 
+* `mu_memset` - equivalent to `memset`.
+
 ## `math.h` dependencies
 
 * `mu_pow` - equivalent to `pow`.
 
 * `mu_sqrt` - equivalent to `sqrt`.
 
-* `mu_fabs` - equivalent to `fabs`.
+* `mu_fabsf` - equivalent to `fabsf`.
