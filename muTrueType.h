@@ -2170,9 +2170,9 @@ mutt is developed primarily off of these sources of documentation:
 				#define mu_sqrt sqrt
 			#endif
 
-			// @DOCLINE * `mu_fabs` - equivalent to `fabs`.
-			#ifndef mu_fabs
-				#define mu_fabs fabs
+			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
+			#ifndef mu_fabsf
+				#define mu_fabsf fabsf
 			#endif
 
 		#endif
@@ -5319,6 +5319,15 @@ mutt is developed primarily off of these sources of documentation:
 
 	/* Rendering */
 
+		/* Macros */
+
+			// Float epsilon macro used for countering floating point imprecision in line-segment calculations
+			#define MUTTR_LS_FEPS 0.0001f
+
+			// Double epsilon macro used for same purpose; not used as of right now
+			// This value should be tested and vetted more thoroughly if it's going to be used
+			#define MUTTR_LS_DEPS 0.00000001
+
 		/* Structs */
 
 				// An 'edge' (aka line segment)
@@ -5389,7 +5398,7 @@ mutt is developed primarily off of these sources of documentation:
 			// (Returns negative if no intersection is found; this function only works for positive x-values) 
 			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
 				// Check if they intersect at all (there is probably a better way to do this)
-				if (!((ry >= y0 && ry <= y1) || (ry >= y1 && ry <= y0))) {
+				if (!((ry >= (y0-MUTTR_LS_FEPS) && ry <= (y1+MUTTR_LS_FEPS)) || (ry >= (y1-MUTTR_LS_FEPS) && ry <= (y0+MUTTR_LS_FEPS))) || (y1-y0 == 0.f)) {
 					// Return -1 for no intersection
 					return -1.f;
 				}
@@ -5665,6 +5674,7 @@ mutt is developed primarily off of these sources of documentation:
 					float x;
 					// The edge which it intersected with
 					uint32_m e;
+					muBool counted;
 				};
 				typedef struct muttR_Intersection muttR_Intersection;
 
@@ -5732,6 +5742,7 @@ mutt is developed primarily off of these sources of documentation:
 							float ray_x = mutt_y_ray_edge_intersection_x(ray_y, shape->edges[e]);
 							if (ray_x >= 0.f) {
 								intersections[is_count  ].x = ray_x;
+								intersections[is_count  ].counted = MU_TRUE;
 								intersections[is_count++].e = e;
 							}
 						}
@@ -5756,24 +5767,37 @@ mutt is developed primarily off of these sources of documentation:
 
 							// Flip the fill color for each intersection we've passed
 							while (is < is_count && ray_x >= intersections[is].x) {
-								// If we're encountering a double-intersection:
-								if (is > 0 && fabs(intersections[is].x-intersections[is-1].x) <= .0001f) {
-									// Only count the intersection if the two edges differ in y-vector sign
-									// (AKA, we're grazing by)
-									if ((shape->edges[intersections[is].e].vec * shape->edges[intersections[is-1].e].vec) < 0.f) {
+								muttR_Edge edge = shape->edges[intersections[is].e];
+								// If our ray is directly intersecting one of the points in a non-horizontal edge:
+								if ((mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS || mu_fabsf(ray_y-edge.y1) <= MUTTR_LS_FEPS)) {
+									// Only double-count it if we're directly intersecting the lower point
+									if (mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS) {
 										fill_color = ~fill_color;
+										intersections[is].counted = MU_FALSE;
 									}
 								}
-								// If it isn't a double-intersection, we can just flip
-								else {
-									fill_color = ~fill_color;
-								}
+								// If it isn't a point-intersection, we can just flip
+								fill_color = ~fill_color;
 								++is;
 							}
 
 							// Fill pixel with fill color
 							pixels[hpix_offset+w] = fill_color;
 						}
+
+						/*if (fill_color) {
+							printf("== bad ==\n");
+							for (uint32_m i = 0; i < is_count; ++i) {
+								if (intersections[i].counted) {
+									printf("y: ");
+								} else {
+									printf("n: ");
+								}
+								printf("x=%f, ", intersections[i].x);
+								muttR_Edge edge = shape->edges[intersections[i].e];
+								printf("[(%f, %f), (%f, %f)]\n", edge.x0, edge.y0, edge.x1, edge.y1);
+							}
+						}*/
 
 						hpix_offset += width;
 					}
