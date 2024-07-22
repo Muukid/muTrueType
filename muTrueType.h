@@ -5322,7 +5322,8 @@ mutt is developed primarily off of these sources of documentation:
 		/* Macros */
 
 			// Float epsilon macro used for countering floating point imprecision in line-segment calculations
-			#define MUTTR_LS_FEPS 0.0001f
+			// This value is unabashedly stolen from stb_truetype, but it works real well
+			#define MUTTR_LS_FEPS (1.f/1024.f)
 
 			// Double epsilon macro used for same purpose; not used as of right now
 			// This value should be tested and vetted more thoroughly if it's going to be used
@@ -5357,6 +5358,8 @@ mutt is developed primarily off of these sources of documentation:
 					// Note: implies a maximum of 4294967295 edges, hopefully enough!
 					uint32_m edge_count;
 					muttR_Edge* edges;
+					uint32_m max_x;
+					uint32_m max_y;
 				};
 				typedef struct muttR_Shape muttR_Shape;
 
@@ -5722,16 +5725,14 @@ mutt is developed primarily off of these sources of documentation:
 						uint32_m h = height - lh;
 
 						// Just fill all x-values with zero if the height is now outside of the glyph range
-						/*if (h >= pglyph->min_height) {
-							for (uint32_m w = 0; w < width; ++w) {
-								pixels[hpix_offset+w] = 0;
-							}
+						if (h > 0 && h-1 > shape->max_y) {
+							mu_memset(&pixels[hpix_offset], 0, width);
 							hpix_offset += width;
 							continue;
-						}*/
+						}
 
-						// Calculate y-value of ray
-						float ray_y = (float)(h);
+						// Calculate y-value of ray (middle of pixel)
+						float ray_y = (float)(h) - .5f;
 
 						// Initialize intersection list length
 						uint32_m is_count = 0;
@@ -5751,53 +5752,61 @@ mutt is developed primarily off of these sources of documentation:
 						mu_qsort(intersections, is_count, sizeof(muttR_Intersection), mutt_compare_intersections);
 
 						// Loop through each x-value
-						uint8_m fill_color = 0;
 						uint32_m is = 0; // (Upcoming intersection)
 						for (uint32_m w = 0; w < width; ++w) {
 							// Just fill all x-values with zero if width is now outside of glyph range
-							/*if (w >= pglyph->min_width) {
-								while (w < width) {
-									pixels[hpix_offset+w++] = 0;
-								}
+							if (w > shape->max_x) {
+								mu_memset(&pixels[hpix_offset+w], 0, width-w);
 								break;
-							}*/
+							}
 
-							// Calculate x-coordinate
-							float ray_x = (float)(w);
+							// Calculate x-coordinate (middle of pixel)
+							float ray_x = (float)(w) + .5f;
 
-							// Flip the fill color for each intersection we've passed
-							while (is < is_count && ray_x >= intersections[is].x) {
-								muttR_Edge edge = shape->edges[intersections[is].e];
-								// If our ray is directly intersecting one of the points in a non-horizontal edge:
+							// Skip over every intersection we've passed
+							// "ray_x > ..." ensures rule 2 of scan converting:
+							// "If a contour falls exactly on a pixel’s center, that pixel is turned on."
+							while (is < is_count && ray_x > intersections[is].x) {
+								++is;
+							}
+
+							uint8_m fill_color = 0;
+
+							// Determine fill color by winding number
+							int32_m winding = 0;
+							// - Loop through every upcoming intersection
+							//   @TODO We can probably find a way to determine winding order without
+							//   having to loop like this each time...
+							for (uint32_m isw = is; isw < is_count; ++isw) {
+								// - Calculate whether or not the winding should add or remove
+								int8_m this_winding;
+								muttR_Edge edge = shape->edges[intersections[isw].e];
+								if (edge.vec < 0.f) {
+									this_winding = 1;
+								} else if (edge.vec > 0.f) {
+									this_winding = -1;
+								}
+
+								// - Don't consider winding if we're directly intersecting the high vertex point of the
+								//   edge (this prevents bad double counting).
 								if ((mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS || mu_fabsf(ray_y-edge.y1) <= MUTTR_LS_FEPS)) {
-									// Only double-count it if we're directly intersecting the lower point
 									if (mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS) {
-										fill_color = ~fill_color;
-										intersections[is].counted = MU_FALSE;
+										this_winding = 0;
 									}
 								}
-								// If it isn't a point-intersection, we can just flip
-								fill_color = ~fill_color;
-								++is;
+
+								// - Add this winding to the total winding number
+								winding += this_winding;
+							}
+
+							// If the winding number wasn't 0, we're in the glyph
+							if (winding != 0) {
+								fill_color = 255;
 							}
 
 							// Fill pixel with fill color
 							pixels[hpix_offset+w] = fill_color;
 						}
-
-						/*if (fill_color) {
-							printf("== bad ==\n");
-							for (uint32_m i = 0; i < is_count; ++i) {
-								if (intersections[i].counted) {
-									printf("y: ");
-								} else {
-									printf("n: ");
-								}
-								printf("x=%f, ", intersections[i].x);
-								muttR_Edge edge = shape->edges[intersections[i].e];
-								printf("[(%f, %f), (%f, %f)]\n", edge.x0, edge.y0, edge.x1, edge.y1);
-							}
-						}*/
 
 						hpix_offset += width;
 					}
@@ -5811,6 +5820,7 @@ mutt is developed primarily off of these sources of documentation:
 			MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
 				// Convert glyph to edges
 				muttR_Shape shape;
+				mutt_glyph_render_dimensions(font, header, point_size, ppi, &shape.max_x, &shape.max_y);
 				shape.edge_count = mutt_simple_glyph_to_edges(font, header, glyph, 0, point_size, ppi);
 
 				if (shape.edge_count > 0) {
