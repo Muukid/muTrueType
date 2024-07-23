@@ -1680,7 +1680,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Note that these functions require the maxp table to be successfully loaded.
 
-			// @DOCLINE ### Get glyph description
+			// @DOCLINE ### Get glyph header
 
 			typedef struct muttGlyphHeader muttGlyphHeader;
 
@@ -5397,15 +5397,21 @@ mutt is developed primarily off of these sources of documentation:
 
 		/* Math functions */
 
-			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
-			// (Returns negative if no intersection is found; this function only works for positive x-values) 
-			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
-				// Check if they intersect at all (there is probably a better way to do this)
-				if (!((ry >= (y0-MUTTR_LS_FEPS) && ry <= (y1+MUTTR_LS_FEPS)) || (ry >= (y1-MUTTR_LS_FEPS) && ry <= (y0+MUTTR_LS_FEPS))) || (y1-y0 == 0.f)) {
-					// Return -1 for no intersection
-					return -1.f;
-				}
+			// Returns if a ray intersects with a given line segment
+			static inline muBool mutt_y_ray_line_segment_intersection_b(float ry, float y0, float y1) {
+				return (
+					(ry >= (y0-MUTTR_LS_FEPS) && ry <= (y1+MUTTR_LS_FEPS)) || 
+					(ry >= (y1-MUTTR_LS_FEPS) && ry <= (y0+MUTTR_LS_FEPS))
+				) || (y1-y0 == 0.f)
+				;
+			}
 
+			#define MUTTR_LS_CHECKY1(ry, edge) (ry <= (edge.y1+MUTTR_LS_FEPS))
+			#define MUTTR_LS_CHECKY0(ry, edge) (ry <= (edge.y0-MUTTR_LS_FEPS))
+
+			// Calculates the x-value intersection of a horizontal ray [ry] and a line segment [x0, y0, x1, y1]
+			// Note: does NOT check if an intersection exists at all; check with mutt_y_ray_line_segment_intersection_b
+			static inline float mutt_y_ray_line_segment_intersection_x(float ry, float x0, float y0, float x1, float y1) {
 				// Calculate x-value based on y-value for line segment
 				// (https://math.stackexchange.com/a/2297532)
 				return x0 + (
@@ -5415,86 +5421,15 @@ mutt is developed primarily off of these sources of documentation:
 				);
 			}
 
-			// Does mutt_y_ray_line_segment_intersection_x for an edge
-			static inline float mutt_y_ray_edge_intersection_x(float ray_y, muttR_Edge edge) {
-				return mutt_y_ray_line_segment_intersection_x(ray_y, edge.x0, edge.y0, edge.x1, edge.y1);
+			// Returns if a ray intersects with a given edge
+			static inline muBool mutt_y_ray_edge_intersection_b(float ray_y, muttR_Edge edge) {
+				return mutt_y_ray_line_segment_intersection_b(ray_y, edge.y0, edge.y1);
 			}
 
-			// Calculates the x-value intersection(s) of a horizontal ray [ry] and
-			// a quadratic  Bezier curve  [x0, y0, x1, y1, x2, y2],  returning the
-			// result by dereferencing the two possible x intersections [rx0, rx1]
-			// (Sets negative  for no intersection;  this only works for positive)
-			static inline void mutt_y_ray_quad_bezier_intersection_x(float ry,
-				float x0, float y0, float x1, float y1, float x2, float y2,
-				float* rx0, float* rx1
-			) {
-				// Calculate t-values for first and second intersection
-
-				// - Equation for solving for the t-value looks like:
-				//
-				//       d +- sqrt(ry*a + g)
-				//   t = ------------------
-				//             a
-				//
-				//   where d = y0-y1
-				//         g = y1*y1 - y0*y2
-				//     and a = y0 - 2*y1 + y2
-				//
-				//   If (ry*a + g) is negative or !{ 0 <= t <= 1 },
-				//   no intersections are found.
-
-				// - Calculate variables
-				float d = y0-y1;
-				float g = (y1*y1) - (y0*y2);
-				float a = y0 - (2.f*y1) + y2;
-				// - Return a line segment approximation if divisor is too small.
-				//   This is a hack around floating point imprecision.
-				if (a == 0.f) {
-					*rx0 = mutt_y_ray_line_segment_intersection_x(ry, x0, y0, x1, y1);
-					*rx1 = mutt_y_ray_line_segment_intersection_x(ry, x1, y1, x2, y2);
-					return;
-				}
-
-				// - Calcuate sqrt part (s)
-				float s = (ry*a) + g;
-				// -- Exclude negative square roots
-				if (s < 0.f) {
-					*rx0 = -1.f;
-					*rx1 = -1.f;
-					return;
-				}
-				s = mu_sqrt(s);
-
-				// - Calculate t-values
-				float rt0 = (d + s) / a;
-				float rt1 = (d - s) / a;
-
-				// Calculate x-value intersections based on t-values
-
-				// - Equation for x-value given t looks like:
-				//
-				//   (v*v)*x0 + 2*v*t*x1 + (t*t)*x2
-				//
-				//   where v = 1-t
-
-				// - Do calculations for first intersection if t-value for it is valid
-				if (rt0 >= 0.f && rt0 <= 1.f) {
-					// Calculate variable
-					float v = 1.f-rt0;
-					// Solve equation for x-value
-					*rx0 = ((v*v)*x0) + (2.f*v*rt0*x1) + ((rt0*rt0)*x2);
-				} else {
-					// (Set invalid value if t-value is invalid, AKA no intersection)
-					*rx0 = -1.f;
-				}
-
-				// - Same for second intersection
-				if (rt1 >= 0.f && rt1 <= 1.f) {
-					float v = 1.f-rt1;
-					*rx1 = ((v*v)*x0) + (2.f*v*rt1*x1) + ((rt1*rt1)*x2);
-				} else {
-					*rx1 = -1.f;
-				}
+			// Does mutt_y_ray_line_segment_intersection_x for an edge
+			// Note: does NOT check if an intersection exists at all; check with mutt_y_ray_edge_intersection_b
+			static inline float mutt_y_ray_edge_intersection_x(float ray_y, muttR_Edge edge) {
+				return mutt_y_ray_line_segment_intersection_x(ray_y, edge.x0, edge.y0, edge.x1, edge.y1);
 			}
 
 			// Calculates the x- and y- value of a point on a Bezier curve given t.
@@ -5669,7 +5604,7 @@ mutt is developed primarily off of these sources of documentation:
 					return *((size_m*)&edges) / sizeof(muttR_Edge);
 				}
 
-			/* Rendering format-by-format */
+			/* Intersections */
 
 				// Intersection
 				struct muttR_Intersection {
@@ -5677,7 +5612,6 @@ mutt is developed primarily off of these sources of documentation:
 					float x;
 					// The edge which it intersected with
 					uint32_m e;
-					muBool counted;
 				};
 				typedef struct muttR_Intersection muttR_Intersection;
 
@@ -5692,6 +5626,28 @@ mutt is developed primarily off of these sources of documentation:
 					return 0;
 				}
 
+			/* Winding */
+
+				// Calculates the winding of a given edge
+				static inline int8_m mutt_edge_winding(float ray_y, muttR_Edge edge) {
+					// Don't consider winding if we're directly intersecting the high vertex point of the edge
+					// (This prevents bad double counting)
+					if (mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS) {
+						return 0;
+					}
+
+					// Return winding based on vector; down is +1, up is -1, neither is 0
+					if (edge.vec < 0.f) {
+						return 1;
+					} else if (edge.vec > 0.f) {
+						return -1;
+					}
+					return 0;
+				}
+
+			/* Format-by-format functions */
+
+				// MUTT_BW_FULL_PIXEL_BI_LEVEL_R 
 				muttResult mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
 					// Just fill black if no edges are specified
 					if (shape->edge_count == 0) {
@@ -5699,24 +5655,15 @@ mutt is developed primarily off of these sources of documentation:
 						return MUTT_SUCCESS;
 					}
 
-					/*mu_memset(pixels, 0, width*height);
-					for (uint32_m e = 0; e < shape->edge_count; e++) {
-						int ipx = (int)shape->edges[e].x0;
-						int ipy = (int)shape->edges[e].y0;
-						ipy = height - ipy;
-						pixels[(ipy*width)+ipx] = 255;
-						ipx = (int)shape->edges[e].x1;
-						ipy = (int)shape->edges[e].y1;
-						ipy = height - ipy;
-						pixels[(ipy*width)+ipx] = 255;
-					}
-					return MUTT_SUCCESS;*/
-
 					// Allocate intersection array
 					muttR_Intersection* intersections = (muttR_Intersection*)mu_malloc(shape->edge_count*sizeof(muttR_Intersection));
 					if (!intersections) {
 						return MUTT_FAILED_MALLOC;
 					}
+
+					// Active edge list
+					uint32_m first_aedge = 0;
+					uint32_m aedge_len = 0;
 
 					// Loop through each horizontal strip
 					uint32_m hpix_offset = 0;
@@ -5734,22 +5681,51 @@ mutt is developed primarily off of these sources of documentation:
 						// Calculate y-value of ray (middle of pixel)
 						float ray_y = (float)(h) - .5f;
 
+						// Increase the active edge length to include possible new in-range edges
+						while (first_aedge+aedge_len < shape->edge_count) {
+							if (MUTTR_LS_CHECKY1(ray_y, shape->edges[first_aedge+aedge_len])) {
+								++aedge_len;
+							} else {
+								break;
+							}
+						}
+
+						// Move up the first active edge until we're in range of the next nearest edge
+						while (aedge_len != 0) {
+							if (MUTTR_LS_CHECKY0(ray_y, shape->edges[first_aedge])) {
+								++first_aedge;
+								--aedge_len;
+							} else {
+								break;
+							}
+						}
+
 						// Initialize intersection list length
 						uint32_m is_count = 0;
 
-						// Loop through each edge
-						for (uint32_m e = 0; e < shape->edge_count; ++e) {
-							// Get intersection and add if valid
-							float ray_x = mutt_y_ray_edge_intersection_x(ray_y, shape->edges[e]);
-							if (ray_x >= 0.f) {
-								intersections[is_count  ].x = ray_x;
-								intersections[is_count  ].counted = MU_TRUE;
-								intersections[is_count++].e = e;
+						// Loop through each active edge
+						uint32_m last_aedge = first_aedge+aedge_len;
+						for (uint32_m e = first_aedge; e < last_aedge; ++e) {
+							// Get intersection and add if exists
+							if (mutt_y_ray_edge_intersection_b(ray_y, shape->edges[e])) {
+								float ray_x = mutt_y_ray_edge_intersection_x(ray_y, shape->edges[e]);
+								// For some reason, this check still needs to be performed.
+								// No idea why.
+								if (ray_x >= 0.f) {
+									intersections[is_count  ].x = ray_x;
+									intersections[is_count++].e = e;
+								}
 							}
 						}
 
 						// Sort intersections
 						mu_qsort(intersections, is_count, sizeof(muttR_Intersection), mutt_compare_intersections);
+
+						// Calculate total winding order
+						int32_m winding = 0;
+						for (uint32_m isw = 0; isw < is_count; ++isw) {
+							winding += mutt_edge_winding(ray_y, shape->edges[intersections[isw].e]);
+						}
 
 						// Loop through each x-value
 						uint32_m is = 0; // (Upcoming intersection)
@@ -5763,49 +5739,23 @@ mutt is developed primarily off of these sources of documentation:
 							// Calculate x-coordinate (middle of pixel)
 							float ray_x = (float)(w) + .5f;
 
-							// Skip over every intersection we've passed
+							// Skip over every intersection we've passed, while removing their windings to
+							// get how many windings we're currently at.
 							// "ray_x > ..." ensures rule 2 of scan converting:
 							// "If a contour falls exactly on a pixel’s center, that pixel is turned on."
 							while (is < is_count && ray_x > intersections[is].x) {
+								winding -= mutt_edge_winding(ray_y, shape->edges[intersections[is].e]);
 								++is;
-							}
-
-							uint8_m fill_color = 0;
-
-							// Determine fill color by winding number
-							int32_m winding = 0;
-							// - Loop through every upcoming intersection
-							//   @TODO We can probably find a way to determine winding order without
-							//   having to loop like this each time...
-							for (uint32_m isw = is; isw < is_count; ++isw) {
-								// - Calculate whether or not the winding should add or remove
-								int8_m this_winding;
-								muttR_Edge edge = shape->edges[intersections[isw].e];
-								if (edge.vec < 0.f) {
-									this_winding = 1;
-								} else if (edge.vec > 0.f) {
-									this_winding = -1;
-								}
-
-								// - Don't consider winding if we're directly intersecting the high vertex point of the
-								//   edge (this prevents bad double counting).
-								if ((mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS || mu_fabsf(ray_y-edge.y1) <= MUTTR_LS_FEPS)) {
-									if (mu_fabsf(ray_y-edge.y0) <= MUTTR_LS_FEPS) {
-										this_winding = 0;
-									}
-								}
-
-								// - Add this winding to the total winding number
-								winding += this_winding;
 							}
 
 							// If the winding number wasn't 0, we're in the glyph
 							if (winding != 0) {
-								fill_color = 255;
+								pixels[hpix_offset+w] = 255;
 							}
-
-							// Fill pixel with fill color
-							pixels[hpix_offset+w] = fill_color;
+							// If it was 0, we're outside of the glyph
+							else {
+								pixels[hpix_offset+w] = 0;
+							}
 						}
 
 						hpix_offset += width;
@@ -5830,7 +5780,13 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					mutt_simple_glyph_to_edges(font, header, glyph, shape.edges, point_size, ppi);
-					//mutt_sort_shape_edges(&shape);
+					mutt_sort_shape_edges(&shape);
+					for (uint16_m e = 0; e < shape.edge_count; ++e) {
+						if (e > 0 && shape.edges[e].y1 > shape.edges[e-1].y1) {
+							mu_free(shape.edges);
+							return MUTT_FAILED_REALLOC;
+						}
+					}
 				}
 
 				else {
