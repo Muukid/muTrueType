@@ -157,18 +157,6 @@ int main(void) {
 		goto fail_pixels;
 	}
 
-	// Allocate memory for the glyph stuff
-	uint32_m glyph_mem_len;
-
-	// - Simple/Composite memory:
-	{
-		glyph_mem_len = mutt_simple_glyph_get_max_size(&font);
-		uint32_m composite_max = mutt_composite_glyph_get_max_size(&font);
-		if (composite_max > glyph_mem_len) {
-			glyph_mem_len = composite_max;
-		}
-	}
-
 #endif
 
 /* Render each glyph and output it */
@@ -211,7 +199,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 		// Allocate and retrieve glyph memory
 
 		muttSimpleGlyph sglyph;
-		//muttCompositeGlyph cglyph;
+		muttCompositeGlyph cglyph;
 		muByte* data;
 
 		// - Simple
@@ -243,6 +231,35 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 			}
 		}
 
+		// - Composite
+		else {
+			// Retrieve amount of memory needed
+			uint32_m written;
+			result = mutt_composite_glyph_get_data(&font, &header, &cglyph, 0, &written);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to retrieve the memory requirements for glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				continue;
+			}
+
+			// Allocate memory
+			data = (muByte*)malloc(written);
+			if (!data) {
+				printf("[Warning] Failed to allocate glyph memory for glyph #%" PRIu16 " (%" PRIu32 " bytes)\n", glyph_id, written);
+				mu_free(pixels);
+				continue;
+			}
+
+			// Get data
+			result = mutt_composite_glyph_get_data(&font, &header, &cglyph, data, 0);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to retrieve the data for glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				mu_free(data);
+				continue;
+			}
+		}
+
 		// Render glyph and output result
 
 		// - Simple
@@ -259,8 +276,14 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 
 		// - Composite
 		else {
-			printf("[Warning] Glyph #%" PRIu16 " was a composite glyph, which is not supported for rendering yet\n", glyph_id);
-			continue;
+			// Render glyph
+			result = mutt_render_composite_glyph(&font, &header, &cglyph, point_size, ppi, format, pixels, width, height);
+			if (result != MUTT_SUCCESS) {
+				printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				mu_free(pixels);
+				mu_free(data);
+				continue;
+			}
 		}
 
 	#endif

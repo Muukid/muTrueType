@@ -224,6 +224,14 @@ mutt uses the `muttResult` enumerator to represent how a function went. It has t
 
 * `MUTT_CMAP_REQUIRES_MAXP` - the cmap table failed to load because maxp is rather not being loaded or failed to load, and cmap relies on maxp.
 
+* `MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER` - the value "argument1" in a component within a composite glyph that specifies a point number in the parent glyph was invalid/out of range.
+
+* `MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER` - the value "argument2" in a component within a composite glyph that specifies a point number in the child glyph was invalid/out of range.
+
+* `MUTT_INVALID_COMPONENT_POINT_COUNT` - the amount of points in a component within a composite glyph exceeded the maximum.
+
+* `MUTT_INVALID_COMPONENT_CONTOUR_COUNT` - the amount of contours in a component within a composite glyph exceeded the maximum.
+
 Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
 
 ## Result name function
@@ -1706,6 +1714,6 @@ mutt has several C standard library dependencies not provided by its other libra
 
 * `mu_pow` - equivalent to `pow`.
 
-* `mu_sqrt` - equivalent to `sqrt`.
-
 * `mu_fabsf` - equivalent to `fabsf`.
+
+* `mu_roundf` - equivalent to `roundf`.

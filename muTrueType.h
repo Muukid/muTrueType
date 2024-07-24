@@ -6,6 +6,7 @@ No warranty implied; use at your own risk.
 Licensed under MIT License or public domain, whichever you prefer.
 More explicit license information at the end of file.
 
+@TODO Instruction handling.
 @TODO Add more individual error results (for example, if a single entry in cmap fails due to some unsupported encoding or something, don't shut off the WHOLE cmap table, just shut off that one entry. It's annoying, but needs to be done)
 @TODO Save memory by not including certain redundant numbers (like versions, or numbers regarding offsets)
 @TODO Add more format options, like BGR/BGRA, higher/lower bit-depth, etc.
@@ -14,7 +15,9 @@ More explicit license information at the end of file.
 @TODO Possible fluctuating edge precision.
 @TODO Manual width/height offsets in rendering for rendering to a part of pixel data.
 @TODO Verify non-infinite composite glyph nesting (or verify values in maxp); pretty sure it can be done without manual allocation.
-@TODO More verification in the composite glyph handling in general (both loading and rendering).
+@TODO More verification in the composite glyph handling in general (both loading and rendering). It is trivially easy to trigger a crash from the perspective of the font creator as of right now (although still impossible FROM WHAT I KNOW to create an attack vector). This MIGHT be easier than I fear it is, but I don't know.
+@TODO Implement gvar ASAP (glyph rendering isn't fully correct until this is implemented from what I'm aware).
+@TODO Implement phantom point support (might be part of gvar, not aware as of right now).
 
 @DOCBEGIN
 
@@ -609,6 +612,14 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_GLYF_REQUIRES_HEAD,
 			// @DOCLINE * `@NLFT` - the cmap table failed to load because maxp is rather not being loaded or failed to load, and cmap relies on maxp.
 			MUTT_CMAP_REQUIRES_MAXP,
+			// @DOCLINE * `@NLFT` - the value "argument1" in a component within a composite glyph that specifies a point number in the parent glyph was invalid/out of range.
+			MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER,
+			// @DOCLINE * `@NLFT` - the value "argument2" in a component within a composite glyph that specifies a point number in the child glyph was invalid/out of range.
+			MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER,
+			// @DOCLINE * `@NLFT` - the amount of points in a component within a composite glyph exceeded the maximum.
+			MUTT_INVALID_COMPONENT_POINT_COUNT,
+			// @DOCLINE * `@NLFT` - the amount of contours in a component within a composite glyph exceeded the maximum.
+			MUTT_INVALID_COMPONENT_CONTOUR_COUNT,
 		)
 
 		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
@@ -2154,8 +2165,8 @@ mutt is developed primarily off of these sources of documentation:
 		#endif
 
 		#if !defined(mu_pow) || \
-			!defined(mu_sqrt) || \
-			!defined(mu_fabs)
+			!defined(mu_fabsf) || \
+			!defined(mu_roundf)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2165,14 +2176,14 @@ mutt is developed primarily off of these sources of documentation:
 				#define mu_pow pow
 			#endif
 
-			// @DOCLINE * `mu_sqrt` - equivalent to `sqrt`.
-			#ifndef mu_sqrt
-				#define mu_sqrt sqrt
-			#endif
-
 			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
 			#ifndef mu_fabsf
 				#define mu_fabsf fabsf
+			#endif
+
+			// @DOCLINE * `mu_roundf` - equivalent to `roundf`.
+			#ifndef mu_roundf
+				#define mu_roundf roundf
 			#endif
 
 		#endif
@@ -2276,6 +2287,10 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_GLYF_REQUIRES_MAXP: return "MUTT_GLYF_REQUIRES_MAXP"; break;
 			case MUTT_GLYF_REQUIRES_HEAD: return "MUTT_GLYF_REQUIRES_HEAD"; break;
 			case MUTT_CMAP_REQUIRES_MAXP: return "MUTT_CMAP_REQUIRES_MAXP"; break;
+			case MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER: return "MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER"; break;
+			case MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER: return "MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER"; break;
+			case MUTT_INVALID_COMPONENT_POINT_COUNT: return "MUTT_INVALID_COMPONENT_POINT_COUNT"; break;
+			case MUTT_INVALID_COMPONENT_CONTOUR_COUNT: return "MUTT_INVALID_COMPONENT_CONTOUR_COUNT"; break;
 		}
 	}
 
@@ -4168,6 +4183,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Loop through each record
 				uint16_m flags = MUTT_MORE_COMPONENTS;
 				uint32_m written_amt = 0;
+				muBool instructions = MU_FALSE;
 
 				while (flags & MUTT_MORE_COMPONENTS) {
 					written_amt += sizeof(muttComponentGlyph);
@@ -4178,6 +4194,9 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					flags = mu_rbe_uint16(gdata);
+					if (flags & MUTT_WE_HAVE_INSTRUCTIONS) {
+						instructions = MU_TRUE;
+					}
 
 					// Skip past flags and glyphIndex
 					gdata += 4;
@@ -4211,6 +4230,18 @@ mutt is developed primarily off of these sources of documentation:
 						req_length += 8;
 						written_amt += sizeof(float)*4;
 					}
+				}
+
+				// Instruction handling
+				if (instructions) {
+					// Verify length for instruction length
+					req_length += 2;
+					if (header->length < req_length) {
+						return MUTT_INVALID_GLYF_DESCRIPTION_LENGTH;
+					}
+
+					// Add instruction length to written amount
+					written_amt += mu_rbe_uint16(gdata);
 				}
 
 				if (written_amt > mutt_composite_glyph_get_max_size(font)) {
@@ -5335,6 +5366,8 @@ mutt is developed primarily off of these sources of documentation:
 				struct muttR_Pixel {
 					float x;
 					float y;
+					// true = on curve, false = off curve
+					muBool on;
 				};
 				typedef struct muttR_Pixel muttR_Pixel;
 
@@ -5424,7 +5457,7 @@ mutt is developed primarily off of these sources of documentation:
 				static inline muttResult mutt_edgevec_bez(muttR_EdgeVec* vec, uint32_m bez_count) {
 					vec->len += bez_count;
 
-					if (vec->allocated < vec->len) {
+					while (vec->allocated < vec->len) {
 						uint32_m alloc_x2 = vec->allocated*2;
 						// (to prevent overflow)
 						if (alloc_x2 < vec->allocated) {
@@ -5519,7 +5552,247 @@ mutt is developed primarily off of these sources of documentation:
 
 			/* Pixel glyph conversions */
 
-				// ...
+				// @TODO Make pixel glyph allocation for composite glyphs not rely on maximums; highly inefficient,
+				// should implement a vector-based approach at some point that also can verify maxp values (like, 
+				// if another glyph is being requested whose point count exceeds the maximum, throw error)
+
+				muttResult mutt_simple_glyph_component_to_pixel_glyph(muttFont* font, muttR_PixelGlyph* pglyph, muttGlyphHeader* header, float point_size, float ppi) {
+					// Do nothing if no contours are specified
+					if (header->number_of_contours == 0) {
+						return MUTT_SUCCESS;
+					}
+
+					// Allocate data
+					muByte* mem = (muByte*)mu_malloc(mutt_simple_glyph_get_max_size(font));
+					if (!mem) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Load glyph
+					muttSimpleGlyph glyph;
+					muttResult res = mutt_simple_glyph_get_data(font, header, &glyph, mem, 0);
+					if (res != MUTT_SUCCESS) {
+						mu_free(mem);
+						return res;
+					}
+
+					// Verify contour count
+					uint16_m new_contour_count = (uint16_m)(pglyph->contour_count+header->number_of_contours);
+					if (pglyph->contour_count > new_contour_count || new_contour_count > font->maxp->max_composite_contours) {
+						return MUTT_INVALID_COMPONENT_CONTOUR_COUNT;
+					}
+
+					// Verify point count
+					uint16_m pcount = glyph.end_pts_of_contours[header->number_of_contours-1]+1;
+					uint16_m new_point_count = (uint16_m)(pglyph->point_count+pcount);
+					if (pglyph->point_count > new_point_count || new_point_count > font->maxp->max_composite_points) {
+						return MUTT_INVALID_COMPONENT_POINT_COUNT;
+					}
+
+					// Copy over points (converting from FUnits to pixel-units as we go)
+					for (uint16_m p = 0; p < pcount; ++p) {
+						muttR_Pixel* ppoint = &pglyph->points[pglyph->point_count+p];
+						muttSimpleGlyphPoint* gpoint = &glyph.points[p];
+
+						// X and Y
+						ppoint->x = mutt_funits_to_punits(font, gpoint->x, point_size, ppi);
+						ppoint->y = mutt_funits_to_punits(font, gpoint->y, point_size, ppi);
+
+						// On/Off
+						if (gpoint->flags & MUTT_ON_CURVE_POINT) {
+							ppoint->on = MU_TRUE;
+						} else {
+							ppoint->on = MU_FALSE;
+						}
+					}
+
+					// Copy over end points of contours
+					uint16_m prev_ep;
+					if (pglyph->contour_count > 0) {
+						prev_ep = pglyph->contours[pglyph->contour_count-1]+1;
+					} else {
+						prev_ep = 0;
+					}
+					for (uint16_m c = 0; c < header->number_of_contours; ++c) {
+						pglyph->contours[pglyph->contour_count+c] = prev_ep+glyph.end_pts_of_contours[c];
+					}
+
+					pglyph->point_count = new_point_count;
+					pglyph->contour_count = new_contour_count;
+					mu_free(mem);
+					return MUTT_SUCCESS;
+				}
+
+				// Note: pglyph->points and pglyph->contours need to be freed after this if
+				// it returns MUTT_SUCCESS and either aren't 0.
+				muttResult mutt_composite_glyph_to_pixel_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttR_PixelGlyph* pglyph, float point_size, float ppi) {
+					// Not 100% sure what to do in these cases, so we just won't fill anything
+					mu_memset(pglyph, 0, sizeof(muttR_PixelGlyph));
+					if (font->maxp->max_composite_points == 0 || font->maxp->max_composite_contours == 0 || 
+						glyph->component_count == 0
+					) {
+						return MUTT_SUCCESS;
+					}
+
+					// Allocate points
+					pglyph->points = (muttR_Pixel*)mu_malloc(font->maxp->max_composite_points*sizeof(muttR_Pixel));
+					if (!pglyph->points) {
+						return MUTT_FAILED_MALLOC;
+					}
+					// Allocate contours
+					pglyph->contours = (uint16_m*)mu_malloc(font->maxp->max_composite_contours*sizeof(uint16_m));
+					if (!pglyph->contours) {
+						mu_free(pglyph->points);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Font-unit min/max
+					float x_min = mutt_funits_to_punits(font, header->x_min, point_size, ppi);
+					float y_min = mutt_funits_to_punits(font, header->y_min, point_size, ppi);
+
+					muttResult res;
+
+					// Loop through each component
+					for (uint16_m c = 0; c < glyph->component_count; ++c) {
+						muttComponentGlyph comp = glyph->components[c];
+
+						// Get scale matrix values
+						float xscale, scale01, scale10, yscale;
+						// - Full scale
+						if (comp.flags & MUTT_WE_HAVE_A_SCALE) {
+							xscale = yscale = comp.scales[0];
+							scale01 = scale10 = 0.f;
+						}
+						// - X/Y scale
+						else if (comp.flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+							xscale = comp.scales[0];
+							yscale = comp.scales[1];
+							scale01 = scale10 = 0.f;
+						}
+						// - 2x2 affine transformation
+						else if (comp.flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+							xscale = comp.scales[0];
+							scale01 = comp.scales[1];
+							scale10 = comp.scales[2];
+							yscale = comp.scales[3];
+						}
+						// - No scale
+						else {
+							xscale = yscale = 1.f;
+							scale01 = scale10 = 0.f;
+						}
+
+						// Offsets
+						float x_offset, y_offset;
+						// - X/Y offsets
+						if (comp.flags & MUTT_ARGS_ARE_XY_VALUES) {
+							x_offset = (float)comp.argument1;
+							y_offset = (float)comp.argument2;
+
+							// Scale if needed (assuming no scale if unspecified)
+							if (comp.flags & MUTT_SCALED_COMPONENT_OFFSET) {
+								float tx = (xscale *x_offset) + (scale10*y_offset);
+								float ty = (scale01*x_offset) + (yscale *y_offset);
+								x_offset = tx;
+								y_offset = ty;
+							}
+
+							// Round if needed
+							if (comp.flags & MUTT_ROUND_XY_TO_GRID) {
+								// I THINK this is what this means
+								x_offset = mu_roundf(x_offset);
+								y_offset = mu_roundf(y_offset);
+							}
+						}
+						// - Point numbers
+						else {
+							// Parent number
+							if (comp.argument1 < 0 || comp.argument1 >= pglyph->point_count) {
+								mu_free(pglyph->points);
+								mu_free(pglyph->contours);
+								return MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER;
+							}
+							x_offset = pglyph->points[comp.argument1].x;
+							y_offset = pglyph->points[comp.argument1].y;
+
+							// Child number
+							// ...
+						}
+
+						// Load glyph
+						// - Header
+						muttGlyphHeader rel_header;
+						res = mutt_glyph_get_header(font, comp.glyph_index, &rel_header);
+						if (res != MUTT_SUCCESS) {
+							mu_free(pglyph->points);
+							mu_free(pglyph->contours);
+							return res;
+						}
+
+						uint16_m prev_point_count = pglyph->point_count;
+
+						// - Simple
+						if (rel_header.number_of_contours > -1) {
+							res = mutt_simple_glyph_component_to_pixel_glyph(font, pglyph, &rel_header, point_size, ppi);
+							if (res != MUTT_SUCCESS) {
+								mu_free(pglyph->points);
+								mu_free(pglyph->contours);
+								return res;
+							}
+						}
+						// - Composite
+						else {
+							// @TODO Nested composite glyphs
+							mu_free(pglyph->points);
+							mu_free(pglyph->contours);
+							return MUTT_INVALID_NAME_LANGUAGE_ID;
+						}
+
+						// Simply continue if no points were added
+						if (prev_point_count == pglyph->point_count) {
+							continue;
+						}
+						// The amount of points added:
+						uint16_m this_point_count = pglyph->point_count-prev_point_count;
+
+						// "If a scale or transform matrix is provided, the transformation is applied to the child’s point before the points are aligned."
+
+						// Apply scaling
+						if (xscale != 1.f || yscale != 1.f || scale01 != 0.f || scale10 != 0.f) {
+							for (uint16_m p = prev_point_count; p < pglyph->point_count; ++p) {
+								float tx = (xscale *pglyph->points[p].x) + (scale10*pglyph->points[p].y);
+								float ty = (scale01*pglyph->points[p].x) + (yscale *pglyph->points[p].y);
+								pglyph->points[p].x = tx;
+								pglyph->points[p].y = ty;
+							}
+						}
+
+						// Handle offset
+						// - Possible needed point number handling
+						if (!(comp.flags & MUTT_ARGS_ARE_XY_VALUES)) {
+							// Child number
+							if (comp.argument2 < 0 || comp.argument2 >= this_point_count) {
+								mu_free(pglyph->points);
+								mu_free(pglyph->contours);
+								return MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER;
+							}
+							// I THINK this is correct...
+							x_offset = -(pglyph->points[prev_point_count+comp.argument2].x-x_offset);
+							y_offset = -(pglyph->points[prev_point_count+comp.argument2].y-y_offset);
+						}
+						// - Convert to punits
+						x_offset = mutt_funits_to_punits(font, x_offset, point_size, ppi);
+						y_offset = mutt_funits_to_punits(font, y_offset, point_size, ppi);
+
+						// - Apply offsets
+						for (uint16_m p = prev_point_count; p < pglyph->point_count; ++p) {
+							pglyph->points[p].x = ((pglyph->points[p].x+x_offset)-x_min) + 3.f;
+							pglyph->points[p].y = ((pglyph->points[p].y+y_offset)-y_min) + 3.f;
+						}
+					}
+
+					return MUTT_SUCCESS;
+				}
 
 			/* Processing shapes into edges */
 
@@ -5567,6 +5840,11 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @TODO Too lazy right now, comment this later!
 				muttResult mutt_simple_glyph_to_edges(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttR_EdgeVec* edges, float point_size, float ppi) {
+					// Do nothing if no data is defined
+					if (header->number_of_contours == 0) {
+						return MUTT_SUCCESS;
+					}
+
 					muttResult res;
 					// General info needed (can this theoretically be a u32?)
 					uint16_m num_points = glyph->end_pts_of_contours[header->number_of_contours-1]+1;
@@ -5672,6 +5950,103 @@ mutt is developed primarily off of these sources of documentation:
 						}
 
 						res = mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+						if (res != MUTT_SUCCESS) {
+							return res;
+						}
+
+						ip += 1;
+						//continue;
+					}
+
+					return MUTT_SUCCESS;
+				}
+
+				// Note: largely similar to mutt_simple_glyph_to_edges
+				muttResult mutt_pixel_glyph_to_edges(muttR_PixelGlyph* glyph, muttR_EdgeVec* edges) {
+					// Do nothing if no data is defined
+					if (glyph->contour_count == 0) {
+						return MUTT_SUCCESS;
+					}
+
+					muttResult res;
+
+					uint16_m contour_id = 0;
+					for (uint16_m ip = 0; ip < glyph->point_count;) {
+						if (ip > glyph->contours[contour_id]) {
+							contour_id += 1;
+						}
+
+						muttR_Pixel p = glyph->points[ip];
+
+						if (p.on) {
+							uint16_m p1_id = ip+1;
+							if (p1_id > glyph->contours[contour_id]) {
+								p1_id -= glyph->contours[contour_id]+1;
+								if (contour_id > 0) {
+									p1_id += glyph->contours[contour_id-1]+1;
+								}
+							}
+							muttR_Pixel p1 = glyph->points[p1_id];
+
+							if (p1.on) {
+								mutt_line_segment_into_edge(&edges->el[edges->count++], p.x, p.y, p1.x, p1.y);
+								ip += 1;
+								continue;
+							}
+
+							uint16_m p2_id = ip+2;
+							if (p2_id > glyph->contours[contour_id]) {
+								p2_id -= glyph->contours[contour_id]+1;
+								if (contour_id > 0) {
+									p2_id += glyph->contours[contour_id-1]+1;
+								}
+							}
+							muttR_Pixel p2 = glyph->points[p2_id];
+
+							if (p2.on) {
+								res = mutt_bezier_into_edges(edges, p.x, p.y, p1.x, p1.y, p2.x, p2.y);
+								if (res != MUTT_SUCCESS) {
+									return res;
+								}
+								ip += 2;
+								continue;
+							}
+
+							p2.x = (p1.x+p2.x) / 2.f;
+							p2.y = (p1.y+p2.y) / 2.f;
+
+							res = mutt_bezier_into_edges(edges, p.x, p.y, p1.x, p1.y, p2.x, p2.y);
+							if (res != MUTT_SUCCESS) {
+								return res;
+							}
+
+							ip += 2;
+							continue;
+						}
+
+						uint16_m pn1_id = ip-1;
+						muttR_Pixel pn1 = glyph->points[pn1_id];
+
+						uint16_m p1_id = ip+1;
+						if (p1_id > glyph->contours[contour_id]) {
+							p1_id -= glyph->contours[contour_id]+1;
+							if (contour_id > 0) {
+								p1_id += glyph->contours[contour_id-1]+1;
+							}
+						}
+						muttR_Pixel p1 = glyph->points[p1_id];
+
+						pn1.x = (pn1.x+p.x) / 2.f;
+						pn1.y = (pn1.y+p.y) / 2.f;
+
+						// If the next point is OFF the curve (OFF-OFF[0]-OFF)
+						if (!p1.on) {
+							// The second point needs to be midpointed
+							p1.x = (p.x+p1.x) / 2.f;
+							p1.y = (p.y+p1.y) / 2.f;
+						}
+
+						res = mutt_bezier_into_edges(edges, pn1.x, pn1.y, p.x, p.y, p1.x, p1.y);
 						if (res != MUTT_SUCCESS) {
 							return res;
 						}
@@ -5861,13 +6236,74 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Convert glyph to edges
-				muttR_Shape shape;
-				mutt_glyph_render_dimensions(font, header, point_size, ppi, &shape.max_x, &shape.max_y);
 				res = mutt_simple_glyph_to_edges(font, header, glyph, &edges, point_size, ppi);
 				if (res != MUTT_SUCCESS) {
 					mutt_edgevec_dest(&edges);
 					return res;
 				}
+
+				// Convert to shape and render based on format
+
+				muttR_Shape shape;
+				mutt_glyph_render_dimensions(font, header, point_size, ppi, &shape.max_x, &shape.max_y);
+				shape.edges = edges.el;
+				shape.edge_count = edges.count;
+				mutt_sort_shape_edges(&shape);
+
+				switch (format) {
+					default: mutt_edgevec_dest(&edges); return MUTT_UNKNOWN_RENDER_FORMAT; break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
+				}
+
+				// Free memory and return
+				mutt_edgevec_dest(&edges);
+				return res;
+			}
+
+			MUDEF muttResult mutt_render_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
+				muttResult res;
+
+				// Create pixel glyph
+				muttR_PixelGlyph pglyph;
+				res = mutt_composite_glyph_to_pixel_glyph(font, header, glyph, &pglyph, point_size, ppi);
+				if (res != MUTT_SUCCESS) {
+					return res;
+				}
+
+				// Initialize edge vector
+				muttR_EdgeVec edges;
+				if (pglyph.point_count != 0) {
+					res = mutt_edgevec_init(&edges, pglyph.point_count);
+					if (res != MUTT_SUCCESS) {
+						if (pglyph.points) {
+							mu_free(pglyph.points);
+						}
+						if (pglyph.contours) {
+							mu_free(pglyph.contours);
+						}
+						return res;
+					}
+				} else {
+					mu_memset(&edges, 0, sizeof(edges));
+				}
+
+				// Convert pixel glyph to edges
+				res = mutt_pixel_glyph_to_edges(&pglyph, &edges);
+				if (pglyph.points) {
+					mu_free(pglyph.points);
+				}
+				if (pglyph.contours) {
+					mu_free(pglyph.contours);
+				}
+
+				if (res != MUTT_SUCCESS) {
+					mutt_edgevec_dest(&edges);
+					return res;
+				}
+
+				// Convert to shape and render based on format
+				muttR_Shape shape;
+				mutt_glyph_render_dimensions(font, header, point_size, ppi, &shape.max_x, &shape.max_y);
 				shape.edges = edges.el;
 				shape.edge_count = edges.count;
 				mutt_sort_shape_edges(&shape);
@@ -5878,9 +6314,9 @@ mutt is developed primarily off of these sources of documentation:
 					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
 				}
 
-				// Free memory and return
+				// Free contents and return success
 				mutt_edgevec_dest(&edges);
-				return res;
+				return MUTT_SUCCESS;
 			}
 
 			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
@@ -5911,6 +6347,7 @@ mutt is developed primarily off of these sources of documentation:
 					// Load
 					res = mutt_simple_glyph_get_data(font, &header, &glyph, mem, 0);
 					if (res != MUTT_SUCCESS) {
+						mu_free(mem);
 						return res;
 					}
 
@@ -5920,8 +6357,30 @@ mutt is developed primarily off of these sources of documentation:
 					return res;
 				}
 				else {
-					// @TODO Composite glyph handling
-					return MUTT_INVALID_CMAP_FORMAT_LENGTH;
+					// Allocate
+					muttCompositeGlyph glyph;
+					uint32_m written = 0;
+					res = mutt_composite_glyph_get_data(font, &header, &glyph, 0, &written);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+
+					muByte* mem = (muByte*)mu_malloc(written);
+					if (!mem) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Load
+					res = mutt_composite_glyph_get_data(font, &header, &glyph, mem, 0);
+					if (res != MUTT_SUCCESS) {
+						mu_free(mem);
+						return res;
+					}
+
+					// Render
+					res = mutt_render_composite_glyph(font, &header, &glyph, point_size, ppi, format, pixels, width, height);
+					mu_free(mem);
+					return res;
 				}
 			}
 
