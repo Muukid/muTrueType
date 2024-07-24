@@ -5,7 +5,7 @@
 DEMO NAME:          render.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-12
-LAST UPDATED:       2024-07-22
+LAST UPDATED:       2024-07-24
 
 ============================================================
                         DEMO PURPOSE
@@ -71,7 +71,7 @@ More explicit license information at the end of file.
 	uint16_m glyph_count = 50;
 
 	// Point size to be rendered at
-	float point_size = 200.f;
+	float point_size = 500.f;
 
 	// Pixels per inch
 	float ppi = 96.f;
@@ -141,7 +141,7 @@ int main(void) {
 	}
 }
 
-/* Allocate pixel and glyph memory for non-clamp rendering */
+/* Allocate pixel memory for non-clamp rendering */
 
 #ifndef CLAMP_GLYPHS
 
@@ -159,7 +159,6 @@ int main(void) {
 
 	// Allocate memory for the glyph stuff
 	uint32_m glyph_mem_len;
-	muByte* glyph_mem;
 
 	// - Simple/Composite memory:
 	{
@@ -168,13 +167,6 @@ int main(void) {
 		if (composite_max > glyph_mem_len) {
 			glyph_mem_len = composite_max;
 		}
-	}
-
-	// - Allocate
-	glyph_mem = (muByte*)malloc(glyph_mem_len);
-	if (!glyph_mem) {
-			printf("Unable to allocate glyph memory\n");
-			goto fail_glyph_mem;
 	}
 
 #endif
@@ -190,7 +182,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 	#ifndef CLAMP_GLYPHS
 
 		// Render glyph to pixels
-		result = mutt_render_glyph_id(&font, glyph_id, point_size, ppi, format, pixels, width, height, glyph_mem);
+		result = mutt_render_glyph_id(&font, glyph_id, point_size, ppi, format, pixels, width, height);
 		if (result != MUTT_SUCCESS) {
 				printf("[Warning] Glyph #%" PRIu16 " failed to render: %s\n", glyph_id, mutt_result_get_name(result));
 				continue;
@@ -297,10 +289,6 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 	// Global memory that non-glyph clamping uses
 
 	#ifndef CLAMP_GLYPHS
-		// Free glyph memory
-		free(glyph_mem);
-		fail_glyph_mem:
-
 		// Free pixels
 		free(pixels);
 		fail_pixels:

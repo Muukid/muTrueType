@@ -11,8 +11,10 @@ More explicit license information at the end of file.
 @TODO Add more format options, like BGR/BGRA, higher/lower bit-depth, etc.
 @TODO Verify 2 points or more per contour.
 @TODO Verify all contours start on an on-curve point.
-@TODO Simplify rendering code (largely by snipping redundant repeated code).
 @TODO Possible fluctuating edge precision.
+@TODO Manual width/height offsets in rendering for rendering to a part of pixel data.
+@TODO Verify non-infinite composite glyph nesting (or verify values in maxp); pretty sure it can be done without manual allocation.
+@TODO More verification in the composite glyph handling in general (both loading and rendering).
 
 @DOCBEGIN
 
@@ -2073,9 +2075,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ### Render glyph ID
 
 				// @DOCLINE The function `mutt_render_glyph_id` renders a glyph ID, defined below: @NLNT
-				MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem);
-
-				// @DOCLINE `mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` or `mutt_composite_glyph_get_max_size`, whichever is greater) of the respective glyph ID to be stored.
+				MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
 
 		// @DOCLINE ## Glyph rendering dimensions
 
@@ -5331,6 +5331,24 @@ mutt is developed primarily off of these sources of documentation:
 
 		/* Structs */
 
+				// Pixel point
+				struct muttR_Pixel {
+					float x;
+					float y;
+				};
+				typedef struct muttR_Pixel muttR_Pixel;
+
+				// Pixel glyph
+				struct muttR_PixelGlyph {
+					// Points
+					uint16_m point_count;
+					muttR_Pixel* points;
+					// End points of contours
+					uint16_m contour_count;
+					uint16_m* contours;
+				};
+				typedef struct muttR_PixelGlyph muttR_PixelGlyph;
+
 				// An 'edge' (aka line segment)
 				struct muttR_Edge {
 					// 0 is bottom, 1 is top
@@ -5365,6 +5383,63 @@ mutt is developed primarily off of these sources of documentation:
 
 				void mutt_sort_shape_edges(muttR_Shape* shape) {
 					mu_qsort(shape->edges, shape->edge_count, sizeof(muttR_Edge), mutt_compare_edges);
+				}
+
+			/* Vectors */
+
+				// Edge struct handling
+
+				struct muttR_EdgeVec {
+					muttR_Edge* el;
+					uint32_m len;
+					uint32_m allocated; // (in element count!)
+					uint32_m count; // (Used to keep track of edges as processing happens)
+				};
+				typedef struct muttR_EdgeVec muttR_EdgeVec;
+
+				// Should be initialized to the amount of points in the glyph plus one; this acts as a
+				// minimum and allows normal edges to be added without concern of overflow
+				static inline muttResult mutt_edgevec_init(muttR_EdgeVec* vec, uint32_m edge_count) {
+					vec->el = (muttR_Edge*)mu_malloc(edge_count*sizeof(muttR_Edge));
+					if (!vec->el) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					vec->len = edge_count;
+					vec->allocated = edge_count;
+					vec->count = 0;
+					return MUTT_SUCCESS;
+				}
+
+				static inline void mutt_edgevec_dest(muttR_EdgeVec* vec) {
+					if (vec->el) {
+						mu_free(vec->el);
+					}
+				}
+
+				// Called whenever a Bezier curve is added, which inflates the size
+				// bez_count = the amount of edges a Bezier is worth
+				// I think this overinflates the edge vector, but I'm not certain.
+				// Note: does not increment edge count
+				static inline muttResult mutt_edgevec_bez(muttR_EdgeVec* vec, uint32_m bez_count) {
+					vec->len += bez_count;
+
+					if (vec->allocated < vec->len) {
+						uint32_m alloc_x2 = vec->allocated*2;
+						// (to prevent overflow)
+						if (alloc_x2 < vec->allocated) {
+							return MUTT_FAILED_REALLOC;
+						}
+
+						vec->allocated = alloc_x2;
+						muttR_Edge* new_el = (muttR_Edge*)mu_realloc(vec->el, vec->allocated*sizeof(muttR_Edge));
+						if (!new_el) {
+							return MUTT_FAILED_REALLOC;
+						}
+						vec->el = new_el;
+					}
+
+					return MUTT_SUCCESS;
 				}
 
 		/* Dimensions */
@@ -5442,6 +5517,10 @@ mutt is developed primarily off of these sources of documentation:
 
 		/* Format rendering */
 
+			/* Pixel glyph conversions */
+
+				// ...
+
 			/* Processing shapes into edges */
 
 				static inline void mutt_line_segment_into_edge(muttR_Edge* edge, float x0, float y0, float x1, float y1) {
@@ -5463,7 +5542,13 @@ mutt is developed primarily off of these sources of documentation:
 				#define MUTT_BEZIER_EDGE_COUNT 25
 				static const float MUTT_BEZIER_INVERSE_BEC = 1.f / (float)MUTT_BEZIER_EDGE_COUNT;
 
-				static inline void mutt_bezier_into_edges(muttR_Edge* edges, float x0, float y0, float x1, float y1, float x2, float y2) {
+				static inline muttResult mutt_bezier_into_edges(muttR_EdgeVec* edges, float x0, float y0, float x1, float y1, float x2, float y2) {
+					// Ensure allocation for Bezier
+					muttResult res = mutt_edgevec_bez(edges, MUTT_BEZIER_EDGE_COUNT);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+
 					for (uint32_m ti = 0; ti < MUTT_BEZIER_EDGE_COUNT; ti++) {
 						// Calculate Bezier for the first point
 						float t = (float)ti / (float)MUTT_BEZIER_EDGE_COUNT;
@@ -5474,17 +5559,17 @@ mutt is developed primarily off of these sources of documentation:
 						mutt_get_bezier_point(x0, y0, x1, y1, x2, y2, t+MUTT_BEZIER_INVERSE_BEC, &bx1, &by1);
 
 						// Make edge based on this and go to next edge
-						mutt_line_segment_into_edge(edges, bx0, by0, bx1, by1);
-						++edges;
+						mutt_line_segment_into_edge(&edges->el[edges->count++], bx0, by0, bx1, by1);
 					}
+
+					return MUTT_SUCCESS;
 				}
 
-				// Returns edge count if edges is 0
 				// @TODO Too lazy right now, comment this later!
-				uint32_m mutt_simple_glyph_to_edges(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttR_Edge* edges, float point_size, float ppi) {
+				muttResult mutt_simple_glyph_to_edges(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttR_EdgeVec* edges, float point_size, float ppi) {
+					muttResult res;
 					// General info needed (can this theoretically be a u32?)
 					uint16_m num_points = glyph->end_pts_of_contours[header->number_of_contours-1]+1;
-					muttR_Edge* orig_edges = edges;
 
 					uint16_m contour_id = 0;
 					for (uint16_m ip = 0; ip < num_points;) {
@@ -5505,15 +5590,12 @@ mutt is developed primarily off of these sources of documentation:
 							muttSimpleGlyphPoint p1 = glyph->points[p1_id];
 
 							if (p1.flags & MUTT_ON_CURVE_POINT) {
-								if (orig_edges) {
-									mutt_line_segment_into_edge(edges,
-										mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f
-									);
-								}
-								++edges;
+								mutt_line_segment_into_edge(&edges->el[edges->count++],
+									mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f
+								);
 								ip += 1;
 								continue;
 							}
@@ -5528,80 +5610,77 @@ mutt is developed primarily off of these sources of documentation:
 							muttSimpleGlyphPoint p2 = glyph->points[p2_id];
 
 							if (p2.flags & MUTT_ON_CURVE_POINT) {
-								if (orig_edges) {
-									mutt_bezier_into_edges(edges,
-										mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
-										mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f
-									);
+								res = mutt_bezier_into_edges(edges,
+									mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
+									mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f
+								);
+								if (res != MUTT_SUCCESS) {
+									return res;
 								}
-								edges += MUTT_BEZIER_EDGE_COUNT;
 								ip += 2;
 								continue;
 							}
 
-							if (orig_edges) {
-								float px0 = mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
-								      py0 = mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
-								      px1 = mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
-								      py1 = mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
-								      px2 = mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
-								      py2 = mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f;
-								px2 = (px1+px2) / 2.f;
-								py2 = (py1+py2) / 2.f;
+							float px0 = mutt_funits_to_punits(font, (float)(p .x-header->x_min), point_size, ppi)+3.f,
+							      py0 = mutt_funits_to_punits(font, (float)(p .y-header->y_min), point_size, ppi)+3.f,
+							      px1 = mutt_funits_to_punits(font, (float)(p1.x-header->x_min), point_size, ppi)+3.f,
+							      py1 = mutt_funits_to_punits(font, (float)(p1.y-header->y_min), point_size, ppi)+3.f,
+							      px2 = mutt_funits_to_punits(font, (float)(p2.x-header->x_min), point_size, ppi)+3.f,
+							      py2 = mutt_funits_to_punits(font, (float)(p2.y-header->y_min), point_size, ppi)+3.f;
+							px2 = (px1+px2) / 2.f;
+							py2 = (py1+py2) / 2.f;
 
-								mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+							res = mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+							if (res != MUTT_SUCCESS) {
+								return res;
 							}
 
-							edges += MUTT_BEZIER_EDGE_COUNT;
 							ip += 2;
 							continue;
 						}
 
-						if (orig_edges) {
-							uint16_m pn1_id = ip-1;
-							muttSimpleGlyphPoint pn1 = glyph->points[pn1_id];
+						uint16_m pn1_id = ip-1;
+						muttSimpleGlyphPoint pn1 = glyph->points[pn1_id];
 
-							uint16_m p1_id = ip+1;
-							if (p1_id > glyph->end_pts_of_contours[contour_id]) {
-								p1_id -= glyph->end_pts_of_contours[contour_id]+1;
-								if (contour_id > 0) {
-									p1_id += glyph->end_pts_of_contours[contour_id-1]+1;
-								}
+						uint16_m p1_id = ip+1;
+						if (p1_id > glyph->end_pts_of_contours[contour_id]) {
+							p1_id -= glyph->end_pts_of_contours[contour_id]+1;
+							if (contour_id > 0) {
+								p1_id += glyph->end_pts_of_contours[contour_id-1]+1;
 							}
-							muttSimpleGlyphPoint p1 = glyph->points[p1_id];
+						}
+						muttSimpleGlyphPoint p1 = glyph->points[p1_id];
 
-							float px0 = mutt_funits_to_punits(font, (float)(pn1.x-header->x_min), point_size, ppi)+3.f,
-							      py0 = mutt_funits_to_punits(font, (float)(pn1.y-header->y_min), point_size, ppi)+3.f,
-							      px1 = mutt_funits_to_punits(font, (float)(p  .x-header->x_min), point_size, ppi)+3.f,
-							      py1 = mutt_funits_to_punits(font, (float)(p  .y-header->y_min), point_size, ppi)+3.f,
-							      px2 = mutt_funits_to_punits(font, (float)(p1 .x-header->x_min), point_size, ppi)+3.f,
-							      py2 = mutt_funits_to_punits(font, (float)(p1 .y-header->y_min), point_size, ppi)+3.f;
-							px0 = (px0+px1) / 2.f;
-							py0 = (py0+py1) / 2.f;
+						float px0 = mutt_funits_to_punits(font, (float)(pn1.x-header->x_min), point_size, ppi)+3.f,
+						      py0 = mutt_funits_to_punits(font, (float)(pn1.y-header->y_min), point_size, ppi)+3.f,
+						      px1 = mutt_funits_to_punits(font, (float)(p  .x-header->x_min), point_size, ppi)+3.f,
+						      py1 = mutt_funits_to_punits(font, (float)(p  .y-header->y_min), point_size, ppi)+3.f,
+						      px2 = mutt_funits_to_punits(font, (float)(p1 .x-header->x_min), point_size, ppi)+3.f,
+						      py2 = mutt_funits_to_punits(font, (float)(p1 .y-header->y_min), point_size, ppi)+3.f;
+						px0 = (px0+px1) / 2.f;
+						py0 = (py0+py1) / 2.f;
 
-							// If the next point is OFF the curve (OFF-OFF[0]-OFF)
-							if (!(p1.flags & MUTT_ON_CURVE_POINT)) {
-								// The second point needs to be midpointed
-								px2 = (px1+px2) / 2.f;
-								py2 = (py1+py2) / 2.f;
-							}
-
-							mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+						// If the next point is OFF the curve (OFF-OFF[0]-OFF)
+						if (!(p1.flags & MUTT_ON_CURVE_POINT)) {
+							// The second point needs to be midpointed
+							px2 = (px1+px2) / 2.f;
+							py2 = (py1+py2) / 2.f;
 						}
 
-						edges += MUTT_BEZIER_EDGE_COUNT;
+						res = mutt_bezier_into_edges(edges, px0, py0, px1, py1, px2, py2);
+						if (res != MUTT_SUCCESS) {
+							return res;
+						}
+
 						ip += 1;
 						//continue;
 					}
 
-					// Return the amount of edges added
-					// (Casting is weird because casting pointer directly to
-					// integer type causes many compilers to complain)
-					return *((size_m*)&edges) / sizeof(muttR_Edge);
+					return MUTT_SUCCESS;
 				}
 
 			/* Intersections */
@@ -5768,47 +5847,43 @@ mutt is developed primarily off of these sources of documentation:
 		/* High-level rendering functions */
 
 			MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
+				muttResult res;
+
+				// Initialize edge vector
+				muttR_EdgeVec edges;
+				if (header->number_of_contours != 0) {
+					res = mutt_edgevec_init(&edges, glyph->end_pts_of_contours[header->number_of_contours-1]+1);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+				} else {
+					mu_memset(&edges, 0, sizeof(edges));
+				}
+
 				// Convert glyph to edges
 				muttR_Shape shape;
 				mutt_glyph_render_dimensions(font, header, point_size, ppi, &shape.max_x, &shape.max_y);
-				shape.edge_count = mutt_simple_glyph_to_edges(font, header, glyph, 0, point_size, ppi);
-
-				if (shape.edge_count > 0) {
-					shape.edges = (muttR_Edge*)mu_malloc(sizeof(muttR_Edge)*shape.edge_count);
-					if (!shape.edges) {
-						return MUTT_FAILED_MALLOC;
-					}
-
-					mutt_simple_glyph_to_edges(font, header, glyph, shape.edges, point_size, ppi);
-					mutt_sort_shape_edges(&shape);
-					for (uint16_m e = 0; e < shape.edge_count; ++e) {
-						if (e > 0 && shape.edges[e].y1 > shape.edges[e-1].y1) {
-							mu_free(shape.edges);
-							return MUTT_FAILED_REALLOC;
-						}
-					}
+				res = mutt_simple_glyph_to_edges(font, header, glyph, &edges, point_size, ppi);
+				if (res != MUTT_SUCCESS) {
+					mutt_edgevec_dest(&edges);
+					return res;
 				}
-
-				else {
-					shape.edges = 0;
-				}
+				shape.edges = edges.el;
+				shape.edge_count = edges.count;
+				mutt_sort_shape_edges(&shape);
 
 				// Render based on format
-				muttResult res;
-
 				switch (format) {
-					default: return MUTT_UNKNOWN_RENDER_FORMAT; break;
+					default: mutt_edgevec_dest(&edges); return MUTT_UNKNOWN_RENDER_FORMAT; break;
 					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
 				}
 
 				// Free memory and return
-				if (shape.edges) {
-					mu_free(shape.edges);
-				}
+				mutt_edgevec_dest(&edges);
 				return res;
 			}
 
-			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem) {
+			MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
 				muttResult res;
 
 				// Get header
@@ -5820,13 +5895,29 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Simple glyph:
 				if (header.number_of_contours >= 0) {
+					// Allocate
 					muttSimpleGlyph glyph;
+					uint32_m written = 0;
+					res = mutt_simple_glyph_get_data(font, &header, &glyph, 0, &written);
+					if (res != MUTT_SUCCESS) {
+						return res;
+					}
+
+					muByte* mem = (muByte*)mu_malloc(written);
+					if (!mem) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Load
 					res = mutt_simple_glyph_get_data(font, &header, &glyph, mem, 0);
 					if (res != MUTT_SUCCESS) {
 						return res;
 					}
 
-					return mutt_render_simple_glyph(font, &header, &glyph, point_size, ppi, format, pixels, width, height);
+					// Render
+					res = mutt_render_simple_glyph(font, &header, &glyph, point_size, ppi, format, pixels, width, height);
+					mu_free(mem);
+					return res;
 				}
 				else {
 					// @TODO Composite glyph handling

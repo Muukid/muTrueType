@@ -1650,11 +1650,9 @@ The color channel formatting of `pixels` is provided by the value `format`.
 The function `mutt_render_glyph_id` renders a glyph ID, defined below: 
 
 ```c
-MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, muByte* mem);
+MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
 ```
 
-
-`mem` should be a pointer to memory whose length is sufficient for the glyph description (`mutt_simple_glyph_get_max_size` or `mutt_composite_glyph_get_max_size`, whichever is greater) of the respective glyph ID to be stored.
 
 ## Glyph rendering dimensions
 
