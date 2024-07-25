@@ -3791,22 +3791,19 @@ mutt is developed primarily off of these sources of documentation:
 				header->length = 0;
 				uint32_m offset;
 				if (font->head->index_to_loc_format == 0) {
-					// (We don't need to check if test_id gets out of range here, as
-					// offsets[numGlyphs] is greater than offsets[numGlyphs-1], and
-					// such has been checked.
-					// test_id can also be u16 because it will not equal numGlyphs.
-					while (header->length == 0) {
-						offset = (uint32_m)(font->loca->offsets.o16[test_id]*2);
-						header->length = (uint32_m)(font->loca->offsets.o16[test_id+1]*2) - offset;
-						test_id += 1;
-					}
+					offset = (uint32_m)(font->loca->offsets.o16[test_id]*2);
+					header->length = (uint32_m)(font->loca->offsets.o16[test_id+1]*2);
 				} else {
-					while (header->length == 0) {
-						offset = font->loca->offsets.o32[test_id];
-						header->length = font->loca->offsets.o32[test_id+1] - offset;
-						test_id += 1;
-					}
+					offset = font->loca->offsets.o32[test_id];
+					header->length = font->loca->offsets.o16[test_id+1];
 				}
+				if (offset == header->length) {
+					// Header has no outline, AKA it's invisible
+					// We return an empty contour for this
+					mu_memset(header, 0, sizeof(muttGlyphHeader));
+					return MUTT_SUCCESS;
+				}
+				header->length -= offset;
 				header->data = &font->glyf->data[offset];
 			}
 
@@ -3977,7 +3974,11 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Loop through each flag
 			uint16_m pi = 0; // (point index)
+			uint16_m contour_id = 0;
 			while (pi < points) {
+				if (pi > glyph->end_pts_of_contours[contour_id]) {
+					++contour_id;
+				}
 				// Verify length for this flag
 				req_length += 1;
 				if (header->length < req_length) {
@@ -3998,6 +3999,11 @@ mutt is developed primarily off of these sources of documentation:
 						return MUTT_INVALID_GLYF_FLAGS;
 					}
 				}*/
+
+				// Verify that first point is on-curve, and if not, MAKE it on the curve
+				if ((pi == 0 && !(flags & MUTT_ON_CURVE_POINT)) || (contour_id != 0 && glyph->end_pts_of_contours[contour_id-1]+1 == pi)) {
+					glyph->points[pi].flags |= MUTT_ON_CURVE_POINT;
+				}
 
 				// Get implied length of x- and y-coordinates based on flag
 				uint8_m coord_length = 0;
@@ -5921,8 +5927,7 @@ mutt is developed primarily off of these sources of documentation:
 							continue;
 						}
 
-						uint16_m pn1_id = ip-1;
-						muttSimpleGlyphPoint pn1 = glyph->points[pn1_id];
+						muttSimpleGlyphPoint pn1 = glyph->points[ip-1];
 
 						uint16_m p1_id = ip+1;
 						if (p1_id > glyph->end_pts_of_contours[contour_id]) {
@@ -6227,7 +6232,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Initialize edge vector
 				muttR_EdgeVec edges;
 				if (header->number_of_contours != 0) {
-					res = mutt_edgevec_init(&edges, glyph->end_pts_of_contours[header->number_of_contours-1]+1);
+					res = mutt_edgevec_init(&edges, glyph->end_pts_of_contours[header->number_of_contours-1]+1+header->number_of_contours);
 					if (res != MUTT_SUCCESS) {
 						return res;
 					}
@@ -6251,7 +6256,7 @@ mutt is developed primarily off of these sources of documentation:
 				mutt_sort_shape_edges(&shape);
 
 				switch (format) {
-					default: mutt_edgevec_dest(&edges); return MUTT_UNKNOWN_RENDER_FORMAT; break;
+					default: res = MUTT_UNKNOWN_RENDER_FORMAT; break;
 					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
 				}
 
@@ -6273,7 +6278,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Initialize edge vector
 				muttR_EdgeVec edges;
 				if (pglyph.point_count != 0) {
-					res = mutt_edgevec_init(&edges, pglyph.point_count);
+					res = mutt_edgevec_init(&edges, pglyph.point_count+pglyph.contour_count);
 					if (res != MUTT_SUCCESS) {
 						if (pglyph.points) {
 							mu_free(pglyph.points);
