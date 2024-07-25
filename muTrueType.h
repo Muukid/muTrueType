@@ -5562,6 +5562,8 @@ mutt is developed primarily off of these sources of documentation:
 				// should implement a vector-based approach at some point that also can verify maxp values (like, 
 				// if another glyph is being requested whose point count exceeds the maximum, throw error)
 
+				// @TODO Avoid code repetition in this section
+
 				muttResult mutt_simple_glyph_component_to_pixel_glyph(muttFont* font, muttR_PixelGlyph* pglyph, muttGlyphHeader* header, float point_size, float ppi) {
 					// Do nothing if no contours are specified
 					if (header->number_of_contours == 0) {
@@ -5625,6 +5627,168 @@ mutt is developed primarily off of these sources of documentation:
 
 					pglyph->point_count = new_point_count;
 					pglyph->contour_count = new_contour_count;
+					mu_free(mem);
+					return MUTT_SUCCESS;
+				}
+
+				muttResult mutt_composite_glyph_component_to_pixel_glyph(muttFont* font, muttR_PixelGlyph* pglyph, muttGlyphHeader* header, float point_size, float ppi) {
+					muttResult res;
+
+					// Get glyph data
+					muByte* mem = (muByte*)mu_malloc(mutt_composite_glyph_get_max_size(font));
+					if (!mem) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					muttCompositeGlyph glyph;
+					res = mutt_composite_glyph_get_data(font, header, &glyph, mem, 0);
+					if (res != MUTT_SUCCESS) {
+						mu_free(mem);
+						return res;
+					}
+
+					// Font-unit min/max
+					//float x_min = mutt_funits_to_punits(font, header->x_min, point_size, ppi);
+					//float y_min = mutt_funits_to_punits(font, header->y_min, point_size, ppi);
+					if (header) {}
+
+					// Loop through each component
+					for (uint16_m c = 0; c < glyph.component_count; ++c) {
+						muttComponentGlyph comp = glyph.components[c];
+
+						// Get scale matrix values
+						float xscale, scale01, scale10, yscale;
+						// - Full scale
+						if (comp.flags & MUTT_WE_HAVE_A_SCALE) {
+							xscale = yscale = comp.scales[0];
+							scale01 = scale10 = 0.f;
+						}
+						// - X/Y scale
+						else if (comp.flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+							xscale = comp.scales[0];
+							yscale = comp.scales[1];
+							scale01 = scale10 = 0.f;
+						}
+						// - 2x2 affine transformation
+						else if (comp.flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+							xscale = comp.scales[0];
+							scale01 = comp.scales[1];
+							scale10 = comp.scales[2];
+							yscale = comp.scales[3];
+						}
+						// - No scale
+						else {
+							xscale = yscale = 1.f;
+							scale01 = scale10 = 0.f;
+						}
+
+						// Offsets
+						float x_offset, y_offset;
+						// - X/Y offsets
+						if (comp.flags & MUTT_ARGS_ARE_XY_VALUES) {
+							x_offset = (float)comp.argument1;
+							y_offset = (float)comp.argument2;
+
+							// Scale if needed (assuming no scale if unspecified)
+							if (comp.flags & MUTT_SCALED_COMPONENT_OFFSET) {
+								float tx = (xscale *x_offset) + (scale10*y_offset);
+								float ty = (scale01*x_offset) + (yscale *y_offset);
+								x_offset = tx;
+								y_offset = ty;
+							}
+
+							// Round if needed
+							if (comp.flags & MUTT_ROUND_XY_TO_GRID) {
+								// I THINK this is what this means
+								x_offset = mu_roundf(x_offset);
+								y_offset = mu_roundf(y_offset);
+							}
+						}
+						// - Point numbers
+						else {
+							// Parent number
+							if (comp.argument1 < 0 || comp.argument1 >= pglyph->point_count) {
+								mu_free(mem);
+								return MUTT_INVALID_COMPONENT_PARENT_POINT_NUMBER;
+							}
+							x_offset = pglyph->points[comp.argument1].x;
+							y_offset = pglyph->points[comp.argument1].y;
+
+							// Child number
+							// ...
+						}
+
+						// Load glyph
+						// - Header
+						muttGlyphHeader rel_header;
+						res = mutt_glyph_get_header(font, comp.glyph_index, &rel_header);
+						if (res != MUTT_SUCCESS) {
+							mu_free(mem);
+							return res;
+						}
+
+						uint16_m prev_point_count = pglyph->point_count;
+
+						// - Simple
+						if (rel_header.number_of_contours > -1) {
+							res = mutt_simple_glyph_component_to_pixel_glyph(font, pglyph, &rel_header, point_size, ppi);
+							if (res != MUTT_SUCCESS) {
+								mu_free(mem);
+								return res;
+							}
+						}
+						// - Composite
+						else {
+							// @TODO Nested composite glyphs
+							res = mutt_composite_glyph_component_to_pixel_glyph(font, pglyph, &rel_header, point_size, ppi);
+							if (res != MUTT_SUCCESS) {
+								mu_free(mem);
+								return res;
+							}
+						}
+
+						// Simply continue if no points were added
+						if (prev_point_count == pglyph->point_count) {
+							continue;
+						}
+						// The amount of points added:
+						uint16_m this_point_count = pglyph->point_count-prev_point_count;
+
+						// "If a scale or transform matrix is provided, the transformation is applied to the child’s point before the points are aligned."
+
+						// Apply scaling
+						if (xscale != 1.f || yscale != 1.f || scale01 != 0.f || scale10 != 0.f) {
+							for (uint16_m p = prev_point_count; p < pglyph->point_count; ++p) {
+								float tx = (xscale *pglyph->points[p].x) + (scale10*pglyph->points[p].y);
+								float ty = (scale01*pglyph->points[p].x) + (yscale *pglyph->points[p].y);
+								pglyph->points[p].x = tx;
+								pglyph->points[p].y = ty;
+							}
+						}
+
+						// Handle offset
+						// - Possible needed point number handling
+						if (!(comp.flags & MUTT_ARGS_ARE_XY_VALUES)) {
+							// Child number
+							if (comp.argument2 < 0 || comp.argument2 >= this_point_count) {
+								mu_free(mem);
+								return MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER;
+							}
+							// I THINK this is correct...
+							x_offset = -(pglyph->points[prev_point_count+comp.argument2].x-x_offset);
+							y_offset = -(pglyph->points[prev_point_count+comp.argument2].y-y_offset);
+						}
+						// - Convert to punits
+						x_offset = mutt_funits_to_punits(font, x_offset, point_size, ppi);
+						y_offset = mutt_funits_to_punits(font, y_offset, point_size, ppi);
+
+						// - Apply offsets
+						for (uint16_m p = prev_point_count; p < pglyph->point_count; ++p) {
+							pglyph->points[p].x = pglyph->points[p].x+x_offset;
+							pglyph->points[p].y = pglyph->points[p].y+y_offset;
+						}
+					}
+
 					mu_free(mem);
 					return MUTT_SUCCESS;
 				}
@@ -5748,10 +5912,12 @@ mutt is developed primarily off of these sources of documentation:
 						}
 						// - Composite
 						else {
-							// @TODO Nested composite glyphs
-							mu_free(pglyph->points);
-							mu_free(pglyph->contours);
-							return MUTT_INVALID_NAME_LANGUAGE_ID;
+							res = mutt_composite_glyph_component_to_pixel_glyph(font, pglyph, &rel_header, point_size, ppi);
+							if (res != MUTT_SUCCESS) {
+								mu_free(pglyph->points);
+								mu_free(pglyph->contours);
+								return res;
+							}
 						}
 
 						// Simply continue if no points were added
