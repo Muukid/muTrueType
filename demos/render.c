@@ -5,7 +5,7 @@
 DEMO NAME:          render.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-07-12
-LAST UPDATED:       2024-07-24
+LAST UPDATED:       2024-07-26
 
 ============================================================
                         DEMO PURPOSE
@@ -68,7 +68,7 @@ More explicit license information at the end of file.
 	muttResult result = MUTT_SUCCESS;
 
 	// Amount of glyphs to render
-	uint16_m glyph_count = 50;
+	uint16_m glyph_count = 65535;
 
 	// Point size to be rendered at
 	float point_size = 500.f;
@@ -187,6 +187,12 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 			continue;
 		}
 
+		// Don't draw if it's a non-outlined contour
+		if (header.length == 0) {
+			printf("Glyph #%" PRIu16 " has no outline, skipping...\n", glyph_id);
+			continue;
+		}
+
 		// Allocate pixel memory for glyph
 		uint32_m width, height;
 		mutt_glyph_render_dimensions(&font, &header, point_size, ppi, &width, &height);
@@ -267,7 +273,11 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 			// Render glyph
 			result = mutt_render_simple_glyph(&font, &header, &sglyph, point_size, ppi, format, pixels, width, height);
 			if (result != MUTT_SUCCESS) {
-				printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				if (result == MUTT_EMPTY_SIMPLE_GLYPH) {
+					printf("Glyph #%" PRIu16 " was empty\n", glyph_id);
+				} else {
+					printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				}
 				mu_free(pixels);
 				mu_free(data);
 				continue;
@@ -279,7 +289,11 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 			// Render glyph
 			result = mutt_render_composite_glyph(&font, &header, &cglyph, point_size, ppi, format, pixels, width, height);
 			if (result != MUTT_SUCCESS) {
-				printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				if (result == MUTT_EMPTY_COMPOSITE_GLYPH) {
+					printf("Glyph #%" PRIu16 " was empty\n", glyph_id);
+				} else {
+					printf("[Warning] Failed to render glyph #%" PRIu16 ": %s\n", glyph_id, mutt_result_get_name(result));
+				}
 				mu_free(pixels);
 				mu_free(data);
 				continue;
@@ -291,7 +305,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 	// Output result as PNG
 	// - Generate filename based on glyph ID
 	char name[24] = {0};
-	sprintf(name, "%" PRIu16 ".png", glyph_id);
+	sprintf(name, "f/%" PRIu16 ".png", glyph_id);
 	// - Output file using stb_image_write
 	if (stbi_write_png(name, width, height, 1, pixels, width) == 0) {
 		printf("[Warning] Failed to write \"%" PRIu16 ".png\"\n", glyph_id);

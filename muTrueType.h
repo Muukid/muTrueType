@@ -6,18 +6,12 @@ No warranty implied; use at your own risk.
 Licensed under MIT License or public domain, whichever you prefer.
 More explicit license information at the end of file.
 
-@TODO Instruction handling.
 @TODO Add more individual error results (for example, if a single entry in cmap fails due to some unsupported encoding or something, don't shut off the WHOLE cmap table, just shut off that one entry. It's annoying, but needs to be done)
 @TODO Save memory by not including certain redundant numbers (like versions, or numbers regarding offsets)
 @TODO Add more format options, like BGR/BGRA, higher/lower bit-depth, etc.
 @TODO Verify 2 points or more per contour.
-@TODO Verify all contours start on an on-curve point.
 @TODO Possible fluctuating edge precision.
 @TODO Manual width/height offsets in rendering for rendering to a part of pixel data.
-@TODO Verify non-infinite composite glyph nesting (or verify values in maxp); pretty sure it can be done without manual allocation.
-@TODO More verification in the composite glyph handling in general (both loading and rendering). It is trivially easy to trigger a crash from the perspective of the font creator as of right now (although still impossible FROM WHAT I KNOW to create an attack vector). This MIGHT be easier than I fear it is, but I don't know.
-@TODO Implement gvar ASAP (glyph rendering isn't fully correct until this is implemented from what I'm aware).
-@TODO Implement phantom point support (might be part of gvar, not aware as of right now).
 
 @DOCBEGIN
 
@@ -57,6 +51,36 @@ mutt is developed primarily off of these sources of documentation:
 * [OpenType spec](https://learn.microsoft.com/en-us/typography/opentype/spec/).
 
 * [TrueType reference manual](https://developer.apple.com/fonts/TrueType-Reference-Manual/).
+
+# Known issues and limitations
+
+This section covers the known issues and limitations of the libraries.
+
+## Tables
+
+As of right now, mutt only supports reading data from the 9 tables required in TrueType (cmap, glyf, head, hhea, hmtx, loca, maxp, name, and post). This means that features that rely on other tables (such as font variations) are unsupported.
+
+## Instructions
+
+As of right now, mutt has no support for instruction execution, meaning that features that it provides support for such as hinting are unsupported.
+
+## Glyph data
+
+### Incorrect loading
+
+mutt can load glyph data well enough to render the vast majority of glyphs correctly, but some features cause mutt to load things incorrectly. For example, some composite glyphs on Arial take advantage of scaling to mirror a component glyph, which, for unknown reasons, mutt cannot parse correctly, and thus, an error is returned (specifically `MUTT_INVALID_GLYPH_COORDINATES`).
+
+### Safety checks on composite glyphs
+
+mutt does not do full safety checks on glyphs; in particular, composite glyphs, as they are hard to parse fully upon being loaded. For example, when the composite glyph is being converted to a set of pixel-unit points for rendering, it is not checked if the listed maximum amount of points in 'maxp' is actually sufficient enough to store all of the points. A font with invalid maxp tables then, purposeful or accidental, could trigger a crash in this manner. Another example would be infinitely nesting composite glyphs; a composite glyph could reference itself as one of its components, which mutt currently does not detect, and can lead to undefined behavior.
+
+### Unsupported features
+
+Glyph data that relies on values within gvar, such as phantom points, do not work correctly, as gvar is not implemented. This logic applies to all other tables currently unsupported by mutt.
+
+### Tight x/y min/max values
+
+Glyph data is loaded and rendered based on the x/y min/max values they provide, and although checks are done to make sure that all points lie within the range, checks are not performed to make sure that it's tight and their respective values are not decreased to adjust for it; 'tight' in this context means that the x/y min/max values perfectly draw a border around the glyph with no extra space. This means that glyphs can render with extra unnecessary space around them.
 
 @DOCEND
 */
@@ -620,6 +644,12 @@ mutt is developed primarily off of these sources of documentation:
 			MUTT_INVALID_COMPONENT_POINT_COUNT,
 			// @DOCLINE * `@NLFT` - the amount of contours in a component within a composite glyph exceeded the maximum.
 			MUTT_INVALID_COMPONENT_CONTOUR_COUNT,
+			// @DOCLINE * `@NLFT` - the simple glyph provided has no defined data, and thus, cannot be rendered.
+			MUTT_EMPTY_SIMPLE_GLYPH,
+			// @DOCLINE * `@NLFT` - the composite glyph provided has no defined data, and thus, cannot be rendered.
+			MUTT_EMPTY_COMPOSITE_GLYPH,
+			// @DOCLINE * `@NLFT` - coordinates offered in the glyph data were outside of the listed minimum/maximum range. This can also happen when mutt incorrectly parses composite glyph data for unknown reasons.
+			MUTT_INVALID_GLYPH_COORDINATES,
 		)
 
 		// @DOCLINE Most of these errors getting triggered imply that rather the data is corrupt (especially in regards to checksum errors), uses some extension or format not supported by this library (such as OpenType), has accidental incorrect values, or is purposely malformed to attempt to get out of the memory region of the file data.
@@ -2006,7 +2036,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ### F2DOT14 reading
 
 				// @DOCLINE The macro function "MUTT_F2DOT14" creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: @NLNT
-				#define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[0]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
+				#define MUTT_F2DOT14(b) (float)((*(int8_m*)&b[1]) & 0xC0) + ((float)(mu_rbe_uint16(b) & 0xFFFF) / 16384.f)
 				//                                            ^ 0 or 1?
 
 			// @DOCLINE ### idDelta logic
@@ -2291,6 +2321,9 @@ mutt is developed primarily off of these sources of documentation:
 			case MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER: return "MUTT_INVALID_COMPONENT_CHILD_POINT_NUMBER"; break;
 			case MUTT_INVALID_COMPONENT_POINT_COUNT: return "MUTT_INVALID_COMPONENT_POINT_COUNT"; break;
 			case MUTT_INVALID_COMPONENT_CONTOUR_COUNT: return "MUTT_INVALID_COMPONENT_CONTOUR_COUNT"; break;
+			case MUTT_EMPTY_SIMPLE_GLYPH: return "MUTT_EMPTY_SIMPLE_GLYPH"; break;
+			case MUTT_EMPTY_COMPOSITE_GLYPH: return "MUTT_EMPTY_COMPOSITE_GLYPH"; break;
+			case MUTT_INVALID_GLYPH_COORDINATES: return "MUTT_INVALID_GLYPH_COORDINATES"; break;
 		}
 	}
 
@@ -3887,7 +3920,7 @@ mutt is developed primarily off of these sources of documentation:
 					points = (uint32_m)mu_rbe_uint16(gdata);
 
 					// : Verify last element of endPtsOfContours
-					if (points == 0xFF) {
+					if (points == 0xFFFF) {
 						return MUTT_INVALID_GLYF_END_PTS_OF_CONTOURS;
 					}
 
@@ -3935,7 +3968,7 @@ mutt is developed primarily off of these sources of documentation:
 				if (c == header->number_of_contours-1) {
 					points = glyph->end_pts_of_contours[c];
 					// : Verify last element
-					if (points == 0xFF) {
+					if (points == 0xFFFF) {
 						return MUTT_INVALID_GLYF_END_PTS_OF_CONTOURS;
 					}
 					points += 1;
@@ -6395,15 +6428,18 @@ mutt is developed primarily off of these sources of documentation:
 			MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
 				muttResult res;
 
+				if (header->number_of_contours == 0) {
+					return MUTT_EMPTY_SIMPLE_GLYPH;
+				}
+				if (glyph->end_pts_of_contours[0] == 0) {
+					return MUTT_EMPTY_SIMPLE_GLYPH;
+				}
+
 				// Initialize edge vector
 				muttR_EdgeVec edges;
-				if (header->number_of_contours != 0) {
-					res = mutt_edgevec_init(&edges, glyph->end_pts_of_contours[header->number_of_contours-1]+1+header->number_of_contours);
-					if (res != MUTT_SUCCESS) {
-						return res;
-					}
-				} else {
-					mu_memset(&edges, 0, sizeof(edges));
+				res = mutt_edgevec_init(&edges, glyph->end_pts_of_contours[header->number_of_contours-1]+1+header->number_of_contours);
+				if (res != MUTT_SUCCESS) {
+					return res;
 				}
 
 				// Convert glyph to edges
@@ -6421,6 +6457,16 @@ mutt is developed primarily off of these sources of documentation:
 				shape.edge_count = edges.count;
 				mutt_sort_shape_edges(&shape);
 
+				// Make sure all edges are within bounds
+				for (uint32_m e = 0; e < edges.count; ++e) {
+					if (edges.el[e].x0 > shape.max_x || edges.el[e].x1 > shape.max_x || edges.el[e].y1 > shape.max_y
+						|| edges.el[e].x0 < 0.f || edges.el[e].x1 < 0.f || edges.el[e].y0 < 0.f || edges.el[e].y1 < 0.f
+					) {
+						mutt_edgevec_dest(&edges);
+						return MUTT_INVALID_GLYPH_COORDINATES;
+					}
+				}
+
 				switch (format) {
 					default: res = MUTT_UNKNOWN_RENDER_FORMAT; break;
 					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
@@ -6433,6 +6479,10 @@ mutt is developed primarily off of these sources of documentation:
 
 			MUDEF muttResult mutt_render_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height) {
 				muttResult res;
+
+				if (glyph->component_count == 0) {
+					return MUTT_EMPTY_COMPOSITE_GLYPH;
+				}
 
 				// Create pixel glyph
 				muttR_PixelGlyph pglyph;
@@ -6479,9 +6529,19 @@ mutt is developed primarily off of these sources of documentation:
 				shape.edge_count = edges.count;
 				mutt_sort_shape_edges(&shape);
 
+				// Make sure all edges are within bounds
+				for (uint32_m e = 0; e < edges.count; ++e) {
+					if (edges.el[e].x0 > shape.max_x || edges.el[e].x1 > shape.max_x || edges.el[e].y1 > shape.max_y
+						|| edges.el[e].x0 < 0.f || edges.el[e].x1 < 0.f || edges.el[e].y0 < 0.f || edges.el[e].y1 < 0.f
+					) {
+						mutt_edgevec_dest(&edges);
+						return MUTT_INVALID_GLYPH_COORDINATES;
+					}
+				}
+
 				// Render based on format
 				switch (format) {
-					default: mutt_edgevec_dest(&edges); return MUTT_UNKNOWN_RENDER_FORMAT; break;
+					default: res = MUTT_UNKNOWN_RENDER_FORMAT; break;
 					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
 				}
 
