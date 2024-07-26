@@ -2086,7 +2086,7 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 				MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA,
 			)
 
-			// @DOCLINE Black and white rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa.
+			// @DOCLINE Black and white rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa. 4-channel outputs also output pixels not within the glyph as transparent, as the alpha channel is set to 0 just like all of the other channels.
 
 			// @DOCLINE All channels in these formats use the data type `uint8_m`, and are expected to be laid one after the other. For example, RGB data being filled in is expected to be an array of `uint8_m`s, with index 0 being the red channel, index 1 being the green channel, index 2 being the blue channel, index 3 being the red channel again, and so on and so forth.
 
@@ -6305,11 +6305,11 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 
 			/* Format-by-format functions */
 
-				// MUTT_BW_FULL_PIXEL_BI_LEVEL_R 
-				muttResult mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+				// MUTT_BW_FULL_PIXEL_BI_LEVEL...
+				muttResult mutt_render_bw_full_pixel_bi_level(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height, uint8_m adv) {
 					// Just fill black if no edges are specified
 					if (shape->edge_count == 0) {
-						mu_memset(pixels, 0, width*height);
+						mu_memset(pixels, 0, width*height*adv);
 						return MUTT_SUCCESS;
 					}
 
@@ -6331,8 +6331,8 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 
 						// Just fill all x-values with zero if the height is now outside of the glyph range
 						if (h > 0 && h-1 > shape->max_y) {
-							mu_memset(&pixels[hpix_offset], 0, width);
-							hpix_offset += width;
+							mu_memset(&pixels[hpix_offset], 0, width*adv);
+							hpix_offset += width*adv;
 							continue;
 						}
 
@@ -6390,7 +6390,7 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 						for (uint32_m w = 0; w < width; ++w) {
 							// Just fill all x-values with zero if width is now outside of glyph range
 							if (w > shape->max_x) {
-								mu_memset(&pixels[hpix_offset+w], 0, width-w);
+								mu_memset(&pixels[hpix_offset+(w*adv)], 0, (width-w)*adv);
 								break;
 							}
 
@@ -6408,19 +6408,34 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 
 							// If the winding number wasn't 0, we're in the glyph
 							if (winding != 0) {
-								pixels[hpix_offset+w] = 255;
+								mu_memset(&pixels[hpix_offset+(w*adv)], 255, adv);
 							}
 							// If it was 0, we're outside of the glyph
 							else {
-								pixels[hpix_offset+w] = 0;
+								mu_memset(&pixels[hpix_offset+(w*adv)], 0, adv);
 							}
 						}
 
-						hpix_offset += width;
+						hpix_offset += width*adv;
 					}
 
 					mu_free(intersections);
 					return MUTT_SUCCESS;
+				}
+
+				// MUTT_BW_FULL_PIXEL_BI_LEVEL_R 
+				muttResult mutt_render_bw_full_pixel_bi_level_r(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+					return mutt_render_bw_full_pixel_bi_level(shape, pixels, width, height, 1);
+				}
+
+				// MUTT_BW_FULL_PIXEL_BI_LEVEL_RGB
+				muttResult mutt_render_bw_full_pixel_bi_level_rgb(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+					return mutt_render_bw_full_pixel_bi_level(shape, pixels, width, height, 3);
+				}
+
+				// MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA
+				muttResult mutt_render_bw_full_pixel_bi_level_rgba(muttR_Shape* shape, uint8_m* pixels, uint32_m width, uint32_m height) {
+					return mutt_render_bw_full_pixel_bi_level(shape, pixels, width, height, 4);
 				}
 
 		/* High-level rendering functions */
@@ -6469,7 +6484,9 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 
 				switch (format) {
 					default: res = MUTT_UNKNOWN_RENDER_FORMAT; break;
-					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R:    res = mutt_render_bw_full_pixel_bi_level_r   (&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_RGB:  res = mutt_render_bw_full_pixel_bi_level_rgb (&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA: res = mutt_render_bw_full_pixel_bi_level_rgba(&shape, pixels, width, height); break;
 				}
 
 				// Free memory and return
@@ -6542,7 +6559,9 @@ Glyph data is loaded and rendered based on the x/y min/max values they provide, 
 				// Render based on format
 				switch (format) {
 					default: res = MUTT_UNKNOWN_RENDER_FORMAT; break;
-					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R: res = mutt_render_bw_full_pixel_bi_level_r(&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_R:    res = mutt_render_bw_full_pixel_bi_level_r   (&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_RGB:  res = mutt_render_bw_full_pixel_bi_level_rgb (&shape, pixels, width, height); break;
+					case MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA: res = mutt_render_bw_full_pixel_bi_level_rgba(&shape, pixels, width, height); break;
 				}
 
 				// Free contents and return success
