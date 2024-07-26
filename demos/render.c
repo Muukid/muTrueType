@@ -79,6 +79,9 @@ More explicit license information at the end of file.
 	// Rendering format
 	muttRenderFormat format = MUTT_BW_FULL_PIXEL_BI_LEVEL_R;
 
+	// The amount of channels in the format
+	const uint8_m channels = 1;
+
 int main(void) {
 
 /* Load font */
@@ -151,7 +154,7 @@ int main(void) {
 	printf("Image dimensions: %" PRIu32 "x%" PRIu32 "\n", width, height);
 
 	// Allocate pixels based on dimensions
-	uint8_m* pixels = (uint8_m*)malloc(width*height);
+	uint8_m* pixels = (uint8_m*)malloc(width*height*channels);
 	if (!pixels) {
 		printf("Unable to allocate pixels\n");
 		goto fail_pixels;
@@ -170,7 +173,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 	#ifndef CLAMP_GLYPHS
 
 		// Render glyph to pixels
-		result = mutt_render_glyph_id(&font, glyph_id, point_size, ppi, format, pixels, width, height);
+		result = mutt_render_glyph_id(&font, glyph_id, point_size, ppi, format, pixels, width, height, width*channels);
 		if (result != MUTT_SUCCESS) {
 				printf("[Warning] Glyph #%" PRIu16 " failed to render: %s\n", glyph_id, mutt_result_get_name(result));
 				continue;
@@ -196,7 +199,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 		// Allocate pixel memory for glyph
 		uint32_m width, height;
 		mutt_glyph_render_dimensions(&font, &header, point_size, ppi, &width, &height);
-		uint8_m* pixels = (uint8_m*)malloc(width*height);
+		uint8_m* pixels = (uint8_m*)malloc(width*height*channels);
 		if (!pixels) {
 			printf("[Warning] Failed to allocate pixel data for glyph #%" PRIu16 " (%" PRIu32 "x%" PRIu32 ")\n", glyph_id, width, height);
 			continue;
@@ -271,7 +274,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 		// - Simple
 		if (header.number_of_contours > -1) {
 			// Render glyph
-			result = mutt_render_simple_glyph(&font, &header, &sglyph, point_size, ppi, format, pixels, width, height);
+			result = mutt_render_simple_glyph(&font, &header, &sglyph, point_size, ppi, format, pixels, width, height, width*channels);
 			if (result != MUTT_SUCCESS) {
 				if (result == MUTT_EMPTY_SIMPLE_GLYPH) {
 					printf("Glyph #%" PRIu16 " was empty\n", glyph_id);
@@ -287,7 +290,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 		// - Composite
 		else {
 			// Render glyph
-			result = mutt_render_composite_glyph(&font, &header, &cglyph, point_size, ppi, format, pixels, width, height);
+			result = mutt_render_composite_glyph(&font, &header, &cglyph, point_size, ppi, format, pixels, width, height, width*channels);
 			if (result != MUTT_SUCCESS) {
 				if (result == MUTT_EMPTY_COMPOSITE_GLYPH) {
 					printf("Glyph #%" PRIu16 " was empty\n", glyph_id);
@@ -307,7 +310,7 @@ for (uint32_m i = 0; i < glyph_count; i++) {
 	char name[24] = {0};
 	sprintf(name, "f/%" PRIu16 ".png", glyph_id);
 	// - Output file using stb_image_write
-	if (stbi_write_png(name, width, height, 1, pixels, width) == 0) {
+	if (stbi_write_png(name, width, height, channels, pixels, width*channels) == 0) {
 		printf("[Warning] Failed to write \"%" PRIu16 ".png\"\n", glyph_id);
 	} else {
 		printf("Written \"%" PRIu16 ".png\"\n", glyph_id);

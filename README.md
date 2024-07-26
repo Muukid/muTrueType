@@ -1658,17 +1658,19 @@ The enumerator `muttRenderFormat` represents a rendering format that mutt is abl
 
 * `MUTT_BW_FULL_PIXEL_BI_LEVEL_RGBA` - black & white full-pixel bi-level rendering, with the output corresponding to four color channels (red, green, blue, and alpha).
 
-Black and white rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa. 4-channel outputs also output pixels not within the glyph as transparent, as the alpha channel is set to 0 just like all of the other channels.
+Black and white (BW) rendering methods output color values indicative of the following pattern: the lower the value, the less "in the glyph", and the higher the value, the more "in the glyph". For example, in full-pixel rendering, a fully black pixel (whose channels value(s) would be 0) is completely not in a glyph, and vice versa. Note that this does *not* mean monochrome, as black and white sub-pixel rendering can give values with certain channels having higher/lower values than others within a pixel whilst still being called "black and white"; the term "black and white" simply refers to the pattern of lower values meaning less "inside the glyph" and vice versa. 4-channel outputs also output pixels not within the glyph as transparent, as the alpha channel is set to 0 just like all of the other channels.
 
 All channels in these formats use the data type `uint8_m`, and are expected to be laid one after the other. For example, RGB data being filled in is expected to be an array of `uint8_m`s, with index 0 being the red channel, index 1 being the green channel, index 2 being the blue channel, index 3 being the red channel again, and so on and so forth.
 
-"Full-pixel" means that a pixel is treated as one singular monochrome value, with darker meaning that the pixel is less in the glyph, and brighter meaning that the pixel is more in the glyph; exactly how much the pixel is or isn't inside the glyph is deemed per-pixel in a monochrome fashion.
+The pixels are expected to be laid out from left-to right and top-to-bottom.
 
-"Sub-pixel" means that a pixel is split up into more elements when rendering somehow, like separating how much the pixel is or isn't inside the glyph by channels, which can result in a non-monochrome output.
+"Full-pixel" means that a pixel is treated as one singular monochrome value, with darker meaning that the pixel is less in the glyph, and brighter meaning that the pixel is more in the glyph; exactly how much the pixel is or isn't inside the glyph is deemed per-pixel in a monochrome fashion. It is the opposite of sub-pixel.
 
-"Bi-level" means that a pixel is simply in or out of the glyph, with no possibility of intermediate values.
+"Sub-pixel" means that a pixel is split up into more elements when rendering somehow, like separating how much the pixel is or isn't inside the glyph by channels, which can result in a non-monochrome output. It is the opposite of full-pixel.
 
-"Anti-aliasing" means that multiple samples are taken for each pixel and then averaged for the pixel's brightness, meaning that there are now pixels that are partially inside or outside of the glyph.
+"Bi-level" means that a pixel is simply in or out of the glyph, with no possibility of intermediate values. It is the opposite of anti-aliasing.
+
+"Anti-aliasing" (AA) means that multiple samples are taken for each pixel and then averaged for the pixel's brightness, meaning that there are now pixels that are partially inside or outside of the glyph. It is the opposite of bi-level.
 
 Most of the terms in this section like "full-pixel" are taken from [The Raster Tragedy](http://rastertragedy.com/RTRCh2.htm); more information is available at that source.
 
@@ -1678,25 +1680,36 @@ This section covers the functions related to rendering a glyph to a set of pixel
 
 Pixels are expected to be laid out horizontally by index; that is, `pixels[0], pixels[1], ..., pixels[width-1]` is expected to be the first row (highest in y-level) of pixels, `pixels[height], pixels[height+1]...` is expected to be the second row, `pixels[height*2], pixels[height*2+1]...` is expected to be the third row, etc.
 
-### Render simple glyph
+### Render simple/composite glyph
 
 The function `mutt_render_simple_glyph` renders a simple glyph, defined below: 
 
 ```c
-MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
+MUDEF muttResult mutt_render_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, uint32_m stride);
+```
+
+
+The function `mutt_render_composite_glyph` renders a composite glyph, defined below: 
+
+```c
+MUDEF muttResult mutt_render_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, uint32_m stride);
 ```
 
 
 The color channel formatting of `pixels` is provided by the value `format`.
+
+`width` and `height` provide the dimensions of the pixels, and `stride` tells the renderer how much to move forward, in bytes, to go to the next horizontal row of pixels. In most cases, this will be `width * channels`, but it can also be used to render the glyph into part of an image without the renderer overwriting other parts.
 
 ### Render glyph ID
 
 The function `mutt_render_glyph_id` renders a glyph ID, defined below: 
 
 ```c
-MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height);
+MUDEF muttResult mutt_render_glyph_id(muttFont* font, uint16_m glyph_id, float point_size, float ppi, muttRenderFormat format, uint8_m* pixels, uint32_m width, uint32_m height, uint32_m stride);
 ```
 
+
+Details about the parameters are provided for the descriptions of `mutt_render_simple_glyph` and `mutt_render_composite_glyph`.
 
 ## Glyph rendering dimensions
 
