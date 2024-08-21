@@ -47,6 +47,22 @@ More explicit license information at the end of file.
 	// Result value holder
 	muttResult result = MUTT_SUCCESS;
 
+/* Functions */
+
+	// Prints a value in binary
+	void print_binary(muByte* mem, size_m size) {
+		// Loop through each byte
+		for (size_m byte = 0; byte < size; ++byte) {
+			// Loop through each bit
+			for (size_m bit = 0; bit < 8; ++bit) {
+				// Shift and mask for the bit in this byte
+				uint8_m val = (mem[byte] >> bit) & 1;
+				// Print bit value
+				printf("%" PRIu8 "", val);
+			}
+		}
+	}
+
 int main(void)
 {
 	/* Load font */
@@ -134,7 +150,7 @@ int main(void)
 	{
 		printf("== Maxp ==\n");
 
-		// Case for if maxp failed to load:
+		// Case for if maxp failed to load
 		if (!font.maxp) {
 			printf("maxp failed to load: %s\n\n", mutt_result_get_name(font.maxp_res));
 			goto end_of_maxp;
@@ -161,9 +177,38 @@ int main(void)
 	}
 	end_of_maxp:
 
+	/* Print head */
+	{
+		printf("== Head ==\n");
+
+		// Case for if head failed to load
+		if (!font.head) {
+			printf("head failed to load: %s\n\n", mutt_result_get_name(font.head_res));
+			goto end_of_head;
+		}
+
+		// Print values
+		printf("fontRevision         = %" PRIi16 ".%" PRIu16 "\n", font.head->font_revision_high, font.head->font_revision_low);
+		printf("checksumAdjustment   = %" PRIu32 "\n", font.head->checksum_adjustment);
+		printf("flags                = "); print_binary((muByte*)&font.head->flags, sizeof(font.head->flags)); printf("\n");
+		printf("unitsPerEm           = %" PRIu16 "\n", font.head->units_per_em);
+		printf("created              = %" PRIi64 "\n", font.head->created);
+		printf("modified             = %" PRIi64 "\n", font.head->modified);
+		printf("xMin, xMax           = [%" PRIi16 ", %" PRIi16 "]\n", font.head->x_min, font.head->x_max);
+		printf("yMin, yMax           = [%" PRIi16 ", %" PRIi16 "]\n", font.head->y_min, font.head->y_max);
+		printf("macStyle             = "); print_binary((muByte*)&font.head->mac_style, sizeof(font.head->mac_style)); printf("\n");
+		printf("lowestRecPPEM        = %" PRIu16 "\n", font.head->lowest_rec_ppem);
+		printf("fontDirectionHint    = %" PRIi16 "\n", font.head->font_direction_hint);
+		printf("indexToLocFormat     = %" PRIi16 "\n", font.head->index_to_loc_format);
+
+		printf("\n");
+	}
+	end_of_head:
+
 	/* Deload font */
 	{
 		mutt_deload(&font);
+		printf("Successful\n");
 	}
 }
 

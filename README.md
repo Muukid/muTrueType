@@ -205,13 +205,15 @@ The struct `muttTableRecord` represents a table record in the table directory. I
 
 * `uint32_m length` - equivalent to "length" in the table record.
 
+The checksum value is not validated for the head table, as the head table itself includes a checksum value.
+
 ## Maxp table
 
 The struct `muttMaxp` is used to represent the maxp table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`maxp`", and loaded with the flag `MUTT_LOAD_MAXP`. It has the following members:
 
-* `uint16_m version_high` - the high-bytes of "version" in the version 1.0 maxp table.
+* `uint16_m version_high` - the high bytes of "version" in the version 1.0 maxp table.
 
-* `uint16_m version_low` - the low-bytes of "version" in the version 1.0 maxp table.
+* `uint16_m version_low` - the low bytes of "version" in the version 1.0 maxp table.
 
 * `uint16_m num_glyphs` - equivalent to "numGlyphs" in the version 1.0 maxp table.
 
@@ -243,15 +245,59 @@ The struct `muttMaxp` is used to represent the maxp table provided by a TrueType
 
 Since most values given in this table are just maximums, there are only checks performed for the version, numGlyph, and maxZones values. All other values dictate maximums that other tables must follow, and checks will be performed on said tables to ensure they stay within the maximums dictated by maxp.
 
+## Head table
+
+The struct `muttHead` is used to represent the head table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`head`", and loaded with the flag `MUTT_LOAD_HEAD`. It has the following members:
+
+* `int16_m font_revision_high` - equivalent to the high bytes of "fontRevision" in the head table.
+
+* `uint16_m font_revision_low` - equivalent to the low bytes of "fontRevision" in the head table.
+
+* `uint32_m checksum_adjustment` - equivalent to "checksumAdjustment" in the head table.
+
+* `uint16_m flags` - equivalent to "flags" in the head table.
+
+* `uint16_m units_per_em` - equivalent to "unitsPerEm" in the head table.
+
+* `int64_m created` - equivalent to "created" in the head table.
+
+* `int64_m modified` - equivalent to "modified" in the head table.
+
+* `int16_m x_min` - equivalent to "xMin" in the head table.
+
+* `int16_m y_min` - equivalent to "yMin" in the head table.
+
+* `int16_m x_max` - equivalent to "xMax" in the head table.
+
+* `int16_m y_max` - equivalent to "yMax" in the head table.
+
+* `uint16_m mac_style` - equivalent to "macStyle" in the head table.
+
+* `uint16_m lowest_rec_ppem` - equivalent to "lowestRecPPEM" in the head table.
+
+* `int16_m font_direction_hint` - equivalent to "fontDirectionHint" in the head table.
+
+* `int16_m index_to_loc_format` - equivalent to "indexToLocFormat" in the head table.
+
+Currently, the values for "checksumAdjustment" and "fontDirectionHint" are not checked.
+
 # Result
 
-The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded). The following values are defined for `muttResult` (all values not explicitly stated as being fatal, non-fatal, or successful are assumed to be fatal):
+The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
+
+## Result values
+
+The following values are defined for `muttResult` (all values not explicitly stated as being fatal, non-fatal, or successful are assumed to be fatal):
+
+### General result values
 
 * `MUTT_SUCCESS` - the task was successfully completed; real value 0.
 
 * `MUTT_FAILED_MALLOC` - a call to malloc failed, implying insufficient available memory to perform the task.
 
 * `MUTT_FAILED_FIND_TABLE` - the table could not be located, and is likely not included in the font file.
+
+### Directory result values
 
 * `MUTT_INVALID_DIRECTORY_LENGTH` - the length of the table directory was invalid. This is the first check performed on the length of the font file data, meaning that if this result is given, it is likely that the data given is not font file data.
 
@@ -269,13 +315,41 @@ The type `muttResult` (typedef for `uint32_m`) is defined to represent how a tas
 
 * `MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS` - one or more tables required by TrueType standards could not be found in the table directory.
 
+### Maxp result values
+
 * `MUTT_INVALID_MAXP_LENGTH` - the length of the maxp table was invalid.
 
-* `MUTT_INVALID_MAXP_VERSION` - the version of the maxp table given was invalid. This likely means that the font has a CFF/CFF2 font outline, which is currently unsupported.
+* `MUTT_INVALID_MAXP_VERSION` - the version of the maxp table given was invalid/unsupported. This likely means that the font has a CFF/CFF2 font outline, which is currently unsupported.
 
 * `MUTT_INVALID_MAXP_NUM_GLYPHS` - the value for "numGlyphs" given in the maxp table was invalid.
 
 * `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" given in the maxp table was invalid.
+
+### Head result values
+
+* `MUTT_INVALID_HEAD_LENGTH` - the length of the head table was invalid.
+
+* `MUTT_INVALID_HEAD_VERSION` - the version indicated for the head table was invalid/unsupported.
+
+* `MUTT_INVALID_HEAD_MAGIC_NUMBER` - the value for the magic number in the head table was invalid.
+
+* `MUTT_INVALID_HEAD_UNITS_PER_EM` - the value for the units per em in the head table was not within the correct range of 16 to 16384.
+
+* `MUTT_INVALID_HEAD_X_MIN_COORDINATES` - the value "xMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+
+* `MUTT_INVALID_HEAD_Y_MIN_COORDINATES` - the value "yMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+
+* `MUTT_INVALID_HEAD_X_MAX_COORDINATES` - the value "xMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+
+* `MUTT_INVALID_HEAD_Y_MAX_COORDINATES` - the value "yMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+
+* `MUTT_INVALID_HEAD_X_MIN_MAX` - the value established minimum x-value within the head table was greater than the established maximum x-value.
+
+* `MUTT_INVALID_HEAD_Y_MIN_MAX` - the value established minimum y-value within the head table was greater than the established maximum y-value.
+
+* `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT` - the value for "indexToLocFormat" within the head table was invalid/unsupported; it was not one of the expected values 0 (Offset16) or 1 (Offset32).
+
+* `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
 
 ## Check if result is fatal
 
