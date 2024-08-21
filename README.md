@@ -38,6 +38,14 @@ The resources' licenses may differ from the licensing of mutt itself; see the [l
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
 
+# Known bugs and limitations
+
+This section covers all of the known bugs and limitations of mutt.
+
+## Instruction support
+
+Currently, mutt does not have any built-in way to execute any TrueType instructions.
+
 ## Licensing of demo resources
 
 The resources used by the demos may differ from licensing of the demos themselves; in that context, their licenses apply, with licensing of each file available as a separate file with the same name, but with no filename extension.
@@ -121,7 +129,7 @@ For most users, it is unnecessary or confusing to specify all the tables they wa
 
 * [0x000001FF] `MUTT_LOAD_REQUIRED` - load the tables required by the TrueType specification (maxp, head, hhea, hmtx, loca, post, name, glyf, and cmap).
 
- `[0xFFFFFFFF] `MUTT_LOAD_ALL` - loads all tables that could be supported by mutt.
+* [0xFFFFFFFF] `MUTT_LOAD_ALL` - loads all tables that could be supported by mutt.
 
 # Low-level API
 
@@ -131,7 +139,9 @@ The low-level API of mutt is designed to support reading information from the ta
 
 The font struct, `muttFont`, is the primary way of reading information from TrueType tables, holding pointers to each table's defined data, and is automatically filled using the function [`mutt_load`](#loading-a-font). It has the following members:
 
-* `muttLoadFlags load_flags` - flags indicating which tables successfully loaded.
+* `muttLoadFlags load_flags` - flags indicating which requested tables successfully loaded.
+
+* `muttLoadFlags fail_load_flags` - flags indicating which requested tables did not successfully load.
 
 * `muttDirectory* directory` - a pointer to the [font directory](#font-directory).
 
@@ -195,15 +205,57 @@ The struct `muttTableRecord` represents a table record in the table directory. I
 
 * `uint32_m length` - equivalent to "length" in the table record.
 
+## Maxp table
+
+The struct `muttMaxp` is used to represent the maxp table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`maxp`", and loaded with the flag `MUTT_LOAD_MAXP`. It has the following members:
+
+* `uint16_m version_high` - the high-bytes of "version" in the version 1.0 maxp table.
+
+* `uint16_m version_low` - the low-bytes of "version" in the version 1.0 maxp table.
+
+* `uint16_m num_glyphs` - equivalent to "numGlyphs" in the version 1.0 maxp table.
+
+* `uint16_m max_points` - equivalent to "maxPoints" in the version 1.0 maxp table.
+
+* `uint16_m max_contours` - equivalent to "maxContours" in the version 1.0 maxp table.
+
+* `uint16_m max_composite_points` - equivalent to "maxCompositePoints" in the version 1.0 maxp table.
+
+* `uint16_m max_composite_contours` - equivalent to "maxCompositeContours" in the version 1.0 maxp table.
+
+* `uint16_m max_zones` - equivalent to "maxZones" in the version 1.0 maxp table.
+
+* `uint16_m max_twilight_points` - equivalent to "maxTwilightPoints" in the version 1.0 maxp table.
+
+* `uint16_m max_storage` - equivalent to "maxStorage" in the version 1.0 maxp table.
+
+* `uint16_m max_function_defs` - equivalent to "maxFunctionDefs" in the version 1.0 maxp table.
+
+* `uint16_m max_instruction_defs` - equivalent to "maxInstructionDefs" in the version 1.0 maxp table.
+
+* `uint16_m max_stack_elements` - equivalent to "maxStackElements" in the version 1.0 maxp table.
+
+* `uint16_m max_size_of_instructions` - equivalent to "maxSizeOfInstructions" in the version 1.0 maxp table.
+
+* `uint16_m max_component_elements` - equivalent to "maxComponentElements" in the version 1.0 maxp table.
+
+* `uint16_m max_component_depth` - equivalent to "maxComponentDepth" in the version 1.0 maxp table.
+
+Since most values given in this table are just maximums, there are only checks performed for the version, numGlyph, and maxZones values. All other values dictate maximums that other tables must follow, and checks will be performed on said tables to ensure they stay within the maximums dictated by maxp.
+
 # Result
 
 The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded). The following values are defined for `muttResult` (all values not explicitly stated as being fatal, non-fatal, or successful are assumed to be fatal):
 
 * `MUTT_SUCCESS` - the task was successfully completed; real value 0.
 
-* `MUTT_INVALID_DIRECTORY_LENGTH` - the length of the table directory was invalid. This is the first check performed on the length of the font file data, so if this result is given, it is likely that the data given is not font file data.
+* `MUTT_FAILED_MALLOC` - a call to malloc failed, implying insufficient available memory to perform the task.
 
-* `MUTT_INVALID_DIRECTORY_SFNT_VERSION` - the value of "sfntVersion" in the table directory was invalid/unsupported.
+* `MUTT_FAILED_FIND_TABLE` - the table could not be located, and is likely not included in the font file.
+
+* `MUTT_INVALID_DIRECTORY_LENGTH` - the length of the table directory was invalid. This is the first check performed on the length of the font file data, meaning that if this result is given, it is likely that the data given is not font file data.
+
+* `MUTT_INVALID_DIRECTORY_SFNT_VERSION` - the value of "sfntVersion" in the table directory was invalid/unsupported. This is the first check performed on the values within the font file data, meaning that if this result is given, it is likely that the data given is not TrueType font file data. This can also be triggered by the TrueType font using CFF data, which is currently unsupported.
 
 * `MUTT_INVALID_DIRECTORY_NUM_TABLES` - the value of "numTables" in the table directory was invalid; the number of tables must be at least 9 to store all tables required in TrueType.
 
@@ -214,6 +266,16 @@ The type `muttResult` (typedef for `uint32_m`) is defined to represent how a tas
 * `MUTT_INVALID_DIRECTORY_RECORD_CHECKSUM` - the value of "checksum" in a table record within the table directory was invalid, implying that the table data was incorrect.
 
 * `MUTT_INVALID_DIRECTORY_RECORD_TABLE_TAG` - the table tag of a table within the table directory was a duplicate of a previous one.
+
+* `MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS` - one or more tables required by TrueType standards could not be found in the table directory.
+
+* `MUTT_INVALID_MAXP_LENGTH` - the length of the maxp table was invalid.
+
+* `MUTT_INVALID_MAXP_VERSION` - the version of the maxp table given was invalid. This likely means that the font has a CFF/CFF2 font outline, which is currently unsupported.
+
+* `MUTT_INVALID_MAXP_NUM_GLYPHS` - the value for "numGlyphs" given in the maxp table was invalid.
+
+* `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" given in the maxp table was invalid.
 
 ## Check if result is fatal
 

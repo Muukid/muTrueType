@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-18
+LAST UPDATED:       2024-08-21
 
 ============================================================
                         DEMO PURPOSE
@@ -92,6 +92,15 @@ int main(void)
 		}
 
 		printf("Successfully loaded font file 'resources/font.ttf'\n");
+
+		// Print if some tables failed to load
+		if (font.fail_load_flags) {
+			printf("Some tables failed to load\n");
+		} else {
+			printf("All tables loaded successfully\n");
+		}
+
+		printf("\n");
 	}
 
 	/* Print table directory info */
@@ -120,6 +129,37 @@ int main(void)
 
 		printf("\n");
 	}
+
+	/* Print maxp */
+	{
+		printf("== Maxp ==\n");
+
+		// Case for if maxp failed to load:
+		if (!font.maxp) {
+			printf("maxp failed to load: %s\n\n", mutt_result_get_name(font.maxp_res));
+			goto end_of_maxp;
+		}
+
+		// Print values
+		printf("version               = %" PRIu16 ".%" PRIu16 "\n", font.maxp->version_high, font.maxp->version_low);
+		printf("numGlyphs             = %" PRIu16 "\n", font.maxp->num_glyphs);
+		printf("maxPoints             = %" PRIu16 "\n", font.maxp->max_points);
+		printf("maxContours           = %" PRIu16 "\n", font.maxp->max_contours);
+		printf("maxCompositePoints    = %" PRIu16 "\n", font.maxp->max_composite_points);
+		printf("maxCompositeContours  = %" PRIu16 "\n", font.maxp->max_composite_contours);
+		printf("maxZones              = %" PRIu16 "\n", font.maxp->max_zones);
+		printf("maxTwilightPoints     = %" PRIu16 "\n", font.maxp->max_twilight_points);
+		printf("maxStorage            = %" PRIu16 "\n", font.maxp->max_storage);
+		printf("maxFunctionDefs       = %" PRIu16 "\n", font.maxp->max_function_defs);
+		printf("maxInstructionDefs    = %" PRIu16 "\n", font.maxp->max_instruction_defs);
+		printf("maxStackElements      = %" PRIu16 "\n", font.maxp->max_stack_elements);
+		printf("maxSizeOfInstructions = %" PRIu16 "\n", font.maxp->max_size_of_instructions);
+		printf("maxComponentElements  = %" PRIu16 "\n", font.maxp->max_component_elements);
+		printf("maxComponentDepth     = %" PRIu16 "\n", font.maxp->max_component_depth);
+
+		printf("\n");
+	}
+	end_of_maxp:
 
 	/* Deload font */
 	{
