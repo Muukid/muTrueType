@@ -307,7 +307,23 @@ The struct `muttHhea` is used to represent the hhea table provided by a TrueType
 
 * `uint16_m number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
 
-All values provided in the `muttHhea` struct are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+All values provided in the `muttHhea` struct are not checked (besides numberOfHMetrics, since it must be less than or equal to `maxp->num_glyphs` in order to generate a valid array length for "leftSideBearings" within hmtx), as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
+## Hmtx table
+
+The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX`. It has the following members:
+
+* `muttLongHorMetric* hmetrics` - an array of horizontal metric records; equiavlent to "hMetrics" in the hmtx table. Its length is equivalent to `hhea->number_of_hmetrics`.
+
+* `int16_m* left_side_bearings` - equivalent to "leftSideBearings" in the hmtx table. Its length is equivalent to `maxp->num_glyphs - hhea->number_of_hmetrics`.
+
+The struct `muttLongHorMetrics` has the following members:
+
+* `uint16_m advance_width` - equivalent to "advanceWidth" in the LongHorMetric record.
+
+* `int16_m lsb` - equivalent to "lsb" in the LongHorMetric record.
+
+All values provided in the `muttHmtx` struct (AKA the values in `muttLongHorMetrics`) are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
 
 # Result
 
@@ -379,11 +395,25 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
 
+### Hhea result values
+
 * `MUTT_INVALID_HHEA_LENGTH` - the length of the hhea table was invalid.
 
 * `MUTT_INVALID_HHEA_VERSION` - the version indicated for the hhea table was invalid/unsupported.
 
 * `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" within the hhea table was invalid/unsupported; it was not the expected value 0.
+
+* `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS` - the value for "numberOfHMetrics" within the hhea table was invalid; numberOfHMetrics must be less than or equal to "numGlyphs" in order to generate a valid array length for "leftSideBearings" within hmtx.
+
+* `MUTT_HHEA_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and hhea requires maxp to be loaded.
+
+### Hmtx result values
+
+* `MUTT_INVALID_HMTX_LENGTH` - the length of the hmtx table was invalid.
+
+* `MUTT_HMTX_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and hmtx requires maxp to be loaded.
+
+* `MUTT_HMTX_REQUIRES_HHEA` - the hhea table rather failed to load or was not requested for loading, and hmtx requires hhea to be loaded.
 
 ## Check if result is fatal
 

@@ -1123,7 +1123,31 @@ mutt is developed primarily off of these sources of documentation:
 				uint16_m number_of_hmetrics;
 			};
 
-			// @DOCLINE All values provided in the `muttHhea` struct are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+			// @DOCLINE All values provided in the `muttHhea` struct are not checked (besides numberOfHMetrics, since it must be less than or equal to `maxp->num_glyphs` in order to generate a valid array length for "leftSideBearings" within hmtx), as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
+		// @DOCLINE ## Hmtx table
+
+			typedef struct muttLongHorMetric muttLongHorMetric;
+
+			// @DOCLINE The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX`. It has the following members:
+
+			struct muttHmtx {
+				// @DOCLINE * `@NLFT* hmetrics` - an array of horizontal metric records; equiavlent to "hMetrics" in the hmtx table. Its length is equivalent to `hhea->number_of_hmetrics`.
+				muttLongHorMetric* hmetrics;
+				// @DOCLINE * `@NLFT* left_side_bearings` - equivalent to "leftSideBearings" in the hmtx table. Its length is equivalent to `maxp->num_glyphs - hhea->number_of_hmetrics`.
+				int16_m* left_side_bearings;
+			};
+
+			// @DOCLINE The struct `muttLongHorMetrics` has the following members:
+
+			struct muttLongHorMetric {
+				// @DOCLINE * `@NLFT advance_width` - equivalent to "advanceWidth" in the LongHorMetric record.
+				uint16_m advance_width;
+				// @DOCLINE * `@NLFT lsb` - equivalent to "lsb" in the LongHorMetric record.
+				int16_m lsb;
+			};
+
+			// @DOCLINE All values provided in the `muttHmtx` struct (AKA the values in `muttLongHorMetrics`) are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
 
 	// @DOCLINE # Result
 
@@ -1134,84 +1158,100 @@ mutt is developed primarily off of these sources of documentation:
 		// @DOCLINE The following values are defined for `muttResult` (all values not explicitly stated as being fatal, non-fatal, or successful are assumed to be fatal):
 
 		// @DOCLINE ### General result values
-
 		// 0 -> 63 //
-		// @DOCLINE * `MUTT_SUCCESS` - the task was successfully completed; real value 0.
-		#define MUTT_SUCCESS 0
-		// @DOCLINE * `MUTT_FAILED_MALLOC` - a call to malloc failed, implying insufficient available memory to perform the task.
-		#define MUTT_FAILED_MALLOC 1
-		// @DCOLINE * `MUTT_FAILED_REALLOC` - a call to realloc failed, implying insufficient available memory to perform the task.
-		#define MUTT_FAILED_REALLOC 2
-		// @DOCLINE * `MUTT_FAILED_FIND_TABLE` - the table could not be located, and is likely not included in the font file.
-		#define MUTT_FAILED_FIND_TABLE 3
+
+			// @DOCLINE * `MUTT_SUCCESS` - the task was successfully completed; real value 0.
+			#define MUTT_SUCCESS 0
+			// @DOCLINE * `MUTT_FAILED_MALLOC` - a call to malloc failed, implying insufficient available memory to perform the task.
+			#define MUTT_FAILED_MALLOC 1
+			// @DCOLINE * `MUTT_FAILED_REALLOC` - a call to realloc failed, implying insufficient available memory to perform the task.
+			#define MUTT_FAILED_REALLOC 2
+			// @DOCLINE * `MUTT_FAILED_FIND_TABLE` - the table could not be located, and is likely not included in the font file.
+			#define MUTT_FAILED_FIND_TABLE 3
 
 		// @DOCLINE ### Directory result values
-
 		// 64 -> 127 //
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_LENGTH` - the length of the table directory was invalid. This is the first check performed on the length of the font file data, meaning that if this result is given, it is likely that the data given is not font file data.
-		#define MUTT_INVALID_DIRECTORY_LENGTH 64
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_SFNT_VERSION` - the value of "sfntVersion" in the table directory was invalid/unsupported. This is the first check performed on the values within the font file data, meaning that if this result is given, it is likely that the data given is not TrueType font file data. This can also be triggered by the TrueType font using CFF data, which is currently unsupported.
-		#define MUTT_INVALID_DIRECTORY_SFNT_VERSION 65
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_NUM_TABLES` - the value of "numTables" in the table directory was invalid; the number of tables must be at least 9 to store all tables required in TrueType.
-		#define MUTT_INVALID_DIRECTORY_NUM_TABLES 66
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_OFFSET` - the value of "offset" in a table record within the table directory was out of range.
-		#define MUTT_INVALID_DIRECTORY_RECORD_OFFSET 67
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_LENGTH` - the value of "length" in a table record within the table directory was out of range.
-		#define MUTT_INVALID_DIRECTORY_RECORD_LENGTH 68
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_CHECKSUM` - the value of "checksum" in a table record within the table directory was invalid, implying that the table data was incorrect.
-		#define MUTT_INVALID_DIRECTORY_RECORD_CHECKSUM 69
-		// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_TABLE_TAG` - the table tag of a table within the table directory was a duplicate of a previous one.
-		#define MUTT_INVALID_DIRECTORY_RECORD_TABLE_TAG 70
-		// @DOCLINE * `MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS` - one or more tables required by TrueType standards could not be found in the table directory.
-		#define MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS 71
+
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_LENGTH` - the length of the table directory was invalid. This is the first check performed on the length of the font file data, meaning that if this result is given, it is likely that the data given is not font file data.
+			#define MUTT_INVALID_DIRECTORY_LENGTH 64
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_SFNT_VERSION` - the value of "sfntVersion" in the table directory was invalid/unsupported. This is the first check performed on the values within the font file data, meaning that if this result is given, it is likely that the data given is not TrueType font file data. This can also be triggered by the TrueType font using CFF data, which is currently unsupported.
+			#define MUTT_INVALID_DIRECTORY_SFNT_VERSION 65
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_NUM_TABLES` - the value of "numTables" in the table directory was invalid; the number of tables must be at least 9 to store all tables required in TrueType.
+			#define MUTT_INVALID_DIRECTORY_NUM_TABLES 66
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_OFFSET` - the value of "offset" in a table record within the table directory was out of range.
+			#define MUTT_INVALID_DIRECTORY_RECORD_OFFSET 67
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_LENGTH` - the value of "length" in a table record within the table directory was out of range.
+			#define MUTT_INVALID_DIRECTORY_RECORD_LENGTH 68
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_CHECKSUM` - the value of "checksum" in a table record within the table directory was invalid, implying that the table data was incorrect.
+			#define MUTT_INVALID_DIRECTORY_RECORD_CHECKSUM 69
+			// @DOCLINE * `MUTT_INVALID_DIRECTORY_RECORD_TABLE_TAG` - the table tag of a table within the table directory was a duplicate of a previous one.
+			#define MUTT_INVALID_DIRECTORY_RECORD_TABLE_TAG 70
+			// @DOCLINE * `MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS` - one or more tables required by TrueType standards could not be found in the table directory.
+			#define MUTT_MISSING_DIRECTORY_RECORD_TABLE_TAGS 71
 
 		// @DOCLINE ### Maxp result values
-
 		// 128 -> 191 //
-		// @DOCLINE * `MUTT_INVALID_MAXP_LENGTH` - the length of the maxp table was invalid.
-		#define MUTT_INVALID_MAXP_LENGTH 128
-		// @DOCLINE * `MUTT_INVALID_MAXP_VERSION` - the version of the maxp table given was invalid/unsupported. This likely means that the font has a CFF/CFF2 font outline, which is currently unsupported.
-		#define MUTT_INVALID_MAXP_VERSION 129
-		// @DOCLINE * `MUTT_INVALID_MAXP_NUM_GLYPHS` - the value for "numGlyphs" given in the maxp table was invalid.
-		#define MUTT_INVALID_MAXP_NUM_GLYPHS 130
-		// @DOCLINE * `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" given in the maxp table was invalid.
-		#define MUTT_INVALID_MAXP_MAX_ZONES 131
+
+			// @DOCLINE * `MUTT_INVALID_MAXP_LENGTH` - the length of the maxp table was invalid.
+			#define MUTT_INVALID_MAXP_LENGTH 128
+			// @DOCLINE * `MUTT_INVALID_MAXP_VERSION` - the version of the maxp table given was invalid/unsupported. This likely means that the font has a CFF/CFF2 font outline, which is currently unsupported.
+			#define MUTT_INVALID_MAXP_VERSION 129
+			// @DOCLINE * `MUTT_INVALID_MAXP_NUM_GLYPHS` - the value for "numGlyphs" given in the maxp table was invalid.
+			#define MUTT_INVALID_MAXP_NUM_GLYPHS 130
+			// @DOCLINE * `MUTT_INVALID_MAXP_MAX_ZONES` - the value for "maxZones" given in the maxp table was invalid.
+			#define MUTT_INVALID_MAXP_MAX_ZONES 131
 
 		// @DOCLINE ### Head result values
-
 		// 192 -> 255 //
-		// @DOCLINE * `MUTT_INVALID_HEAD_LENGTH` - the length of the head table was invalid.
-		#define MUTT_INVALID_HEAD_LENGTH 192
-		// @DOCLINE * `MUTT_INVALID_HEAD_VERSION` - the version indicated for the head table was invalid/unsupported.
-		#define MUTT_INVALID_HEAD_VERSION 193
-		// @DOCLINE * `MUTT_INVALID_HEAD_MAGIC_NUMBER` - the value for the magic number in the head table was invalid.
-		#define MUTT_INVALID_HEAD_MAGIC_NUMBER 194
-		// @DOCLINE * `MUTT_INVALID_HEAD_UNITS_PER_EM` - the value for the units per em in the head table was not within the correct range of 16 to 16384.
-		#define MUTT_INVALID_HEAD_UNITS_PER_EM 195
-		// @DOCLINE * `MUTT_INVALID_HEAD_X_MIN_COORDINATES` - the value "xMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
-		#define MUTT_INVALID_HEAD_X_MIN_COORDINATES 196
-		// @DOCLINE * `MUTT_INVALID_HEAD_Y_MIN_COORDINATES` - the value "yMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
-		#define MUTT_INVALID_HEAD_Y_MIN_COORDINATES 197
-		// @DOCLINE * `MUTT_INVALID_HEAD_X_MAX_COORDINATES` - the value "xMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
-		#define MUTT_INVALID_HEAD_X_MAX_COORDINATES 198
-		// @DOCLINE * `MUTT_INVALID_HEAD_Y_MAX_COORDINATES` - the value "yMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
-		#define MUTT_INVALID_HEAD_Y_MAX_COORDINATES 199
-		// @DOCLINE * `MUTT_INVALID_HEAD_X_MIN_MAX` - the value established minimum x-value within the head table was greater than the established maximum x-value.
-		#define MUTT_INVALID_HEAD_X_MIN_MAX 200
-		// @DOCLINE * `MUTT_INVALID_HEAD_Y_MIN_MAX` - the value established minimum y-value within the head table was greater than the established maximum y-value.
-		#define MUTT_INVALID_HEAD_Y_MIN_MAX 201
-		// @DOCLINE * `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT` - the value for "indexToLocFormat" within the head table was invalid/unsupported; it was not one of the expected values 0 (Offset16) or 1 (Offset32).
-		#define MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT 202
-		// @DOCLINE * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
-		#define MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT 203
 
+			// @DOCLINE * `MUTT_INVALID_HEAD_LENGTH` - the length of the head table was invalid.
+			#define MUTT_INVALID_HEAD_LENGTH 192
+			// @DOCLINE * `MUTT_INVALID_HEAD_VERSION` - the version indicated for the head table was invalid/unsupported.
+			#define MUTT_INVALID_HEAD_VERSION 193
+			// @DOCLINE * `MUTT_INVALID_HEAD_MAGIC_NUMBER` - the value for the magic number in the head table was invalid.
+			#define MUTT_INVALID_HEAD_MAGIC_NUMBER 194
+			// @DOCLINE * `MUTT_INVALID_HEAD_UNITS_PER_EM` - the value for the units per em in the head table was not within the correct range of 16 to 16384.
+			#define MUTT_INVALID_HEAD_UNITS_PER_EM 195
+			// @DOCLINE * `MUTT_INVALID_HEAD_X_MIN_COORDINATES` - the value "xMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+			#define MUTT_INVALID_HEAD_X_MIN_COORDINATES 196
+			// @DOCLINE * `MUTT_INVALID_HEAD_Y_MIN_COORDINATES` - the value "yMin" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+			#define MUTT_INVALID_HEAD_Y_MIN_COORDINATES 197
+			// @DOCLINE * `MUTT_INVALID_HEAD_X_MAX_COORDINATES` - the value "xMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+			#define MUTT_INVALID_HEAD_X_MAX_COORDINATES 198
+			// @DOCLINE * `MUTT_INVALID_HEAD_Y_MAX_COORDINATES` - the value "yMax" in the head table was not within the valid TrueType grid coordinate range of -16384 to 16383.
+			#define MUTT_INVALID_HEAD_Y_MAX_COORDINATES 199
+			// @DOCLINE * `MUTT_INVALID_HEAD_X_MIN_MAX` - the value established minimum x-value within the head table was greater than the established maximum x-value.
+			#define MUTT_INVALID_HEAD_X_MIN_MAX 200
+			// @DOCLINE * `MUTT_INVALID_HEAD_Y_MIN_MAX` - the value established minimum y-value within the head table was greater than the established maximum y-value.
+			#define MUTT_INVALID_HEAD_Y_MIN_MAX 201
+			// @DOCLINE * `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT` - the value for "indexToLocFormat" within the head table was invalid/unsupported; it was not one of the expected values 0 (Offset16) or 1 (Offset32).
+			#define MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT 202
+			// @DOCLINE * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
+			#define MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT 203
+
+		// @DOCLINE ### Hhea result values
 		// 256 -> 319 //
-		// @DOCLINE * `MUTT_INVALID_HHEA_LENGTH` - the length of the hhea table was invalid.
-		#define MUTT_INVALID_HHEA_LENGTH 256
-		// @DOCLINE * `MUTT_INVALID_HHEA_VERSION` - the version indicated for the hhea table was invalid/unsupported.
-		#define MUTT_INVALID_HHEA_VERSION 257
-		// @DOCLINE * `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" within the hhea table was invalid/unsupported; it was not the expected value 0.
-		#define MUTT_INVALID_HHEA_METRIC_DATA_FORMAT 258
+
+			// @DOCLINE * `MUTT_INVALID_HHEA_LENGTH` - the length of the hhea table was invalid.
+			#define MUTT_INVALID_HHEA_LENGTH 256
+			// @DOCLINE * `MUTT_INVALID_HHEA_VERSION` - the version indicated for the hhea table was invalid/unsupported.
+			#define MUTT_INVALID_HHEA_VERSION 257
+			// @DOCLINE * `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" within the hhea table was invalid/unsupported; it was not the expected value 0.
+			#define MUTT_INVALID_HHEA_METRIC_DATA_FORMAT 258
+			// @DOCLINE * `MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS` - the value for "numberOfHMetrics" within the hhea table was invalid; numberOfHMetrics must be less than or equal to "numGlyphs" in order to generate a valid array length for "leftSideBearings" within hmtx.
+			#define MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS 259
+			// @DOCLINE * `MUTT_HHEA_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and hhea requires maxp to be loaded.
+			#define MUTT_HHEA_REQUIRES_MAXP 260
+
+		// @DOCLINE ### Hmtx result values
+		// 320 -> 383 //
+
+			// @DOCLINE * `MUTT_INVALID_HMTX_LENGTH` - the length of the hmtx table was invalid.
+			#define MUTT_INVALID_HMTX_LENGTH 320
+			// @DOCLINE * `MUTT_HMTX_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and hmtx requires maxp to be loaded.
+			#define MUTT_HMTX_REQUIRES_MAXP 321
+			// @DOCLINE * `MUTT_HMTX_REQUIRES_HHEA` - the hhea table rather failed to load or was not requested for loading, and hmtx requires hhea to be loaded.
+			#define MUTT_HMTX_REQUIRES_HHEA 322
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -1632,6 +1672,7 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Loads the hhea table
+			// Req: maxp
 			muttResult mutt_LoadHhea(muttFont* font, muByte* data, uint32_m datalen) {
 				// Allocate hhea
 				muttHhea* hhea = (muttHhea*)mu_malloc(sizeof(muttHhea));
@@ -1683,9 +1724,97 @@ mutt is developed primarily off of these sources of documentation:
 
 				// numberOfHMetrics
 				hhea->number_of_hmetrics = MU_RBEU16(data+34);
+				// - numGlyphs-numberOfHMetrics must be valid for leftSideBearings in hmtx
+				if (hhea->number_of_hmetrics > font->maxp->num_glyphs) {
+					mu_free(hhea);
+					return MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS;
+				}
 
 				font->hhea = hhea;
 				return MUTT_SUCCESS;
+			}
+
+		/* Allocated tables */
+
+			// Loads the hmtx table
+			// Req: maxp, hhea
+			void mutt_DeloadHmtx(muttHmtx* hmtx);
+			muttResult mutt_LoadHmtx(muttFont* font, muByte* data, uint32_m datalen) {
+				// Verify length
+				if (datalen <
+					// hMetrics
+					(uint64_m)(4*font->hhea->number_of_hmetrics)
+					// leftSideBearings
+					+(uint64_m)(2*(font->maxp->num_glyphs-font->hhea->number_of_hmetrics))
+				) {
+					return MUTT_INVALID_HMTX_LENGTH;
+				}
+
+				// Allocate
+				muttHmtx* hmtx = (muttHmtx*)mu_malloc(sizeof(muttHmtx));
+				if (!hmtx) {
+					// mutt_DeloadHmtx(hmtx);
+					return MUTT_FAILED_MALLOC;
+				}
+				hmtx->hmetrics = 0;
+				hmtx->left_side_bearings = 0;
+
+				// Allocate hMetrics
+				if (font->hhea->number_of_hmetrics == 0) {
+					hmtx->hmetrics = 0;
+				} else {
+					hmtx->hmetrics = (muttLongHorMetric*)mu_malloc(sizeof(muttLongHorMetric)*font->hhea->number_of_hmetrics);
+					if (!hmtx->hmetrics) {
+						mutt_DeloadHmtx(hmtx);
+						return MUTT_FAILED_MALLOC;
+					}
+				}
+
+				// Allocate leftSideBearings
+				uint16_m lsb_len = font->maxp->num_glyphs - font->hhea->number_of_hmetrics;
+				if (lsb_len == 0) {
+					hmtx->left_side_bearings = 0;
+				} else {
+					hmtx->left_side_bearings = (int16_m*)mu_malloc(lsb_len*2);
+					if (!hmtx->left_side_bearings) {
+						mutt_DeloadHmtx(hmtx);
+						return MUTT_FAILED_MALLOC;
+					}
+				}
+
+				// Loop through each hMetrics index
+				for (uint16_m h = 0; h < font->hhea->number_of_hmetrics; ++h) {
+					// advanceWidth
+					hmtx->hmetrics[h].advance_width = MU_RBEU16(data);
+					// lsb
+					hmtx->hmetrics[h].lsb = MU_RBES16(data+2);
+					// Increment data
+					data += 4;
+				}
+
+				// Loop through each leftSideBearings index
+				for (uint16_m l = 0; l < lsb_len; ++l) {
+					// leftSideBearings[l]
+					hmtx->left_side_bearings[l] = MU_RBES16(data);
+					// Increment data
+					data += 2;
+				}
+
+				font->hmtx = hmtx;
+				return MUTT_SUCCESS;
+			}
+
+			// Deloads the hmtx table
+			void mutt_DeloadHmtx(muttHmtx* hmtx) {
+				if (hmtx) {
+					if (hmtx->hmetrics) {
+						mu_free(hmtx->hmetrics);
+					}
+					if (hmtx->left_side_bearings) {
+						mu_free(hmtx->left_side_bearings);
+					}
+					mu_free(hmtx);
+				}
 			}
 
 		/* Loading / Deloading */
@@ -1701,10 +1830,13 @@ mutt is developed primarily off of these sources of documentation:
 				// hhea
 				font->hhea_res = (load_flags & MUTT_LOAD_HHEA) ? MUTT_FAILED_FIND_TABLE : 0;
 				font->fail_load_flags |= (load_flags & MUTT_LOAD_HHEA);
+				// hmtx
+				font->hmtx_res = (load_flags & MUTT_LOAD_HMTX) ? MUTT_FAILED_FIND_TABLE : 0;
+				font->fail_load_flags |= (load_flags & MUTT_LOAD_HMTX);
 			}
 
 			// Does one pass through each table load
-			void mutt_LoadTables(muttFont* font, muByte* data) {
+			void mutt_LoadTables(muttFont* font, muByte* data, muttLoadFlags* first, muBool dep_pass, muttLoadFlags* waiting) {
 				// Loop through each table
 				for (uint16_m i = 0; i < font->directory->num_tables; ++i) {
 					// Get record information
@@ -1716,6 +1848,10 @@ mutt is developed primarily off of these sources of documentation:
 
 						// maxp
 						case 0x6D617870: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_MAXP;
+							}
 							// Skip if already processed
 							// This works because all tables to be processed are initialized
 							// to "MUTT_FAILED_FIND_TABLE" and set to something else once
@@ -1737,6 +1873,10 @@ mutt is developed primarily off of these sources of documentation:
 
 						// head
 						case 0x68656164: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_HEAD;
+							}
 							// Skip if already processed
 							if (font->head_res != MUTT_FAILED_FIND_TABLE) {
 								break;
@@ -1753,12 +1893,29 @@ mutt is developed primarily off of these sources of documentation:
 							}
 						} break;
 
-						// hhea
+						// hhea; req maxp
 						case 0x68686561: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_HHEA;
+							}
 							// Skip if already processed
 							if (font->hhea_res != MUTT_FAILED_FIND_TABLE) {
 								break;
 							}
+
+							// Give bad result if missing dependency
+							if (!dep_pass && !(*first & MUTT_LOAD_MAXP)) {
+								font->hhea_res = MUTT_HHEA_REQUIRES_MAXP;
+								break;
+							}
+							// Continue if dependencies aren't processed
+							if (!font->maxp) {
+								*waiting |= MUTT_LOAD_HHEA;
+								break;
+							}
+							// Mark as no longer waiting
+							*waiting ^= MUTT_LOAD_HHEA;
 
 							// Load
 							font->hhea_res = mutt_LoadHhea(font, &data[rec.offset], rec.length);
@@ -1770,12 +1927,56 @@ mutt is developed primarily off of these sources of documentation:
 								font->load_flags ^= MUTT_LOAD_HHEA;
 							}
 						} break;
+
+						// hmtx; req maxp, hhea
+						case 0x686D7478: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_HMTX;
+							}
+							// Skip if already processed
+							if (font->hmtx_res != MUTT_FAILED_FIND_TABLE) {
+								break;
+							}
+
+							// Give bad result if missing dependency
+							if (!dep_pass) {
+								// maxp
+								if (!(*first & MUTT_LOAD_MAXP)) {
+									font->hmtx_res = MUTT_HMTX_REQUIRES_MAXP;
+									break;
+								}
+								// hhea
+								if (!(*first & MUTT_LOAD_HHEA)) {
+									font->hmtx_res = MUTT_HMTX_REQUIRES_HHEA;
+									break;
+								}
+							}
+							// Continue if dependencies aren't processed
+							if (!(font->maxp) || !(font->hhea)) {
+								*waiting |= MUTT_LOAD_HMTX;
+								break;
+							}
+							// Mark as no longer waiting
+							*waiting ^= MUTT_LOAD_HMTX;
+
+							// Load
+							font->hmtx_res = mutt_LoadHmtx(font, &data[rec.offset], rec.length);
+							if (font->hmtx) {
+								font->load_flags |= MUTT_LOAD_HMTX;
+								font->fail_load_flags ^= MUTT_LOAD_HMTX;
+							} else {
+								font->fail_load_flags |= MUTT_LOAD_HMTX;
+								font->load_flags ^= MUTT_LOAD_HMTX;
+							}
+						} break;
 					}
 				}
 			}
 
 			// Deallocates all loaded tables
 			void mutt_DeloadTables(muttFont* font) {
+				// Basic tables
 				if (font->maxp) {
 					mu_free(font->maxp);
 				}
@@ -1785,6 +1986,9 @@ mutt is developed primarily off of these sources of documentation:
 				if (font->hhea) {
 					mu_free(font->hhea);
 				}
+
+				// Allocated tables
+				mutt_DeloadHmtx(font->hmtx);
 			}
 
 			MUDEF muttResult mutt_load(muByte* data, uint64_m datalen, muttFont* font, muttLoadFlags load_flags) {
@@ -1809,7 +2013,13 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Init and load tables
 				mutt_InitTables(font, load_flags);
-				mutt_LoadTables(font, data);
+
+				muttLoadFlags temp_flags = 0;
+				muttLoadFlags wait_flags = 0;
+				mutt_LoadTables(font, data, &temp_flags, MU_TRUE, &wait_flags);
+				while (wait_flags) {
+					mutt_LoadTables(font, data, &temp_flags, MU_FALSE, &wait_flags);
+				}
 
 				return MUTT_SUCCESS;
 			}
@@ -1871,6 +2081,11 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_HHEA_LENGTH: return "MUTT_INVALID_HHEA_LENGTH"; break;
 				case MUTT_INVALID_HHEA_VERSION: return "MUTT_INVALID_HHEA_VERSION"; break;
 				case MUTT_INVALID_HHEA_METRIC_DATA_FORMAT: return "MUTT_INVALID_HHEA_METRIC_DATA_FORMAT"; break;
+				case MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS: return "MUTT_INVALID_HHEA_NUMBER_OF_HMETRICS"; break;
+				case MUTT_HHEA_REQUIRES_MAXP: return "MUTT_HHEA_REQUIRES_MAXP"; break;
+				case MUTT_INVALID_HMTX_LENGTH: return "MUTT_INVALID_HMTX_LENGTH"; break;
+				case MUTT_HMTX_REQUIRES_MAXP: return "MUTT_HMTX_REQUIRES_MAXP";
+				case MUTT_HMTX_REQUIRES_HHEA: return "MUTT_HMTX_REQUIRES_HHEA";
 			}
 		}
 

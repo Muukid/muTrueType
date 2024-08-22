@@ -139,8 +139,8 @@ int main(void)
 
 			// Print other information
 			printf("\tchecksum = %" PRIu32 "\n", record.checksum);
-			printf("\toffset = %" PRIu32 " bytes\n", record.offset);
-			printf("\tlength = %" PRIu32 " bytes\n", record.length);
+			printf("\toffset   = %" PRIu32 " bytes\n", record.offset);
+			printf("\tlength   = %" PRIu32 " bytes\n", record.length);
 		}
 
 		printf("\n");
@@ -231,6 +231,55 @@ int main(void)
 		printf("\n");
 	}
 	end_of_hhea:
+
+	/* Print hmtx */
+	{
+		printf("== Hmtx ==\n");
+
+		// Case for if hmtx failed to load
+		if (!font.hmtx) {
+			printf("hmtx failed to load: %s\n\n", mutt_result_get_name(font.hmtx_res));
+			goto end_of_hmtx;
+		}
+
+		printf("hMetrics[%" PRIu16 "]\n", font.hhea->number_of_hmetrics);
+		// Loop through each power of 2 in indexes for hmetrics array
+		{
+			uint16_m prev_h = 0;
+			for (uint16_m h = 0; h < font.hhea->number_of_hmetrics; (h==0) ?(h+=1) :(h*=2)) {
+				// Add break for if we overflow
+				if (h < prev_h) break;
+				prev_h = h;
+
+				// Print info
+				// - Index
+				printf("\thMetrics[%" PRIu16 "]\t = { ", h);
+				// - advanceWidth
+				printf("advanceWidth=%" PRIu16 ", \t", font.hmtx->hmetrics[h].advance_width);
+				// - lsb
+				printf("lsb=%" PRIu16 " }\n", font.hmtx->hmetrics[h].lsb);
+			}
+		}
+
+		// Calculate number of elements in leftSideBearings array
+		uint16_m lsb_len = font.maxp->num_glyphs - font.hhea->number_of_hmetrics;
+		printf("leftSideBearings[%" PRIu16 "]\n", lsb_len);
+		// Loop through each power of 2 in indexes for left side bearings array
+		{
+			uint16_m prev_l = 0;
+			for (uint16_m l = 0; l < lsb_len; (l==0) ?(l+=1) :(l*=2)) {
+				// Add break for overflow
+				if (l < prev_l) break;
+				prev_l = l;
+
+				// Print number
+				printf("\tlsb[%" PRIu16 "]\t = %" PRIi16 "\n", l, font.hmtx->left_side_bearings[l]);
+			}
+		}
+
+		printf("\n");
+	}
+	end_of_hmtx:
 
 	/* Deload font */
 	{
