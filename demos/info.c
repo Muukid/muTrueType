@@ -246,9 +246,7 @@ int main(void)
 		// Loop through each power of 2 in indexes for hmetrics array
 		{
 			uint16_m prev_h = 0;
-			for (uint16_m h = 0; h < font.hhea->number_of_hmetrics; (h==0) ?(h+=1) :(h*=2)) {
-				// Add break for if we overflow
-				if (h < prev_h) break;
+			for (uint16_m h = 0; h < font.hhea->number_of_hmetrics && prev_h <= h; (h==0) ?(h+=1) :(h*=2)) {
 				prev_h = h;
 
 				// Print info
@@ -267,9 +265,7 @@ int main(void)
 		// Loop through each power of 2 in indexes for left side bearings array
 		{
 			uint16_m prev_l = 0;
-			for (uint16_m l = 0; l < lsb_len; (l==0) ?(l+=1) :(l*=2)) {
-				// Add break for overflow
-				if (l < prev_l) break;
+			for (uint16_m l = 0; l < lsb_len && prev_l <= l; (l==0) ?(l+=1) :(l*=2)) {
 				prev_l = l;
 
 				// Print number
@@ -280,6 +276,48 @@ int main(void)
 		printf("\n");
 	}
 	end_of_hmtx:
+
+	/* Print loca */
+	{
+		printf("== Loca ==\n");
+
+		// Case for if loca failed to load
+		if (!font.loca) {
+			printf("loca failed to load: %s\n\n", mutt_result_get_name(font.loca_res));
+			goto end_of_loca;
+		}
+
+		// Calculate number of offsets
+		uint32_m offsets = ((uint32_m)font.maxp->num_glyphs) + 1;
+
+		// Offset16:
+		if (font.head->index_to_loc_format == MUTT_OFFSET_16) {
+			printf("Offset16[%" PRIu32 "]\n", offsets);
+
+			// Loop through each power of 2 in offset indexes
+			uint32_m prev_o = 0;
+			for (uint32_m o = 0; o < offsets && prev_o <= o; (o==0) ?(o+=1) :(o*=2)) {
+				prev_o = o;
+				// Print index
+				printf("\toffsets[%" PRIu32 "]\t = %" PRIu16 "\n", o, font.loca->offsets16[o]);
+			}
+		}
+		// Offset 32:
+		else {
+			printf("Offset32[%" PRIu32 "]\n", offsets);
+
+			// Loop through each power of 2 in offset indexes
+			uint32_m prev_o = 0;
+			for (uint32_m o = 0; o < offsets && prev_o <= o; (o==0) ?(o+=1) :(o*=2)) {
+				prev_o = o;
+				// Print index
+				printf("offsets[%" PRIu32 "]\t = %" PRIu32 "\n", o, font.loca->offsets32[o]);
+			}
+		}
+
+		printf("\n");
+	}
+	end_of_loca:
 
 	/* Deload font */
 	{

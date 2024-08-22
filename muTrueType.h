@@ -47,6 +47,10 @@ The resources' licenses may differ from the licensing of mutt itself; see the [l
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
 
+## Licensing of demo resources
+
+The resources used by the demos may differ from licensing of the demos themselves; in that context, their licenses apply, with licensing of each file available as a separate file with the same name, but with no filename extension.
+
 # Known bugs and limitations
 
 This section covers all of the known bugs and limitations of mutt.
@@ -55,9 +59,13 @@ This section covers all of the known bugs and limitations of mutt.
 
 Currently, mutt does not have any built-in way to execute any TrueType instructions.
 
-## Licensing of demo resources
+## Limited table support
 
-The resources used by the demos may differ from licensing of the demos themselves; in that context, their licenses apply, with licensing of each file available as a separate file with the same name, but with no filename extension.
+mutt is meant to be fairly simplistic for now, so it only supports reading information from all of the 9 required tables (besides post). Support for other tables may be added in future versions.
+
+## Support for post table
+
+mutt currently does not have support for reading values from the post table, which is one of the 9 required tables in the TrueType specification.
 
 # TrueType documentation
 
@@ -917,7 +925,7 @@ mutt is developed primarily off of these sources of documentation:
 			typedef struct muttHead muttHead;
 			typedef struct muttHhea muttHhea;
 			typedef struct muttHmtx muttHmtx;
-			typedef struct muttLoca muttLoca;
+			typedef union  muttLoca muttLoca;
 			typedef struct muttPost muttPost;
 			typedef struct muttName muttName;
 			typedef struct muttGlyf muttGlyf;
@@ -1094,9 +1102,15 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Currently, the values for "checksumAdjustment" and "fontDirectionHint" are not checked.
 
+			// @DOCLINE ### indexToLocFormat macros
+
+				// @DOCLINE The macros `MUTT_OFFSET_16` (0) and `MUTT_OFFSET_32` (1) are defined to make reading the value of "indexToLocFormat" easier.
+				#define MUTT_OFFSET_16 0
+				#define MUTT_OFFSET_32 1
+
 		// @DOCLINE ## Hhea table
 
-			// @DOCLINE The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA`. It has the following members:
+			// @DOCLINE The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA` (`MUTT_LOAD_MAXP` must also be defined). It has the following members:
 
 			struct muttHhea {
 				// @DOCLINE * `@NLFT ascender` - equivalent to "ascender" in the hhea table.
@@ -1129,7 +1143,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			typedef struct muttLongHorMetric muttLongHorMetric;
 
-			// @DOCLINE The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX`. It has the following members:
+			// @DOCLINE The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HHEA` must also be defined). It has the following members:
 
 			struct muttHmtx {
 				// @DOCLINE * `@NLFT* hmetrics` - an array of horizontal metric records; equiavlent to "hMetrics" in the hmtx table. Its length is equivalent to `hhea->number_of_hmetrics`.
@@ -1148,6 +1162,19 @@ mutt is developed primarily off of these sources of documentation:
 			};
 
 			// @DOCLINE All values provided in the `muttHmtx` struct (AKA the values in `muttLongHorMetrics`) are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
+		// @DOCLINE ## Loca table
+
+			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueTYpe font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
+
+			union muttLoca {
+				// @DOCLINE * `@NLFT* offsets16` - equivalent to the short-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_16`.
+				uint16_m* offsets16;
+				// @DOCLINE * `@NLFT* offsets32` - equivalent to the long-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_32`.
+				uint32_m* offsets32;
+			};
+
+			// @DOCLINE The offsets are verified to be within range of the glyf table, along with all of the other rules within the specification.
 
 	// @DOCLINE # Result
 
@@ -1252,6 +1279,18 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_HMTX_REQUIRES_MAXP 321
 			// @DOCLINE * `MUTT_HMTX_REQUIRES_HHEA` - the hhea table rather failed to load or was not requested for loading, and hmtx requires hhea to be loaded.
 			#define MUTT_HMTX_REQUIRES_HHEA 322
+
+		// @DOCLINE ### Loca result values
+		// 384 -> 448 //
+
+			// @DOCLINE * `MUTT_INVALID_LOCA_LENGTH` - the length of the loca table was invalid.
+			#define MUTT_INVALID_LOCA_LENGTH 284
+			// @DOCLINE * `MUTT_INVALID_LOCA_OFFSET` - an offset in the loca table was invalid. This could mean that the offset's range was invalid for the glyf table, or that the rule of incremental offsets was violated.
+			#define MUTT_INVALID_LOCA_OFFSET 285
+			// @DOCLINE * `MUTT_LOCA_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and loca requires maxp to be loaded.
+			#define MUTT_LOCA_REQUIRES_MAXP 286
+			// @DOCLINE * `MUTT_LOCA_REQUIRES_HEAD` - the head table rather failed to load or was not requested for loading, and loca requires head to be loaded.
+			#define MUTT_LOCA_REQUIRES_HEAD 287
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -1817,6 +1856,94 @@ mutt is developed primarily off of these sources of documentation:
 				}
 			}
 
+			// Loads the loca table
+			// Req: maxp, head
+			void mutt_DeloadLoca(muttLoca* loca);
+			muttResult mutt_LoadLoca(muttFont* font, muByte* data, uint32_m datalen) {
+				// Allocate
+				muttLoca* loca = (muttLoca*)mu_malloc(sizeof(muttLoca));
+				if (!loca) {
+					// mutt_DeloadLoca(loca);
+					return MUTT_FAILED_MALLOC;
+				}
+				mu_memset(loca, 0, sizeof(muttLoca));
+
+				// Get offsets count
+				uint32_m offsets = ((uint32_m)font->maxp->num_glyphs) + 1;
+
+				// Allocate offsets
+				// - 16-bit
+				if (font->head->index_to_loc_format == MUTT_OFFSET_16) {
+					// - Verify 16-bit length
+					if (datalen < offsets*2) {
+						mutt_DeloadLoca(loca);
+						return MUTT_INVALID_LOCA_LENGTH;
+					}
+					// - Allocate
+					loca->offsets16 = (uint16_m*)mu_malloc(offsets*2);
+					if (!loca->offsets16) {
+						mutt_DeloadLoca(loca);
+						return MUTT_FAILED_MALLOC;
+					}
+				}
+				// 32-bit
+				else {
+					// - Verify 32-bit length
+					if (datalen < offsets*4) {
+						mutt_DeloadLoca(loca);
+						return MUTT_INVALID_LOCA_LENGTH;
+					}
+					// - Allocate
+					loca->offsets32 = (uint32_m*)mu_malloc(offsets*4);
+					if (!loca->offsets32) {
+						mutt_DeloadLoca(loca);
+						return MUTT_FAILED_MALLOC;
+					}
+				}
+
+				// Loop through each offset
+				// - 16-bit
+				if (font->head->index_to_loc_format == MUTT_OFFSET_16) {
+					for (uint32_m o = 0; o < offsets; ++o) {
+						// Read value and go to next
+						loca->offsets16[o] = MU_RBEU16(data);
+						data += 2;
+						// Verify incremental order
+						if (o > 0 && loca->offsets16[o-1] > loca->offsets16[o]) {
+							mutt_DeloadLoca(loca);
+							return MUTT_INVALID_LOCA_OFFSET;
+						}
+					}
+				}
+				// - 32-bit
+				else {
+					for (uint32_m o = 0; o < offsets; ++o) {
+						// Read value and go to next
+						loca->offsets32[o] = MU_RBEU32(data);
+						data += 4;
+						// Verify incremental order
+						if (o > 0 && loca->offsets32[o-1] > loca->offsets32[o]) {
+							mutt_DeloadLoca(loca);
+							return MUTT_INVALID_LOCA_OFFSET;
+						}
+					}
+				}
+
+				font->loca = loca;
+				return MUTT_SUCCESS;
+			}
+
+			// Deloads the loca table
+			void mutt_DeloadLoca(muttLoca* loca) {
+				if (loca) {
+					// I THINK this works with 32 as well...
+					if (loca->offsets16) {
+						mu_free(loca->offsets16);
+					}
+					mu_free(loca);
+				}
+			}
+
 		/* Loading / Deloading */
 
 			// Initializes all flag/result states of each table to "failed to find"
@@ -1833,6 +1960,9 @@ mutt is developed primarily off of these sources of documentation:
 				// hmtx
 				font->hmtx_res = (load_flags & MUTT_LOAD_HMTX) ? MUTT_FAILED_FIND_TABLE : 0;
 				font->fail_load_flags |= (load_flags & MUTT_LOAD_HMTX);
+				// loca
+				font->loca_res = (load_flags & MUTT_LOAD_LOCA) ? MUTT_FAILED_FIND_TABLE : 0;
+				font->fail_load_flags |= (load_flags & MUTT_LOAD_LOCA);
 			}
 
 			// Does one pass through each table load
@@ -1864,10 +1994,10 @@ mutt is developed primarily off of these sources of documentation:
 							font->maxp_res = mutt_LoadMaxp(font, &data[rec.offset], rec.length);
 							if (font->maxp) {
 								font->load_flags |= MUTT_LOAD_MAXP;
-								font->fail_load_flags ^= MUTT_LOAD_MAXP;
+								font->fail_load_flags &= ~MUTT_LOAD_MAXP;
 							} else {
 								font->fail_load_flags |= MUTT_LOAD_MAXP;
-								font->load_flags ^= MUTT_LOAD_MAXP;
+								font->load_flags &= ~MUTT_LOAD_MAXP;
 							}
 						} break;
 
@@ -1886,10 +2016,10 @@ mutt is developed primarily off of these sources of documentation:
 							font->head_res = mutt_LoadHead(font, &data[rec.offset], rec.length);
 							if (font->head) {
 								font->load_flags |= MUTT_LOAD_HEAD;
-								font->fail_load_flags ^= MUTT_LOAD_HEAD;
+								font->fail_load_flags &= ~MUTT_LOAD_HEAD;
 							} else {
 								font->fail_load_flags |= MUTT_LOAD_HEAD;
-								font->load_flags ^= MUTT_LOAD_HEAD;
+								font->load_flags &= ~MUTT_LOAD_HEAD;
 							}
 						} break;
 
@@ -1915,16 +2045,16 @@ mutt is developed primarily off of these sources of documentation:
 								break;
 							}
 							// Mark as no longer waiting
-							*waiting ^= MUTT_LOAD_HHEA;
+							*waiting &= ~MUTT_LOAD_HHEA;
 
 							// Load
 							font->hhea_res = mutt_LoadHhea(font, &data[rec.offset], rec.length);
 							if (font->hhea) {
 								font->load_flags |= MUTT_LOAD_HHEA;
-								font->fail_load_flags ^= MUTT_LOAD_HHEA;
+								font->fail_load_flags &= ~MUTT_LOAD_HHEA;
 							} else {
 								font->fail_load_flags |= MUTT_LOAD_HHEA;
-								font->load_flags ^= MUTT_LOAD_HHEA;
+								font->load_flags &= ~MUTT_LOAD_HHEA;
 							}
 						} break;
 
@@ -1958,16 +2088,59 @@ mutt is developed primarily off of these sources of documentation:
 								break;
 							}
 							// Mark as no longer waiting
-							*waiting ^= MUTT_LOAD_HMTX;
+							*waiting &= ~MUTT_LOAD_HMTX;
 
 							// Load
 							font->hmtx_res = mutt_LoadHmtx(font, &data[rec.offset], rec.length);
 							if (font->hmtx) {
 								font->load_flags |= MUTT_LOAD_HMTX;
-								font->fail_load_flags ^= MUTT_LOAD_HMTX;
+								font->fail_load_flags &= ~MUTT_LOAD_HMTX;
 							} else {
 								font->fail_load_flags |= MUTT_LOAD_HMTX;
-								font->load_flags ^= MUTT_LOAD_HMTX;
+								font->load_flags &= ~MUTT_LOAD_HMTX;
+							}
+						} break;
+
+						// loca; req maxp, head
+						case 0x6C6F6361: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_LOCA;
+							}
+							// Skip if already processed
+							if (font->loca_res != MUTT_FAILED_FIND_TABLE) {
+								break;
+							}
+
+							// Give bad result if missing dependency
+							if (!dep_pass) {
+								// maxp
+								if (!(*first & MUTT_LOAD_MAXP)) {
+									font->loca_res = MUTT_LOCA_REQUIRES_MAXP;
+									break;
+								}
+								// head
+								if (!(*first & MUTT_LOAD_HEAD)) {
+									font->loca_res = MUTT_LOCA_REQUIRES_HEAD;
+									break;
+								}
+							}
+							// Continue if dependencies aren't processed
+							if (!(font->maxp) || !(font->head)) {
+								*waiting |= MUTT_LOAD_LOCA;
+								break;
+							}
+							// Mark as no longer waiting
+							*waiting &= ~MUTT_LOAD_LOCA;
+
+							// Load
+							font->loca_res = mutt_LoadLoca(font, &data[rec.offset], rec.length);
+							if (font->loca) {
+								font->load_flags |= MUTT_LOAD_LOCA;
+								font->fail_load_flags &= ~MUTT_LOAD_LOCA;
+							} else {
+								font->fail_load_flags |= MUTT_LOAD_LOCA;
+								font->load_flags &= ~MUTT_LOAD_LOCA;
 							}
 						} break;
 					}
@@ -1989,6 +2162,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Allocated tables
 				mutt_DeloadHmtx(font->hmtx);
+				mutt_DeloadLoca(font->loca);
 			}
 
 			MUDEF muttResult mutt_load(muByte* data, uint64_m datalen, muttFont* font, muttLoadFlags load_flags) {
@@ -2086,6 +2260,10 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_HMTX_LENGTH: return "MUTT_INVALID_HMTX_LENGTH"; break;
 				case MUTT_HMTX_REQUIRES_MAXP: return "MUTT_HMTX_REQUIRES_MAXP";
 				case MUTT_HMTX_REQUIRES_HHEA: return "MUTT_HMTX_REQUIRES_HHEA";
+				case MUTT_INVALID_LOCA_LENGTH: return "MUTT_INVALID_LOCA_LENGTH"; break;
+				case MUTT_INVALID_LOCA_OFFSET: return "MUTT_INVALID_LOCA_OFFSET"; break;
+				case MUTT_LOCA_REQUIRES_MAXP: return "MUTT_LOCA_REQUIRES_MAXP"; break;
+				case MUTT_LOCA_REQUIRES_HEAD: return "MUTT_LOCA_REQUIRES_HEAD"; break;
 			}
 		}
 

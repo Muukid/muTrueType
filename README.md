@@ -38,6 +38,10 @@ The resources' licenses may differ from the licensing of mutt itself; see the [l
 
 mutt is licensed under public domain or MIT, whichever you prefer. More information is provided in the accompanying file `license.md` and at the bottom of `muTrueType.h`.
 
+## Licensing of demo resources
+
+The resources used by the demos may differ from licensing of the demos themselves; in that context, their licenses apply, with licensing of each file available as a separate file with the same name, but with no filename extension.
+
 # Known bugs and limitations
 
 This section covers all of the known bugs and limitations of mutt.
@@ -46,9 +50,13 @@ This section covers all of the known bugs and limitations of mutt.
 
 Currently, mutt does not have any built-in way to execute any TrueType instructions.
 
-## Licensing of demo resources
+## Limited table support
 
-The resources used by the demos may differ from licensing of the demos themselves; in that context, their licenses apply, with licensing of each file available as a separate file with the same name, but with no filename extension.
+mutt is meant to be fairly simplistic for now, so it only supports reading information from all of the 9 required tables (besides post). Support for other tables may be added in future versions.
+
+## Support for post table
+
+mutt currently does not have support for reading values from the post table, which is one of the 9 required tables in the TrueType specification.
 
 # TrueType documentation
 
@@ -281,9 +289,13 @@ The struct `muttHead` is used to represent the head table provided by a TrueType
 
 Currently, the values for "checksumAdjustment" and "fontDirectionHint" are not checked.
 
+### indexToLocFormat macros
+
+The macros `MUTT_OFFSET_16` (0) and `MUTT_OFFSET_32` (1) are defined to make reading the value of "indexToLocFormat" easier.
+
 ## Hhea table
 
-The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA`. It has the following members:
+The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA` (`MUTT_LOAD_MAXP` must also be defined). It has the following members:
 
 * `int16_m ascender` - equivalent to "ascender" in the hhea table.
 
@@ -311,7 +323,7 @@ All values provided in the `muttHhea` struct are not checked (besides numberOfHM
 
 ## Hmtx table
 
-The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX`. It has the following members:
+The struct `muttHmtx` is used to represent the hmtx table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hmtx`", and loaded with the flag `MUTT_LOAD_HMTX` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HHEA` must also be defined). It has the following members:
 
 * `muttLongHorMetric* hmetrics` - an array of horizontal metric records; equiavlent to "hMetrics" in the hmtx table. Its length is equivalent to `hhea->number_of_hmetrics`.
 
@@ -324,6 +336,16 @@ The struct `muttLongHorMetrics` has the following members:
 * `int16_m lsb` - equivalent to "lsb" in the LongHorMetric record.
 
 All values provided in the `muttHmtx` struct (AKA the values in `muttLongHorMetrics`) are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
+## Loca table
+
+The union `muttLoca` is used to represent the loca table provided by a TrueTYpe font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
+
+* `uint16_m* offsets16` - equivalent to the short-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_16`.
+
+* `uint32_m* offsets32` - equivalent to the long-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_32`.
+
+The offsets are verified to be within range of the glyf table, along with all of the other rules within the specification.
 
 # Result
 
@@ -414,6 +436,16 @@ The following values are defined for `muttResult` (all values not explicitly sta
 * `MUTT_HMTX_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and hmtx requires maxp to be loaded.
 
 * `MUTT_HMTX_REQUIRES_HHEA` - the hhea table rather failed to load or was not requested for loading, and hmtx requires hhea to be loaded.
+
+### Loca result values
+
+* `MUTT_INVALID_LOCA_LENGTH` - the length of the loca table was invalid.
+
+* `MUTT_INVALID_LOCA_OFFSET` - an offset in the loca table was invalid. This could mean that the offset's range was invalid for the glyf table, or that the rule of incremental offsets was violated.
+
+* `MUTT_LOCA_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and loca requires maxp to be loaded.
+
+* `MUTT_LOCA_REQUIRES_HEAD` - the head table rather failed to load or was not requested for loading, and loca requires head to be loaded.
 
 ## Check if result is fatal
 
