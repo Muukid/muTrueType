@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-21
+LAST UPDATED:       2024-08-22
 
 ============================================================
                         DEMO PURPOSE
@@ -204,6 +204,33 @@ int main(void)
 		printf("\n");
 	}
 	end_of_head:
+
+	/* Print hhea */
+	{
+		printf("== Hhea ==\n");
+
+		// Case for if hhea failed to load
+		if (!font.hhea) {
+			printf("hhea failed to load: %s\n\n", mutt_result_get_name(font.hhea_res));
+			goto end_of_hhea;
+		}
+
+		// Print values
+		printf("ascender            = %" PRIi16 "\n", font.hhea->ascender);
+		printf("descender           = %" PRIi16 "\n", font.hhea->descender);
+		printf("lineGap             = %" PRIi16 "\n", font.hhea->line_gap);
+		printf("advanceWidthMax     = %" PRIu16 "\n", font.hhea->advance_width_max);
+		printf("minLeftSideBearing  = %" PRIi16 "\n", font.hhea->min_left_side_bearing);
+		printf("minRightSideBearing = %" PRIi16 "\n", font.hhea->min_right_side_bearing);
+		printf("xMaxExtent          = %" PRIi16 "\n", font.hhea->x_max_extent);
+		printf("caretSlopeRise      = %" PRIi16 "\n", font.hhea->caret_slope_rise);
+		printf("caretSlopeRun       = %" PRIi16 "\n", font.hhea->caret_slope_run);
+		printf("caretOffset         = %" PRIi16 "\n", font.hhea->caret_offset);
+		printf("numberOfHMetrics    = %" PRIu16 "\n", font.hhea->number_of_hmetrics);
+
+		printf("\n");
+	}
+	end_of_hhea:
 
 	/* Deload font */
 	{

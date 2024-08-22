@@ -281,6 +281,34 @@ The struct `muttHead` is used to represent the head table provided by a TrueType
 
 Currently, the values for "checksumAdjustment" and "fontDirectionHint" are not checked.
 
+## Hhea table
+
+The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA`. It has the following members:
+
+* `int16_m ascender` - equivalent to "ascender" in the hhea table.
+
+* `int16_m descender` - equivalent to "descender" in the hhea table.
+
+* `int16_m line_gap` - equivalent to "lineGap" in the hhea table.
+
+* `uint16_m advance_width_max` - equivalent to "advanceWidthMax" in the hhea table.
+
+* `int16_m min_left_side_bearing` - equivalent to "minLeftSideBearing" in the hhea table.
+
+* `int16_m min_right_side_bearing` - equivalent to "minRightSideBearing" in the hhea table.
+
+* `int16_m x_max_extent` - equivalent to "xMaxExtent" in the hhea table.
+
+* `int16_m caret_slope_rise` - equivalent to "caretSlopeRise" in the hhea table.
+
+* `int16_m caret_slope_run` - equivalent to "caretSlopeRun" in the hhea table.
+
+* `int16_m caret_offset` - equivalent to "caretOffset" in the hhea table.
+
+* `uint16_m number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
+
+All values provided in the `muttHhea` struct are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
 # Result
 
 The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -350,6 +378,12 @@ The following values are defined for `muttResult` (all values not explicitly sta
 * `MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT` - the value for "indexToLocFormat" within the head table was invalid/unsupported; it was not one of the expected values 0 (Offset16) or 1 (Offset32).
 
 * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
+
+* `MUTT_INVALID_HHEA_LENGTH` - the length of the hhea table was invalid.
+
+* `MUTT_INVALID_HHEA_VERSION` - the version indicated for the hhea table was invalid/unsupported.
+
+* `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" within the hhea table was invalid/unsupported; it was not the expected value 0.
 
 ## Check if result is fatal
 

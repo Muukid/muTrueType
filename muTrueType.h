@@ -1094,6 +1094,37 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE Currently, the values for "checksumAdjustment" and "fontDirectionHint" are not checked.
 
+		// @DOCLINE ## Hhea table
+
+			// @DOCLINE The struct `muttHhea` is used to represent the hhea table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`hhea`", and loaded with the flag `MUTT_LOAD_HHEA`. It has the following members:
+
+			struct muttHhea {
+				// @DOCLINE * `@NLFT ascender` - equivalent to "ascender" in the hhea table.
+				int16_m ascender;
+				// @DOCLINE * `@NLFT descender` - equivalent to "descender" in the hhea table.
+				int16_m descender;
+				// @DOCLINE * `@NLFT line_gap` - equivalent to "lineGap" in the hhea table.
+				int16_m line_gap;
+				// @DOCLINE * `@NLFT advance_width_max` - equivalent to "advanceWidthMax" in the hhea table.
+				uint16_m advance_width_max;
+				// @DOCLINE * `@NLFT min_left_side_bearing` - equivalent to "minLeftSideBearing" in the hhea table.
+				int16_m min_left_side_bearing;
+				// @DOCLINE * `@NLFT min_right_side_bearing` - equivalent to "minRightSideBearing" in the hhea table.
+				int16_m min_right_side_bearing;
+				// @DOCLINE * `@NLFT x_max_extent` - equivalent to "xMaxExtent" in the hhea table.
+				int16_m x_max_extent;
+				// @DOCLINE * `@NLFT caret_slope_rise` - equivalent to "caretSlopeRise" in the hhea table.
+				int16_m caret_slope_rise;
+				// @DOCLINE * `@NLFT caret_slope_run` - equivalent to "caretSlopeRun" in the hhea table.
+				int16_m caret_slope_run;
+				// @DOCLINE * `@NLFT caret_offset` - equivalent to "caretOffset" in the hhea table.
+				int16_m caret_offset;
+				// @DOCLINE * `@NLFT number_of_hmetrics` - equivalent to "numberOfHMetrics" in the hhea table.
+				uint16_m number_of_hmetrics;
+			};
+
+			// @DOCLINE All values provided in the `muttHhea` struct are not checked, as virtually all of them have no technically "incorrect" values (from what I'm aware).
+
 	// @DOCLINE # Result
 
 		// @DOCLINE The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -1173,6 +1204,14 @@ mutt is developed primarily off of these sources of documentation:
 		#define MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT 202
 		// @DOCLINE * `MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT` - the value for "glyphDataFormat" within the head table was invalid/unsupported; it was not the expected value 0.
 		#define MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT 203
+
+		// 256 -> 319 //
+		// @DOCLINE * `MUTT_INVALID_HHEA_LENGTH` - the length of the hhea table was invalid.
+		#define MUTT_INVALID_HHEA_LENGTH 256
+		// @DOCLINE * `MUTT_INVALID_HHEA_VERSION` - the version indicated for the hhea table was invalid/unsupported.
+		#define MUTT_INVALID_HHEA_VERSION 257
+		// @DOCLINE * `MUTT_INVALID_HHEA_METRIC_DATA_FORMAT` - the value for "metricDataFormat" within the hhea table was invalid/unsupported; it was not the expected value 0.
+		#define MUTT_INVALID_HHEA_METRIC_DATA_FORMAT 258
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -1592,6 +1631,63 @@ mutt is developed primarily off of these sources of documentation:
 				return MUTT_SUCCESS;
 			}
 
+			// Loads the hhea table
+			muttResult mutt_LoadHhea(muttFont* font, muByte* data, uint32_m datalen) {
+				// Allocate hhea
+				muttHhea* hhea = (muttHhea*)mu_malloc(sizeof(muttHhea));
+				if (!hhea) {
+					return MUTT_FAILED_MALLOC;
+				}
+
+				// Verify min. length for version
+				if (datalen < 4) {
+					mu_free(hhea);
+					return MUTT_INVALID_HHEA_LENGTH;
+				}
+
+				// Verify version
+				if (MU_RBEU16(data) != 1 || MU_RBEU16(data+2) != 0) {
+					mu_free(hhea);
+					return MUTT_INVALID_HHEA_VERSION;
+				}
+
+				// Verify min. length
+				if (datalen < 36) {
+					mu_free(hhea);
+					return MUTT_INVALID_HHEA_LENGTH;
+				}
+
+				// ascender + descender
+				hhea->ascender = MU_RBES16(data+4);
+				hhea->descender = MU_RBES16(data+6);
+				// lineGap
+				hhea->line_gap = MU_RBES16(data+8);
+				// advanceWidthMax
+				hhea->advance_width_max = MU_RBEU16(data+10);
+				// min(Left/Right)SideBearing
+				hhea->min_left_side_bearing = MU_RBES16(data+12);
+				hhea->min_right_side_bearing = MU_RBES16(data+14);
+				// xMaxExtent
+				hhea->x_max_extent = MU_RBES16(data+16);
+				// caretSlope(Rise/Run)
+				hhea->caret_slope_rise = MU_RBES16(data+18);
+				hhea->caret_slope_run = MU_RBES16(data+20);
+				// caretOffset
+				hhea->caret_offset = MU_RBES16(data+22);
+
+				// metricDataFormat
+				if (MU_RBES16(data+32) != 0) {
+					mu_free(hhea);
+					return MUTT_INVALID_HHEA_METRIC_DATA_FORMAT;
+				}
+
+				// numberOfHMetrics
+				hhea->number_of_hmetrics = MU_RBEU16(data+34);
+
+				font->hhea = hhea;
+				return MUTT_SUCCESS;
+			}
+
 		/* Loading / Deloading */
 
 			// Initializes all flag/result states of each table to "failed to find"
@@ -1602,6 +1698,9 @@ mutt is developed primarily off of these sources of documentation:
 				// head
 				font->head_res = (load_flags & MUTT_LOAD_HEAD) ? MUTT_FAILED_FIND_TABLE : 0;
 				font->fail_load_flags |= (load_flags & MUTT_LOAD_HEAD);
+				// hhea
+				font->hhea_res = (load_flags & MUTT_LOAD_HHEA) ? MUTT_FAILED_FIND_TABLE : 0;
+				font->fail_load_flags |= (load_flags & MUTT_LOAD_HHEA);
 			}
 
 			// Does one pass through each table load
@@ -1653,18 +1752,38 @@ mutt is developed primarily off of these sources of documentation:
 								font->load_flags ^= MUTT_LOAD_HEAD;
 							}
 						} break;
+
+						// hhea
+						case 0x68686561: {
+							// Skip if already processed
+							if (font->hhea_res != MUTT_FAILED_FIND_TABLE) {
+								break;
+							}
+
+							// Load
+							font->hhea_res = mutt_LoadHhea(font, &data[rec.offset], rec.length);
+							if (font->hhea) {
+								font->load_flags |= MUTT_LOAD_HHEA;
+								font->fail_load_flags ^= MUTT_LOAD_HHEA;
+							} else {
+								font->fail_load_flags |= MUTT_LOAD_HHEA;
+								font->load_flags ^= MUTT_LOAD_HHEA;
+							}
+						} break;
 					}
 				}
 			}
 
 			// Deallocates all loaded tables
 			void mutt_DeloadTables(muttFont* font) {
-				// maxp + head
 				if (font->maxp) {
 					mu_free(font->maxp);
 				}
 				if (font->head) {
 					mu_free(font->head);
+				}
+				if (font->hhea) {
+					mu_free(font->hhea);
 				}
 			}
 
@@ -1749,6 +1868,9 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_HEAD_Y_MIN_MAX: return "MUTT_INVALID_HEAD_Y_MIN_MAX"; break;
 				case MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT: return "MUTT_INVALID_HEAD_INDEX_TO_LOC_FORMAT"; break;
 				case MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT: return "MUTT_INVALID_HEAD_GLYPH_DATA_FORMAT"; break;
+				case MUTT_INVALID_HHEA_LENGTH: return "MUTT_INVALID_HHEA_LENGTH"; break;
+				case MUTT_INVALID_HHEA_VERSION: return "MUTT_INVALID_HHEA_VERSION"; break;
+				case MUTT_INVALID_HHEA_METRIC_DATA_FORMAT: return "MUTT_INVALID_HHEA_METRIC_DATA_FORMAT"; break;
 			}
 		}
 
