@@ -1165,7 +1165,7 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Loca table
 
-			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueTYpe font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
+			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
 
 			union muttLoca {
 				// @DOCLINE * `@NLFT* offsets16` - equivalent to the short-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_16`.
@@ -1175,6 +1175,565 @@ mutt is developed primarily off of these sources of documentation:
 			};
 
 			// @DOCLINE The offsets are verified to be within range of the glyf table, along with all of the other rules within the specification.
+
+		// @DOCLINE ## Name table
+
+			typedef struct muttNameRecord muttNameRecord;
+			typedef struct muttLangTagRecord muttLangTagRecord;
+
+			// @DOCLINE The struct `muttName` is used to represent the name table provided by a TrueType font, stored in the struct `muttFont` as the pointer mem ber "`name`", and loaded with the flag `MUTT_LOAD_NAME`. It has the following members:
+
+			struct muttName {
+				// @DOCLINE * `@NLFT version` - equivalent to "version" in the naming table header.
+				uint16_m version;
+				// @DOCLINE * `@NLFT count` - the amount of name records specified; equivalent to "count" in the naming table header.
+				uint16_m count;
+				// @DOCLINE * `@NLFT* name_records` - all [name records](#name-record) provided (length `count`); equivalent to "nameRecord" in the naming table header.
+				muttNameRecord* name_records;
+				// @DOCLINE * `@NLFT lang_tag_count` - the amount of language tags specified; equivalent to "langTagCount" in the naming table header.
+				uint16_m lang_tag_count;
+				// @DOCLINE * `@NLFT* lang_tag_records` - all [language tag records](#lang-tag-record) provided (length `lang_tag_count`); equivalent to "langTagRecord" in the naming table header.
+				muttLangTagRecord* lang_tag_records;
+				// @DOCLINE * `@NLFT* string_data` - the raw string data provided by the name table. All pointers to strings provided by the name table are pointers to parts of this data.
+				muByte* string_data;
+			};
+
+			// @DOCLINE ### Name record
+
+				// @DOCLINE The struct `muttNameRecord` represents a name record in TrueType. It has the following members:
+
+				struct muttNameRecord {
+					// @DOCLINE * `@NLFT platform_id` - the [platform ID](#platform-id); equivalent to "platformID" in the name record.
+					uint16_m platform_id;
+					// @DOCLINE * `@NLFT encoding_id` - the [encoding ID](#encoding-id); equivalent to "encodingID" in the name record.
+					uint16_m encoding_id;
+					// @DOCLINE * `@NLFT language_id` - the [language ID](#language-id); equivalent to "languageID" in the name record.
+					uint16_m language_id;
+					// @DOCLINE * `@NLFT name_id` - the [name ID](#name-id); equivalent to "nameID" in the name record.
+					uint16_m name_id;
+					// @DOCLINE * `@NLFT length` - the length of the string, in bytes; equivalent to "length" in the name record.
+					uint16_m length;
+					// @DOCLINE * `@NLFT* string` - a pointer to the string data stored within `muttName->string_data` for this given name record.
+					muByte* string;
+				};
+
+				// @DOCLINE No platform, encoding, language, or name IDs give bad result values unless the specification explicitly states that the range of values that it's within will never be supported. The provided pointer for `string` is checked to be a pointer to valid data for the given length.
+
+			// @DOCLINE ### Lang tag record
+
+				// @DOCLINE The struct `muttLangTagRecord` represents a language tag in TrueType. It has the following members:
+
+				struct muttLangTagRecord {
+					// @DOCLINE * `@NLFT length` - the length of the string, in bytes; equivalent to "length" in the lang tag record.
+					uint16_m length;
+					// @DOCLINE * `@NLFT* lang_tag` - a pointer to the string data stored within `muttName->string_data` for this given name record.
+					muByte* lang_tag;
+				};
+
+				// @DOCLINE The provided pointer for `lang_tag` is checked to be a pointer to valid data for the given length.
+
+		// @DOCLINE ## String macros
+
+			// @DOCLINE This section covers macros defined for platform, encoding, language, and name IDs. Note that values may be given that don't fit into any of the given macros.
+
+			// @DOCLINE ### Platform ID
+
+				// @DOCLINE The following macros are defined for platform IDs:
+
+				// @DOCLINE * [0x0000] `MUTT_PLATFORM_UNICODE` - [Unicode platform](#unicode-encoding).
+				#define MUTT_PLATFORM_UNICODE 0x0000
+				// @DOCLINE * [0x0001] `MUTT_PLATFORM_MACINTOSH` - [Macintosh platform](#macintosh-encoding).
+				#define MUTT_PLATFORM_MACINTOSH 0x0001
+				// @DOCLINE * [0x0002] `MUTT_PLATFORM_ISO` - [ISO platform](#iso-encoding).
+				#define MUTT_PLATFORM_ISO 0x0002
+				// @DOCLINE * [0x0003] `MUTT_PLATFORM_WINDOWS` - [Windows platform](#windows-encoding).
+				#define MUTT_PLATFORM_WINDOWS 0x0003
+				// @DOCLINE * [0x0004] `MUTT_PLATFORM_CUSTOM` - custom encoding.
+				#define MUTT_PLATFORM_CUSTOM 0x0004
+
+				#ifdef MUTT_NAMES
+				// @DOCLINE #### Platform ID names
+
+					// @DOCLINE The name function `mutt_platform_get_name` returns a `const char*` representation of a given platform ID (for example, `MUTT_PLATFORM_UNICODE` returns "MUTT_PLATFORM_UNICODE"), defined below: @NLNT
+					MUDEF const char* mutt_platform_get_name(uint16_m platform_id);
+					// @DOCLINE This function returns "MU_UNKNOWN" in the case that `platform_id` is an unrecognized value.
+
+					// @DOCLINE The name function `mutt_platform_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_PLATFORM_UNICODE` returns "Unicode"), defined below: @NLNT
+					MUDEF const char* mutt_platform_get_nice_name(uint16_m platform_id);
+					// @DOCLINE This function returns "Unknown" in the case that `platform_id` is an unrecognized value.
+
+					// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+				#endif /* MUTT_NAMES */
+
+			// @DOCLINE ### Encoding ID
+
+				// @DOCLINE The following macros are defined for various platform encoding IDs:
+
+				// @DOCLINE #### Unicode encoding
+
+					// @DOCLINE * [0x0000] `MUTT_UNICODE_1_0` - Unicode 1.0.
+					#define MUTT_UNICODE_1_0 0x0000
+					// @DOCLINE * [0x0001] `MUTT_UNICODE_1_1` - Unicode 1.1.
+					#define MUTT_UNICODE_1_1 0x0001
+					// @DOCLINE * [0x0002] `MUTT_UNICODE_ISO_IEC_10646` - ISO/IEC 10646.
+					#define MUTT_UNICODE_ISO_IEC_10646 0x0002
+					// @DOCLINE * [0x0003] `MUTT_UNICODE_2_0_BMP` - Unicode 2.0, BMP only.
+					#define MUTT_UNICODE_2_0_BMP 0x0003
+					// @DOCLINE * [0x0004] `MUTT_UNICODE_2_0` - Unicode 2.0.
+					#define MUTT_UNICODE_2_0 0x0004
+					// @DOCLINE * [0x0005] `MUTT_UNICODE_VARIATION` - Unicode variation sequences.
+					#define MUTT_UNICODE_VARIATION 0x0005
+					// @DOCLINE * [0x0006] `MUTT_UNICODE_FULL` - Unicode "full repertoire".
+					#define MUTT_UNICODE_FULL 0x0006
+
+					#ifdef MUTT_NAMES
+					// @DOCLINE ##### Unicode encoding names
+
+						// @DOCLINE The name function `mutt_unicode_encoding_get_name` returns a `const char*` representation of a given Unicode encoding ID (for example, `MUTT_UNICODE_1_0` returns "MUTT_UNICODE_1_0"), defined below: @NLNT
+						MUDEF const char* mutt_unicode_encoding_get_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE The name function `mutt_unicode_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_UNICODE_1_0` returns "Unicode 1.0"), defined below: @NLNT
+						MUDEF const char* mutt_unicode_encoding_get_nice_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+					#endif /* MUTT_NAMES */
+
+				// @DOCLINE #### Macintosh encoding
+
+					// @DOCLINE * [0x0000] `MUTT_MACINTOSH_ROMAN` - Roman.
+					#define MUTT_MACINTOSH_ROMAN 0x0000
+					// @DOCLINE * [0x0001] `MUTT_MACINTOSH_JAPANESE` - Japanese.
+					#define MUTT_MACINTOSH_JAPANESE 0x0001
+					// @DOCLINE * [0x0002] `MUTT_MACINTOSH_CHINESE_TRADITIONAL` - Chinese (Traditional).
+					#define MUTT_MACINTOSH_CHINESE_TRADITIONAL 0x0002
+					// @DOCLINE * [0x0003] `MUTT_MACINTOSH_KOREAN` - Korean.
+					#define MUTT_MACINTOSH_KOREAN 0x0003
+					// @DOCLINE * [0x0004] `MUTT_MACINTOSH_ARABIC` - Arabic.
+					#define MUTT_MACINTOSH_ARABIC 0x0004
+					// @DOCLINE * [0x0005] `MUTT_MACINTOSH_HEBREW` - Hebrew.
+					#define MUTT_MACINTOSH_HEBREW 0x0005
+					// @DOCLINE * [0x0006] `MUTT_MACINTOSH_GREEK` - Greek.
+					#define MUTT_MACINTOSH_GREEK 0x0006
+					// @DOCLINE * [0x0007] `MUTT_MACINTOSH_RUSSIAN` - Russian.
+					#define MUTT_MACINTOSH_RUSSIAN 0x0007
+					// @DOCLINE * [0x0008] `MUTT_MACINTOSH_RSYMBOL` - RSymbol.
+					#define MUTT_MACINTOSH_RSYMBOL 0x0008
+					// @DOCLINE * [0x0009] `MUTT_MACINTOSH_DEVANAGARI` - Devanagari.
+					#define MUTT_MACINTOSH_DEVANAGARI 0x0009
+					// @DOCLINE * [0x000A] `MUTT_MACINTOSH_GURMUKHI` - Gurmukhi.
+					#define MUTT_MACINTOSH_GURMUKHI 0x000A
+					// @DOCLINE * [0x000B] `MUTT_MACINTOSH_GUJARATI` - Gujarati.
+					#define MUTT_MACINTOSH_GUJARATI 0x000B
+					// @DOCLINE * [0x000C] `MUTT_MACINTOSH_ODIA` - Odia.
+					#define MUTT_MACINTOSH_ODIA 0x000C
+					// @DOCLINE * [0x000D] `MUTT_MACINTOSH_BANGLA` - Bangla.
+					#define MUTT_MACINTOSH_BANGLA 0x000D
+					// @DOCLINE * [0x000E] `MUTT_MACINTOSH_TAMIL` - Tamil.
+					#define MUTT_MACINTOSH_TAMIL 0x000E
+					// @DOCLINE * [0x000F] `MUTT_MACINTOSH_TELUGU` - Telugu.
+					#define MUTT_MACINTOSH_TELUGU 0x000F
+					// @DOCLINE * [0x0010] `MUTT_MACINTOSH_KANNADA` - Kannada.
+					#define MUTT_MACINTOSH_KANNADA 0x0010
+					// @DOCLINE * [0x0011] `MUTT_MACINTOSH_MALAYALAM` - Malayalam.
+					#define MUTT_MACINTOSH_MALAYALAM 0x0011
+					// @DOCLINE * [0x0012] `MUTT_MACINTOSH_SINHALESE` - Sinhalese.
+					#define MUTT_MACINTOSH_SINHALESE 0x0012
+					// @DOCLINE * [0x0013] `MUTT_MACINTOSH_BURMESE` - Burmese.
+					#define MUTT_MACINTOSH_BURMESE 0x0013
+					// @DOCLINE * [0x0014] `MUTT_MACINTOSH_KHMER` - Khmer.
+					#define MUTT_MACINTOSH_KHMER 0x0014
+					// @DOCLINE * [0x0015] `MUTT_MACINTOSH_THAI` - Thai.
+					#define MUTT_MACINTOSH_THAI 0x0015
+					// @DOCLINE * [0x0016] `MUTT_MACINTOSH_LAOTIAN` - Laotian.
+					#define MUTT_MACINTOSH_LAOTIAN 0x0016
+					// @DOCLINE * [0x0017] `MUTT_MACINTOSH_GEORGIAN` - Georgian.
+					#define MUTT_MACINTOSH_GEORGIAN 0x0017
+					// @DOCLINE * [0x0018] `MUTT_MACINTOSH_ARMENIAN` - Armenian.
+					#define MUTT_MACINTOSH_ARMENIAN 0x0018
+					// @DOCLINE * [0x0019] `MUTT_MACINTOSH_CHINESE_SIMPLIFIED` - Chinese (Simplified).
+					#define MUTT_MACINTOSH_CHINESE_SIMPLIFIED 0x0019
+					// @DOCLINE * [0x001A] `MUTT_MACINTOSH_TIBETAN` - Tibetan.
+					#define MUTT_MACINTOSH_TIBETAN 0x001A
+					// @DOCLINE * [0x001B] `MUTT_MACINTOSH_MONGOLIAN` - Mongolian.
+					#define MUTT_MACINTOSH_MONGOLIAN 0x001B
+					// @DOCLINE * [0x001C] `MUTT_MACINTOSH_GEEZ` - Geez.
+					#define MUTT_MACINTOSH_GEEZ 0x001C
+					// @DOCLINE * [0x001D] `MUTT_MACINTOSH_SLAVIC` - Slavic.
+					#define MUTT_MACINTOSH_SLAVIC 0x001D
+					// @DOCLINE * [0x001E] `MUTT_MACINTOSH_VIETNAMESE` - Vietnamese.
+					#define MUTT_MACINTOSH_VIETNAMESE 0x001E
+					// @DOCLINE * [0x001F] `MUTT_MACINTOSH_SINDHI` - Sindhi.
+					#define MUTT_MACINTOSH_SINDHI 0x001F
+					// @DOCLINE * [0x0020] `MUTT_MACINTOSH_UNINTERPRETED` - Uninterpreted.
+					#define MUTT_MACINTOSH_UNINTERPRETED 0x0020
+
+					#ifdef MUTT_NAMES
+					// @DOCLINE ##### Macintosh encoding names
+
+						// @DOCLINE The name function `mutt_macintosh_encoding_get_name` returns a `const char*` representation of a given Macintosh encoding ID (for example, `MUTT_MACINTOSH_ROMAN` returns "MUTT_MACINTOSH_ROMAN"), defined below: @NLNT
+						MUDEF const char* mutt_macintosh_encoding_get_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE The name function `mutt_macintosh_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_MACINTOSH_ROMAN` returns "Roman"), defined below: @NLNT
+						MUDEF const char* mutt_macintosh_encoding_get_nice_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+					#endif /* MUTT_NAMES */
+
+				// @DOCLINE #### ISO encoding
+
+					// @DOCLINE * [0x0000] `MUTT_ISO_7_BIT_ASCII` - 7-bit ASCII.
+					#define MUTT_ISO_7_BIT_ASCII 0x0000
+					// @DOCLINE * [0x0001] `MUTT_ISO_10646` - ISO 10646.
+					#define MUTT_ISO_10646 0x0001
+					// @DOCLINE * [0x0002] `MUTT_ISO_8859_1` - ISO 8859-1.
+					#define MUTT_ISO_8859_1 0x0002
+
+				// @DOCLINE #### Windows encoding
+
+					// @DOCLINE * [0x0000] `MUTT_WINDOWS_SYMBOL` - Symbol.
+					#define MUTT_WINDOWS_SYMBOL 0x0000
+					// @DOCLINE * [0x0001] `MUTT_WINDOWS_UNICODE_BMP` - Unicode BMP.
+					#define MUTT_WINDOWS_UNICODE_BMP 0x0001
+					// @DOCLINE * [0x0002] `MUTT_WINDOWS_SHIFTJIS` - ShiftJIS.
+					#define MUTT_WINDOWS_SHIFTJIS 0x0002
+					// @DOCLINE * [0x0003] `MUTT_WINDOWS_PRC` - PRC.
+					#define MUTT_WINDOWS_PRC 0x0003
+					// @DOCLINE * [0x0004] `MUTT_WINDOWS_BIG5` - Big5.
+					#define MUTT_WINDOWS_BIG5 0x0004
+					// @DOCLINE * [0x0005] `MUTT_WINDOWS_WANSUNG` - Wansung.
+					#define MUTT_WINDOWS_WANSUNG 0x0005
+					// @DOCLINE * [0x0006] `MUTT_WINDOWS_JOHAB` - Johab.
+					#define MUTT_WINDOWS_JOHAB 0x0006
+					// @DOCLINE * [0x000A] `MUTT_WINDOWS_UNICODE` - Unicode full repertoire.
+					#define MUTT_WINDOWS_UNICODE 0x000A
+
+					#ifdef MUTT_NAMES
+					// @DOCLINE ##### Windows encoding names
+
+						// @DOCLINE The name function `mutt_windows_encoding_get_name` returns a `const char*` representation of a given Windows encoding ID (for example, `MUTT_WINDOWS_SYMBOL` returns "MUTT_WINDOWS_SYMBOL"), defined below: @NLNT
+						MUDEF const char* mutt_windows_encoding_get_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE The name function `mutt_windows_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_WINDOWS_SYMBOL` returns "Symbol"), defined below: @NLNT
+						MUDEF const char* mutt_windows_encoding_get_nice_name(uint16_m encoding_id);
+						// @DOCLINE This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+						// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+					#endif /* MUTT_NAMES */
+
+			// @DOCLINE ### Language ID
+
+				// @DOCLINE The following macros are defined for various language IDs:
+
+				// @DOCLINE #### Macintosh language
+
+					// @DOCLINE * [0x0000] `MUTT_MACINTOSH_LANG_ENGLISH` - English.
+					#define MUTT_MACINTOSH_LANG_ENGLISH 0x0000
+					// @DOCLINE * [0x0001] `MUTT_MACINTOSH_LANG_FRENCH` - French.
+					#define MUTT_MACINTOSH_LANG_FRENCH 0x0001
+					// @DOCLINE * [0x0002] `MUTT_MACINTOSH_LANG_GERMAN` - German.
+					#define MUTT_MACINTOSH_LANG_GERMAN 0x0002
+					// @DOCLINE * [0x0003] `MUTT_MACINTOSH_LANG_ITALIAN` - Italian.
+					#define MUTT_MACINTOSH_LANG_ITALIAN 0x0003
+					// @DOCLINE * [0x0004] `MUTT_MACINTOSH_LANG_DUTCH` - Dutch.
+					#define MUTT_MACINTOSH_LANG_DUTCH 0x0004
+					// @DOCLINE * [0x0005] `MUTT_MACINTOSH_LANG_SWEDISH` - Swedish.
+					#define MUTT_MACINTOSH_LANG_SWEDISH 0x0005
+					// @DOCLINE * [0x0006] `MUTT_MACINTOSH_LANG_SPANISH` - Spanish.
+					#define MUTT_MACINTOSH_LANG_SPANISH 0x0006
+					// @DOCLINE * [0x0007] `MUTT_MACINTOSH_LANG_DANISH` - Danish.
+					#define MUTT_MACINTOSH_LANG_DANISH 0x0007
+					// @DOCLINE * [0x0008] `MUTT_MACINTOSH_LANG_PORTUGUESE` - Portuguese.
+					#define MUTT_MACINTOSH_LANG_PORTUGUESE 0x0008
+					// @DOCLINE * [0x0009] `MUTT_MACINTOSH_LANG_NORWEGIAN` - Norwegian.
+					#define MUTT_MACINTOSH_LANG_NORWEGIAN 0x0009
+					// @DOCLINE * [0x000A] `MUTT_MACINTOSH_LANG_HEBREW` - Hebrew.
+					#define MUTT_MACINTOSH_LANG_HEBREW 0x000A
+					// @DOCLINE * [0x000B] `MUTT_MACINTOSH_LANG_JAPANESE` - Japanese.
+					#define MUTT_MACINTOSH_LANG_JAPANESE 0x000B
+					// @DOCLINE * [0x000C] `MUTT_MACINTOSH_LANG_ARABIC` - Arabic.
+					#define MUTT_MACINTOSH_LANG_ARABIC 0x000C
+					// @DOCLINE * [0x000D] `MUTT_MACINTOSH_LANG_FINNISH` - Finnish.
+					#define MUTT_MACINTOSH_LANG_FINNISH 0x000D
+					// @DOCLINE * [0x000E] `MUTT_MACINTOSH_LANG_GREEK` - Greek.
+					#define MUTT_MACINTOSH_LANG_GREEK 0x000E
+					// @DOCLINE * [0x000F] `MUTT_MACINTOSH_LANG_ICELANDIC` - Icelandic.
+					#define MUTT_MACINTOSH_LANG_ICELANDIC 0x000F
+					// @DOCLINE * [0x0010] `MUTT_MACINTOSH_LANG_MALTESE` - Maltese.
+					#define MUTT_MACINTOSH_LANG_MALTESE 0x0010
+					// @DOCLINE * [0x0011] `MUTT_MACINTOSH_LANG_TURKISH` - Turkish.
+					#define MUTT_MACINTOSH_LANG_TURKISH 0x0011
+					// @DOCLINE * [0x0012] `MUTT_MACINTOSH_LANG_CROATIAN` - Croatian.
+					#define MUTT_MACINTOSH_LANG_CROATIAN 0x0012
+					// @DOCLINE * [0x0013] `MUTT_MACINTOSH_LANG_CHINESE_TRADITIONAL` - Chinese (traditional).
+					#define MUTT_MACINTOSH_LANG_CHINESE_TRADITIONAL 0x0013
+					// @DOCLINE * [0x0014] `MUTT_MACINTOSH_LANG_URDU` - Urdu.
+					#define MUTT_MACINTOSH_LANG_URDU 0x0014
+					// @DOCLINE * [0x0015] `MUTT_MACINTOSH_LANG_HINDI` - Hindi.
+					#define MUTT_MACINTOSH_LANG_HINDI 0x0015
+					// @DOCLINE * [0x0016] `MUTT_MACINTOSH_LANG_THAI` - Thai.
+					#define MUTT_MACINTOSH_LANG_THAI 0x0016
+					// @DOCLINE * [0x0017] `MUTT_MACINTOSH_LANG_KOREAN` - Korean.
+					#define MUTT_MACINTOSH_LANG_KOREAN 0x0017
+					// @DOCLINE * [0x0018] `MUTT_MACINTOSH_LANG_LITHUANIAN` - Lithuanian.
+					#define MUTT_MACINTOSH_LANG_LITHUANIAN 0x0018
+					// @DOCLINE * [0x0019] `MUTT_MACINTOSH_LANG_POLISH` - Polish.
+					#define MUTT_MACINTOSH_LANG_POLISH 0x0019
+					// @DOCLINE * [0x001A] `MUTT_MACINTOSH_LANG_HUNGARIAN` - Hungarian.
+					#define MUTT_MACINTOSH_LANG_HUNGARIAN 0x001A
+					// @DOCLINE * [0x001B] `MUTT_MACINTOSH_LANG_ESTONIAN` - Estonian.
+					#define MUTT_MACINTOSH_LANG_ESTONIAN 0x001B
+					// @DOCLINE * [0x001C] `MUTT_MACINTOSH_LANG_LATVIAN` - Latvian.
+					#define MUTT_MACINTOSH_LANG_LATVIAN 0x001C
+					// @DOCLINE * [0x001D] `MUTT_MACINTOSH_LANG_SAMI` - Sami.
+					#define MUTT_MACINTOSH_LANG_SAMI 0x001D
+					// @DOCLINE * [0x001E] `MUTT_MACINTOSH_LANG_FAROESE` - Faroese.
+					#define MUTT_MACINTOSH_LANG_FAROESE 0x001E
+					// @DOCLINE * [0x001F] `MUTT_MACINTOSH_LANG_FARSI_PERSIAN` - Farsi/Persian.
+					#define MUTT_MACINTOSH_LANG_FARSI_PERSIAN 0x001F
+					// @DOCLINE * [0x0020] `MUTT_MACINTOSH_LANG_RUSSIAN` - Russian.
+					#define MUTT_MACINTOSH_LANG_RUSSIAN 0x0020
+					// @DOCLINE * [0x0021] `MUTT_MACINTOSH_LANG_CHINESE_SIMPLIFIED` - Chinese (simplified).
+					#define MUTT_MACINTOSH_LANG_CHINESE_SIMPLIFIED 0x0021
+					// @DOCLINE * [0x0022] `MUTT_MACINTOSH_LANG_FLEMISH` - Flemish.
+					#define MUTT_MACINTOSH_LANG_FLEMISH 0x0022
+					// @DOCLINE * [0x0023] `MUTT_MACINTOSH_LANG_IRISH_GAELIC` - Irish Gaelic.
+					#define MUTT_MACINTOSH_LANG_IRISH_GAELIC 0x0023
+					// @DOCLINE * [0x0024] `MUTT_MACINTOSH_LANG_ALBANIAN` - Albanian.
+					#define MUTT_MACINTOSH_LANG_ALBANIAN 0x0024
+					// @DOCLINE * [0x0025] `MUTT_MACINTOSH_LANG_ROMANIAN` - Romanian.
+					#define MUTT_MACINTOSH_LANG_ROMANIAN 0x0025
+					// @DOCLINE * [0x0026] `MUTT_MACINTOSH_LANG_CZECH` - Czech.
+					#define MUTT_MACINTOSH_LANG_CZECH 0x0026
+					// @DOCLINE * [0x0027] `MUTT_MACINTOSH_LANG_SLOVAK` - Slovak.
+					#define MUTT_MACINTOSH_LANG_SLOVAK 0x0027
+					// @DOCLINE * [0x0028] `MUTT_MACINTOSH_LANG_SLOVENIAN` - Slovenian.
+					#define MUTT_MACINTOSH_LANG_SLOVENIAN 0x0028
+					// @DOCLINE * [0x0029] `MUTT_MACINTOSH_LANG_YIDDISH` - Yiddish.
+					#define MUTT_MACINTOSH_LANG_YIDDISH 0x0029
+					// @DOCLINE * [0x002A] `MUTT_MACINTOSH_LANG_SERBIAN` - Serbian.
+					#define MUTT_MACINTOSH_LANG_SERBIAN 0x002A
+					// @DOCLINE * [0x002B] `MUTT_MACINTOSH_LANG_MACEDONIAN` - Macedonian.
+					#define MUTT_MACINTOSH_LANG_MACEDONIAN 0x002B
+					// @DOCLINE * [0x002C] `MUTT_MACINTOSH_LANG_BULGARIAN` - Bulgarian.
+					#define MUTT_MACINTOSH_LANG_BULGARIAN 0x002C
+					// @DOCLINE * [0x002D] `MUTT_MACINTOSH_LANG_UKRANIAN` - Ukrainian.
+					#define MUTT_MACINTOSH_LANG_UKRANIAN 0x002D
+					// @DOCLINE * [0x002E] `MUTT_MACINTOSH_LANG_BYELORUSSIAN` - Byelorussian.
+					#define MUTT_MACINTOSH_LANG_BYELORUSSIAN 0x002E
+					// @DOCLINE * [0x002F] `MUTT_MACINTOSH_LANG_UZBEK` - Uzbek.
+					#define MUTT_MACINTOSH_LANG_UZBEK 0x002F
+					// @DOCLINE * [0x0030] `MUTT_MACINTOSH_LANG_KAZAKH` - Kazakh.
+					#define MUTT_MACINTOSH_LANG_KAZAKH 0x0030
+					// @DOCLINE * [0x0031] `MUTT_MACINTOSH_LANG_AZERBAIJANI_CYRILLIC` - Azerbaijani (Cyrillic script).
+					#define MUTT_MACINTOSH_LANG_AZERBAIJANI_CYRILLIC 0x0031
+					// @DOCLINE * [0x0032] `MUTT_MACINTOSH_LANG_AZERBAIJANI_ARABIC` - Azerbaijani (Arabic script).
+					#define MUTT_MACINTOSH_LANG_AZERBAIJANI_ARABIC 0x0032
+					// @DOCLINE * [0x0033] `MUTT_MACINTOSH_LANG_ARMENIAN` - Armenian.
+					#define MUTT_MACINTOSH_LANG_ARMENIAN 0x0033
+					// @DOCLINE * [0x0034] `MUTT_MACINTOSH_LANG_GEORGIAN` - Georgian.
+					#define MUTT_MACINTOSH_LANG_GEORGIAN 0x0034
+					// @DOCLINE * [0x0035] `MUTT_MACINTOSH_LANG_MOLDAVIAN` - Moldavian.
+					#define MUTT_MACINTOSH_LANG_MOLDAVIAN 0x0035
+					// @DOCLINE * [0x0036] `MUTT_MACINTOSH_LANG_KIRGHIZ` - Kirghiz.
+					#define MUTT_MACINTOSH_LANG_KIRGHIZ 0x0036
+					// @DOCLINE * [0x0037] `MUTT_MACINTOSH_LANG_TAJIKI` - Tajiki.
+					#define MUTT_MACINTOSH_LANG_TAJIKI 0x0037
+					// @DOCLINE * [0x0038] `MUTT_MACINTOSH_LANG_TURKMEN` - Turkmen.
+					#define MUTT_MACINTOSH_LANG_TURKMEN 0x0038
+					// @DOCLINE * [0x0039] `MUTT_MACINTOSH_LANG_MONGOLIAN` - Mongolian (Mongolian script).
+					#define MUTT_MACINTOSH_LANG_MONGOLIAN 0x0039
+					// @DOCLINE * [0x003A] `MUTT_MACINTOSH_LANG_MONGOLIAN_CYRILLIC` - Mongolian (Cyrillic script).
+					#define MUTT_MACINTOSH_LANG_MONGOLIAN_CYRILLIC 0x003A
+					// @DOCLINE * [0x003B] `MUTT_MACINTOSH_LANG_PASHTO` - Pashto.
+					#define MUTT_MACINTOSH_LANG_PASHTO 0x003B
+					// @DOCLINE * [0x003C] `MUTT_MACINTOSH_LANG_KURDISH` - Kurdish.
+					#define MUTT_MACINTOSH_LANG_KURDISH 0x003C
+					// @DOCLINE * [0x003D] `MUTT_MACINTOSH_LANG_KASHMIRI` - Kashmiri.
+					#define MUTT_MACINTOSH_LANG_KASHMIRI 0x003D
+					// @DOCLINE * [0x003E] `MUTT_MACINTOSH_LANG_SINDHI` - Sindhi.
+					#define MUTT_MACINTOSH_LANG_SINDHI 0x003E
+					// @DOCLINE * [0x003F] `MUTT_MACINTOSH_LANG_TIBETAN` - Tibetan.
+					#define MUTT_MACINTOSH_LANG_TIBETAN 0x003F
+					// @DOCLINE * [0x0040] `MUTT_MACINTOSH_LANG_NEPALI` - Nepali.
+					#define MUTT_MACINTOSH_LANG_NEPALI 0x0040
+					// @DOCLINE * [0x0041] `MUTT_MACINTOSH_LANG_SANSKIRT` - Sanskrit.
+					#define MUTT_MACINTOSH_LANG_SANSKIRT 0x0041
+					// @DOCLINE * [0x0042] `MUTT_MACINTOSH_LANG_MARATHI` - Marathi.
+					#define MUTT_MACINTOSH_LANG_MARATHI 0x0042
+					// @DOCLINE * [0x0043] `MUTT_MACINTOSH_LANG_BENGALI` - Bengali.
+					#define MUTT_MACINTOSH_LANG_BENGALI 0x0043
+					// @DOCLINE * [0x0044] `MUTT_MACINTOSH_LANG_ASSAMESE` - Assamese.
+					#define MUTT_MACINTOSH_LANG_ASSAMESE 0x0044
+					// @DOCLINE * [0x0045] `MUTT_MACINTOSH_LANG_GUJARATI` - Gujarati.
+					#define MUTT_MACINTOSH_LANG_GUJARATI 0x0045
+					// @DOCLINE * [0x0046] `MUTT_MACINTOSH_LANG_PUNJABI` - Punjabi.
+					#define MUTT_MACINTOSH_LANG_PUNJABI 0x0046
+					// @DOCLINE * [0x0047] `MUTT_MACINTOSH_LANG_ORIYA` - Oriya.
+					#define MUTT_MACINTOSH_LANG_ORIYA 0x0047
+					// @DOCLINE * [0x0048] `MUTT_MACINTOSH_LANG_MALAYALAM` - Malayalam.
+					#define MUTT_MACINTOSH_LANG_MALAYALAM 0x0048
+					// @DOCLINE * [0x0049] `MUTT_MACINTOSH_LANG_KANNADA` - Kannada.
+					#define MUTT_MACINTOSH_LANG_KANNADA 0x0049
+					// @DOCLINE * [0x004A] `MUTT_MACINTOSH_LANG_TAMIL` - Tamil.
+					#define MUTT_MACINTOSH_LANG_TAMIL 0x004A
+					// @DOCLINE * [0x004B] `MUTT_MACINTOSH_LANG_TELUGU` - Telugu.
+					#define MUTT_MACINTOSH_LANG_TELUGU 0x004B
+					// @DOCLINE * [0x004C] `MUTT_MACINTOSH_LANG_SINHALESE` - Sinhalese.
+					#define MUTT_MACINTOSH_LANG_SINHALESE 0x004C
+					// @DOCLINE * [0x004D] `MUTT_MACINTOSH_LANG_BURMESE` - Burmese.
+					#define MUTT_MACINTOSH_LANG_BURMESE 0x004D
+					// @DOCLINE * [0x004E] `MUTT_MACINTOSH_LANG_KHMER` - Khmer.
+					#define MUTT_MACINTOSH_LANG_KHMER 0x004E
+					// @DOCLINE * [0x004F] `MUTT_MACINTOSH_LANG_LAO` - Lao.
+					#define MUTT_MACINTOSH_LANG_LAO 0x004F
+					// @DOCLINE * [0x0050] `MUTT_MACINTOSH_LANG_VIETNAMESE` - Vietnamese.
+					#define MUTT_MACINTOSH_LANG_VIETNAMESE 0x0050
+					// @DOCLINE * [0x0051] `MUTT_MACINTOSH_LANG_INDONESIAN` - Indonesian.
+					#define MUTT_MACINTOSH_LANG_INDONESIAN 0x0051
+					// @DOCLINE * [0x0052] `MUTT_MACINTOSH_LANG_TAGALOG` - Tagalog.
+					#define MUTT_MACINTOSH_LANG_TAGALOG 0x0052
+					// @DOCLINE * [0x0053] `MUTT_MACINTOSH_LANG_MALAY_ROMAN` - Malay (Roman script).
+					#define MUTT_MACINTOSH_LANG_MALAY_ROMAN 0x0053
+					// @DOCLINE * [0x0054] `MUTT_MACINTOSH_LANG_MALAY_ARABIC` - Malay (Arabic script).
+					#define MUTT_MACINTOSH_LANG_MALAY_ARABIC 0x0054
+					// @DOCLINE * [0x0055] `MUTT_MACINTOSH_LANG_AMHARIC` - Amharic.
+					#define MUTT_MACINTOSH_LANG_AMHARIC 0x0055
+					// @DOCLINE * [0x0056] `MUTT_MACINTOSH_LANG_TIGRINYA` - Tigrinya.
+					#define MUTT_MACINTOSH_LANG_TIGRINYA 0x0056
+					// @DOCLINE * [0x0057] `MUTT_MACINTOSH_LANG_GALLA` - Galla.
+					#define MUTT_MACINTOSH_LANG_GALLA 0x0057
+					// @DOCLINE * [0x0058] `MUTT_MACINTOSH_LANG_SOMALI` - Somali.
+					#define MUTT_MACINTOSH_LANG_SOMALI 0x0058
+					// @DOCLINE * [0x0059] `MUTT_MACINTOSH_LANG_SWAHILI` - Swahili.
+					#define MUTT_MACINTOSH_LANG_SWAHILI 0x0059
+					// @DOCLINE * [0x005A] `MUTT_MACINTOSH_LANG_KINYARWANDA_RUANDA` - Kinyarwanda/Ruanda.
+					#define MUTT_MACINTOSH_LANG_KINYARWANDA_RUANDA 0x005A
+					// @DOCLINE * [0x005B] `MUTT_MACINTOSH_LANG_RUNDI` - Rundi.
+					#define MUTT_MACINTOSH_LANG_RUNDI 0x005B
+					// @DOCLINE * [0x005C] `MUTT_MACINTOSH_LANG_NYANJA_CHEWA` - Nyanja/Chewa.
+					#define MUTT_MACINTOSH_LANG_NYANJA_CHEWA 0x005C
+					// @DOCLINE * [0x005D] `MUTT_MACINTOSH_LANG_MALAGASY` - Malagasy.
+					#define MUTT_MACINTOSH_LANG_MALAGASY 0x005D
+					// @DOCLINE * [0x005E] `MUTT_MACINTOSH_LANG_ESPERANTO` - Esperanto.
+					#define MUTT_MACINTOSH_LANG_ESPERANTO 0x005E
+					// @DOCLINE * [0x0080] `MUTT_MACINTOSH_LANG_WELSH` - Welsh.
+					#define MUTT_MACINTOSH_LANG_WELSH 0x0080
+					// @DOCLINE * [0x0081] `MUTT_MACINTOSH_LANG_BASQUE` - Basque.
+					#define MUTT_MACINTOSH_LANG_BASQUE 0x0081
+					// @DOCLINE * [0x0082] `MUTT_MACINTOSH_LANG_CATALAN` - Catalan.
+					#define MUTT_MACINTOSH_LANG_CATALAN 0x0082
+					// @DOCLINE * [0x0083] `MUTT_MACINTOSH_LANG_LATIN` - Latin.
+					#define MUTT_MACINTOSH_LANG_LATIN 0x0083
+					// @DOCLINE * [0x0084] `MUTT_MACINTOSH_LANG_QUECHUA` - Quechua.
+					#define MUTT_MACINTOSH_LANG_QUECHUA 0x0084
+					// @DOCLINE * [0x0085] `MUTT_MACINTOSH_LANG_GUARANI` - Guarani.
+					#define MUTT_MACINTOSH_LANG_GUARANI 0x0085
+					// @DOCLINE * [0x0086] `MUTT_MACINTOSH_LANG_AYMARA` - Aymara.
+					#define MUTT_MACINTOSH_LANG_AYMARA 0x0086
+					// @DOCLINE * [0x0087] `MUTT_MACINTOSH_LANG_TATAR` - Tatar.
+					#define MUTT_MACINTOSH_LANG_TATAR 0x0087
+					// @DOCLINE * [0x0088] `MUTT_MACINTOSH_LANG_UIGHUR` - Uighur.
+					#define MUTT_MACINTOSH_LANG_UIGHUR 0x0088
+					// @DOCLINE * [0x0089] `MUTT_MACINTOSH_LANG_DZONGKHA` - Dzongkha.
+					#define MUTT_MACINTOSH_LANG_DZONGKHA 0x0089
+					// @DOCLINE * [0x008A] `MUTT_MACINTOSH_LANG_JAVANESE_ROMAN` - Javanese (Roman script).
+					#define MUTT_MACINTOSH_LANG_JAVANESE_ROMAN 0x008A
+					// @DOCLINE * [0x008B] `MUTT_MACINTOSH_LANG_SUNDANESE_ROMAN` - Sundanese (Roman script).
+					#define MUTT_MACINTOSH_LANG_SUNDANESE_ROMAN 0x008B
+					// @DOCLINE * [0x008C] `MUTT_MACINTOSH_LANG_GALICIAN` - Galician.
+					#define MUTT_MACINTOSH_LANG_GALICIAN 0x008C
+					// @DOCLINE * [0x008D] `MUTT_MACINTOSH_LANG_AFRIKAANS` - Afrikaans.
+					#define MUTT_MACINTOSH_LANG_AFRIKAANS 0x008D
+					// @DOCLINE * [0x008E] `MUTT_MACINTOSH_LANG_BRETON` - Breton.
+					#define MUTT_MACINTOSH_LANG_BRETON 0x008E
+					// @DOCLINE * [0x008F] `MUTT_MACINTOSH_LANG_INUKTITUT` - Inuktitut.
+					#define MUTT_MACINTOSH_LANG_INUKTITUT 0x008F
+					// @DOCLINE * [0x0090] `MUTT_MACINTOSH_LANG_SCOTTISH_GAELIC` - Scottish Gaelic.
+					#define MUTT_MACINTOSH_LANG_SCOTTISH_GAELIC 0x0090
+					// @DOCLINE * [0x0091] `MUTT_MACINTOSH_LANG_MANX_GAELIC` - Manx Gaelic.
+					#define MUTT_MACINTOSH_LANG_MANX_GAELIC 0x0091
+					// @DOCLINE * [0x0092] `MUTT_MACINTOSH_LANG_IRISH_GAELIC_DOT_ABOVE` - Irish Gaelic (with dot above).
+					#define MUTT_MACINTOSH_LANG_IRISH_GAELIC_DOT_ABOVE 0x0092
+					// @DOCLINE * [0x0093] `MUTT_MACINTOSH_LANG_TONGAN` - Tongan.
+					#define MUTT_MACINTOSH_LANG_TONGAN 0x0093
+					// @DOCLINE * [0x0094] `MUTT_MACINTOSH_LANG_GREEK_POLYTONIC` - Greek (polytonic).
+					#define MUTT_MACINTOSH_LANG_GREEK_POLYTONIC 0x0094
+					// @DOCLINE * [0x0095] `MUTT_MACINTOSH_LANG_GREENLANDIC` - Greenlandic.
+					#define MUTT_MACINTOSH_LANG_GREENLANDIC 0x0095
+					// @DOCLINE * [0x0096] `MUTT_MACINTOSH_LANG_AZERBAIJANI_ROMAN` - Azerbaijani (Roman script).
+					#define MUTT_MACINTOSH_LANG_AZERBAIJANI_ROMAN 0x0096
+
+			// @DOCLINE ### Name ID
+
+				// @DOCLINE The follwing macros are defined for various name IDs:
+
+				// @DOCLINE * [0x0000] `MUTT_NAME_COPYRIGHT_NOTICE` - "Copyright notice."
+				#define MUTT_NAME_COPYRIGHT_NOTICE 0x0000
+				// @DOCLINE * [0x0001] `MUTT_NAME_FONT_FAMILY` - "Font Family name."
+				#define MUTT_NAME_FONT_FAMILY 0x0001
+				// @DOCLINE * [0x0002] `MUTT_NAME_FONT_SUBFAMILY` - "Font Subfamily name."
+				#define MUTT_NAME_FONT_SUBFAMILY 0x0002
+				// @DOCLINE * [0x0003] `MUTT_NAME_FONT_IDENTIFIER` - "Unique font identifier."
+				#define MUTT_NAME_FONT_IDENTIFIER 0x0003
+				// @DOCLINE * [0x0004] `MUTT_NAME_FONT_FULL` - "Full font name that reflects all family and relevant subfamily descriptors".
+				#define MUTT_NAME_FONT_FULL 0x0004
+				// @DOCLINE * [0x0005] `MUTT_NAME_VERSION` - "Version string."
+				#define MUTT_NAME_VERSION 0x0005
+				// @DOCLINE * [0x0006] `MUTT_NAME_POSTSCRIPT` - "PostScript name for the font."
+				#define MUTT_NAME_POSTSCRIPT 0x0006
+				// @DOCLINE * [0x0007] `MUTT_NAME_TRADEMARK` - "Trademark."
+				#define MUTT_NAME_TRADEMARK 0x0007
+				// @DOCLINE * [0x0008] `MUTT_NAME_MANUFACTURER` - "Manufacturer Name."
+				#define MUTT_NAME_MANUFACTURER 0x0008
+				// @DOCLINE * [0x0009] `MUTT_NAME_DESIGNER` - "Designer."
+				#define MUTT_NAME_DESIGNER 0x0009
+				// @DOCLINE * [0x000A] `MUTT_NAME_DESCRIPTION` - "Description."
+				#define MUTT_NAME_DESCRIPTION 0x000A
+				// @DOCLINE * [0x000B] `MUTT_NAME_VENDOR_URL` - "URL of Vendor."
+				#define MUTT_NAME_VENDOR_URL 0x000B
+				// @DOCLINE * [0x000C] `MUTT_NAME_DESIGNER_URL` - "URL of Designer."
+				#define MUTT_NAME_DESIGNER_URL 0x000C
+				// @DOCLINE * [0x000D] `MUTT_NAME_LICENSE` - "License Description."
+				#define MUTT_NAME_LICENSE 0x000D
+				// @DOCLINE * [0x000E] `MUTT_NAME_LICENSE_URL` - "License Info URL."
+				#define MUTT_NAME_LICENSE_URL 0x000E
+				// @DOCLINE * [0x0010] `MUTT_NAME_TYPOGRAPHIC_FAMILY` - "Typographic Family name."
+				#define MUTT_NAME_TYPOGRAPHIC_FAMILY 0x0010
+				// @DOCLINE * [0x0011] `MUTT_NAME_TYPOGRAPHIC_SUBFAMILY` - "Typographic Subfamily name."
+				#define MUTT_NAME_TYPOGRAPHIC_SUBFAMILY 0x0011
+				// @DOCLINE * [0x0012] `MUTT_NAME_COMPATIBLE_FULL` - "Compatible Full (Macintosh only)."
+				#define MUTT_NAME_COMPATIBLE_FULL 0x0012
+				// @DOCLINE * [0x0013] `MUTT_NAME_SAMPLE_TEXT` - "Sample text."
+				#define MUTT_NAME_SAMPLE_TEXT 0x0013
+				// @DOCLINE * [0x0014] `MUTT_NAME_POSTSCRIPT_CID_FINDFONT` - "PostScript CID findfont name."
+				#define MUTT_NAME_POSTSCRIPT_CID_FINDFONT 0x0014
+				// @DOCLINE * [0x0015] `MUTT_NAME_WWS_FAMILY` - "WWS Family Name."
+				#define MUTT_NAME_WWS_FAMILY 0x0015
+				// @DOCLINE * [0x0016] `MUTT_NAME_WWS_SUBFAMILY` - "WWS Subfamily Name."
+				#define MUTT_NAME_WWS_SUBFAMILY 0x0016
+				// @DOCLINE * [0x0017] `MUTT_NAME_LIGHT_BACKGROUND_PALETTE` - "Light Background Palette."
+				#define MUTT_NAME_LIGHT_BACKGROUND_PALETTE 0x0017
+				// @DOCLINE * [0x0018] `MUTT_NAME_DARK_BACKGROUND_PALETTE` - "Dark Background Palette."
+				#define MUTT_NAME_DARK_BACKGROUND_PALETTE 0x0018
+
+				#ifdef MUTT_NAMES
+				// @DOCLINE #### Name ID names
+
+					// @DOCLINE The name function `mutt_name_id_get_name` returns a `const char*` representation of a given name ID (for example, `MUTT_NAME_COPYRIGHT_NOTICE` returns "MUTT_NAME_COPYRIGHT_NOTICE"), defined below: @NLNT
+					MUDEF const char* mutt_name_id_get_name(uint16_m name_id);
+					// @DOCLINE This function returns "MU_UNKNOWN" in the case that `name_id` is an unrecognized value.
+
+					// @DOCLINE The name function `mutt_name_id_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_NAME_COPYRIGHT_NOTICE` returns "Copyright notice"), defined below: @NLNT
+					MUDEF const char* mutt_name_id_get_nice_name(uint16_m name_id);
+					// @DOCLINE This function returns "Unknown" in the case that `name_id` is an unrecognized value.
+
+					// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+				#endif /* MUTT_NAMES */
 
 	// @DOCLINE # Result
 
@@ -1281,7 +1840,7 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_HMTX_REQUIRES_HHEA 322
 
 		// @DOCLINE ### Loca result values
-		// 384 -> 448 //
+		// 384 -> 447 //
 
 			// @DOCLINE * `MUTT_INVALID_LOCA_LENGTH` - the length of the loca table was invalid.
 			#define MUTT_INVALID_LOCA_LENGTH 284
@@ -1291,6 +1850,14 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_LOCA_REQUIRES_MAXP 286
 			// @DOCLINE * `MUTT_LOCA_REQUIRES_HEAD` - the head table rather failed to load or was not requested for loading, and loca requires head to be loaded.
 			#define MUTT_LOCA_REQUIRES_HEAD 287
+
+		// @DOCLINE ### Name result values
+		// 448 -> 511 //
+
+			#define MUTT_INVALID_NAME_LENGTH 448
+			#define MUTT_INVALID_NAME_VERSION 449
+			#define MUTT_INVALID_NAME_STORAGE_OFFSET 450
+			#define MUTT_INVALID_NAME_LENGTH_OFFSET 451
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -1944,6 +2511,167 @@ mutt is developed primarily off of these sources of documentation:
 				}
 			}
 
+			// Loads the name table
+			void mutt_DeloadName(muttName* name);
+			muttResult mutt_LoadName(muttFont* font, muByte* data, uint32_m datalen) {
+				// Allocate
+				muttName* name = (muttName*)mu_malloc(sizeof(muttName));
+				if (!name) {
+					return MUTT_FAILED_MALLOC;
+				}
+				mu_memset(name, 0, sizeof(muttName));
+
+				// Verify min. length for version
+				if (datalen < 2) {
+					mutt_DeloadName(name);
+					return MUTT_INVALID_NAME_LENGTH;
+				}
+
+				// Verify version
+				name->version = MU_RBEU16(data);
+				if (name->version != 0 && name->version != 1) {
+					mutt_DeloadName(name);
+					return MUTT_INVALID_NAME_VERSION;
+				}
+
+				// Verify min. length for version, count, and storage offset
+				if (datalen < 6) {
+					mutt_DeloadName(name);
+					return MUTT_INVALID_NAME_LENGTH;
+				}
+
+				// Read count + storageOffset
+				name->count = MU_RBEU16(data+2);
+				uint16_m storage_offset = MU_RBEU16(data+4);
+				// Verify length for storage offset
+				if (storage_offset > datalen) {
+					mutt_DeloadName(name);
+					return MUTT_INVALID_NAME_STORAGE_OFFSET;
+				}
+				// Verify length for nameRecord and storage
+				uint32_m req = 6+(name->count*12)+(datalen-storage_offset);
+				if (datalen < req) {
+					mutt_DeloadName(name);
+					return MUTT_INVALID_NAME_LENGTH;
+				}
+
+				// Allocate and fill storage (if necessary)
+				uint32_m storage_len = datalen-storage_offset;
+				if (storage_len) {
+					name->string_data = (muByte*)mu_malloc(storage_len);
+					if (!name->string_data) {
+						mutt_DeloadName(name);
+						return MUTT_FAILED_MALLOC;
+					}
+					mu_memcpy(name->string_data, &data[storage_offset], storage_len);
+				}
+
+				// Move up data
+				data += 6;
+
+				// If we have name records:
+				if (name->count) {
+					// Allocate name records
+					name->name_records = (muttNameRecord*)mu_malloc(sizeof(muttNameRecord)*((size_m)name->count));
+					if (!name->name_records) {
+						mutt_DeloadName(name);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Loop through each name record
+					for (uint16_m r = 0; r < name->count; ++r) {
+						muttNameRecord* rp = &name->name_records[r];
+
+						// Basic numbers
+						rp->platform_id = MU_RBEU16(data);
+						rp->encoding_id = MU_RBEU16(data+2);
+						rp->language_id = MU_RBEU16(data+4);
+						rp->name_id = MU_RBEU16(data+6);
+						rp->length = MU_RBEU16(data+8);
+
+						// Get & verify offset + length
+						uint16_m offset = MU_RBEU16(data+10);
+						if (offset+rp->length > storage_len) {
+							mutt_DeloadName(name);
+							return MUTT_INVALID_NAME_LENGTH_OFFSET;
+						}
+
+						// Get string
+						rp->string = (storage_len) ?(name->string_data+offset) :(0);
+						// Increment data
+						data += 12;
+					}
+				}
+
+				// For verson 1:
+				if (name->version == 1) {
+					// Verify length for langTagCount
+					req += 2;
+					if (datalen < req) {
+						mutt_DeloadName(name);
+						return MUTT_INVALID_NAME_LENGTH;
+					}
+					// Get langTagCount
+					name->lang_tag_count = MU_RBEU16(data);
+					data += 2;
+					// Verify length for langTagRecord
+					req += name->lang_tag_count*4;
+					if (datalen < req) {
+						mutt_DeloadName(name);
+						return MUTT_INVALID_NAME_LENGTH;
+					}
+				}
+
+				// If we have lang tags:
+				if (name->lang_tag_count) {
+					// Allocate lang tags
+					name->lang_tag_records = (muttLangTagRecord*)mu_malloc(sizeof(muttLangTagRecord)*((size_m)name->lang_tag_count));
+					if (!name->lang_tag_records) {
+						mutt_DeloadName(name);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Loop through each lang tag record
+					for (uint16_m l = 0; l < name->lang_tag_count; ++l) {
+						muttLangTagRecord* lr = &name->lang_tag_records[l];
+
+						// Read length
+						lr->length = MU_RBEU16(data);
+
+						// Get & verify offset + length
+						uint16_m offset = MU_RBEU16(data+2);
+						if (offset+lr->length > storage_len) {
+							mutt_DeloadName(name);
+							return MUTT_INVALID_NAME_LENGTH_OFFSET;
+						}
+
+						// Get lang tag
+						lr->lang_tag = (storage_len) ?(name->string_data+offset) :(0);
+						// Increment data
+						data += 4;
+					}
+				}
+
+				font->name = name;
+				return MUTT_SUCCESS;
+			}
+
+			// Frees all allocated data for name
+			void mutt_DeloadName(muttName* name) {
+				if (name) {
+					if (name->name_records) {
+						mu_free(name->name_records);
+					}
+					if (name->lang_tag_records) {
+						mu_free(name->lang_tag_records);
+					}
+					if (name->string_data) {
+						mu_free(name->string_data);
+					}
+					mu_free(name);
+				}
+			}
+
 		/* Loading / Deloading */
 
 			// Initializes all flag/result states of each table to "failed to find"
@@ -1963,6 +2691,9 @@ mutt is developed primarily off of these sources of documentation:
 				// loca
 				font->loca_res = (load_flags & MUTT_LOAD_LOCA) ? MUTT_FAILED_FIND_TABLE : 0;
 				font->fail_load_flags |= (load_flags & MUTT_LOAD_LOCA);
+				// name
+				font->name_res = (load_flags & MUTT_LOAD_NAME) ? MUTT_FAILED_FIND_TABLE : 0;
+				font->fail_load_flags |= (load_flags & MUTT_LOAD_NAME);
 			}
 
 			// Does one pass through each table load
@@ -2143,6 +2874,28 @@ mutt is developed primarily off of these sources of documentation:
 								font->load_flags &= ~MUTT_LOAD_LOCA;
 							}
 						} break;
+
+						// name
+						case 0x6E616D65: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_NAME;
+							}
+							// Skip if already processed
+							if (font->name_res != MUTT_FAILED_FIND_TABLE) {
+								break;
+							}
+
+							// Load
+							font->name_res = mutt_LoadName(font, &data[rec.offset], rec.length);
+							if (font->name) {
+								font->load_flags |= MUTT_LOAD_NAME;
+								font->fail_load_flags &= ~MUTT_LOAD_NAME;
+							} else {
+								font->fail_load_flags |= MUTT_LOAD_NAME;
+								font->load_flags &= ~MUTT_LOAD_NAME;
+							}
+						} break;
 					}
 				}
 			}
@@ -2163,6 +2916,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Allocated tables
 				mutt_DeloadHmtx(font->hmtx);
 				mutt_DeloadLoca(font->loca);
+				mutt_DeloadName(font->name);
 			}
 
 			MUDEF muttResult mutt_load(muByte* data, uint64_m datalen, muttFont* font, muttLoadFlags load_flags) {
@@ -2264,6 +3018,215 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_LOCA_OFFSET: return "MUTT_INVALID_LOCA_OFFSET"; break;
 				case MUTT_LOCA_REQUIRES_MAXP: return "MUTT_LOCA_REQUIRES_MAXP"; break;
 				case MUTT_LOCA_REQUIRES_HEAD: return "MUTT_LOCA_REQUIRES_HEAD"; break;
+			}
+		}
+
+		MUDEF const char* mutt_platform_get_name(uint16_m platform_id) {
+			switch (platform_id) {
+				default: return "MU_UNKNOWN"; break;
+				case MUTT_PLATFORM_UNICODE: return "MUTT_PLATFORM_UNICODE"; break;
+				case MUTT_PLATFORM_MACINTOSH: return "MUTT_PLATFORM_MACINTOSH"; break;
+				case MUTT_PLATFORM_ISO: return "MUTT_PLATFORM_ISO"; break;
+				case MUTT_PLATFORM_WINDOWS: return "MUTT_PLATFORM_WINDOWS"; break;
+				case MUTT_PLATFORM_CUSTOM: return "MUTT_PLATFORM_CUSTOM"; break;
+			}
+		}
+		MUDEF const char* mutt_platform_get_nice_name(uint16_m platform_id) {
+			switch (platform_id) {
+				default: return "Unknown"; break;
+				case MUTT_PLATFORM_UNICODE: return "Unicode"; break;
+				case MUTT_PLATFORM_MACINTOSH: return "Macintosh"; break;
+				case MUTT_PLATFORM_ISO: return "ISO"; break;
+				case MUTT_PLATFORM_WINDOWS: return "Windows"; break;
+				case MUTT_PLATFORM_CUSTOM: return "Custom"; break;
+			}
+		}
+
+		MUDEF const char* mutt_unicode_encoding_get_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "MU_UNKNOWN"; break;
+				case MUTT_UNICODE_1_0: return "MUTT_UNICODE_1_0"; break;
+				case MUTT_UNICODE_1_1: return "MUTT_UNICODE_1_1"; break;
+				case MUTT_UNICODE_ISO_IEC_10646: return "MUTT_UNICODE_ISO_IEC_10646"; break;
+				case MUTT_UNICODE_2_0_BMP: return "MUTT_UNICODE_2_0_BMP"; break;
+				case MUTT_UNICODE_2_0: return "MUTT_UNICODE_2_0"; break;
+				case MUTT_UNICODE_VARIATION: return "MUTT_UNICODE_VARIATION"; break;
+				case MUTT_UNICODE_FULL: return "MUTT_UNICODE_FULL"; break;
+			}
+		}
+		MUDEF const char* mutt_unicode_encoding_get_nice_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "Unknown"; break;
+				case MUTT_UNICODE_1_0: return "Unicode 1.0"; break;
+				case MUTT_UNICODE_1_1: return "Unicode 1.1"; break;
+				case MUTT_UNICODE_ISO_IEC_10646: return "ISO/IEC 10646"; break;
+				case MUTT_UNICODE_2_0_BMP: return "Unicode 2.0 (BMP only)"; break;
+				case MUTT_UNICODE_2_0: return "Unicode 2.0 (full repertoire)"; break;
+				case MUTT_UNICODE_VARIATION: return "Unicode variation sequences"; break;
+				case MUTT_UNICODE_FULL: return "Unicode full repertoire"; break;
+			}
+		}
+
+		MUDEF const char* mutt_macintosh_encoding_get_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "MU_UNKNOWN"; break;
+				case MUTT_MACINTOSH_ROMAN: return "MUTT_MACINTOSH_ROMAN"; break;
+				case MUTT_MACINTOSH_JAPANESE: return "MUTT_MACINTOSH_JAPANESE"; break;
+				case MUTT_MACINTOSH_CHINESE_TRADITIONAL: return "MUTT_MACINTOSH_CHINESE_TRADITIONAL"; break;
+				case MUTT_MACINTOSH_KOREAN: return "MUTT_MACINTOSH_KOREAN"; break;
+				case MUTT_MACINTOSH_ARABIC: return "MUTT_MACINTOSH_ARABIC"; break;
+				case MUTT_MACINTOSH_HEBREW: return "MUTT_MACINTOSH_HEBREW"; break;
+				case MUTT_MACINTOSH_GREEK: return "MUTT_MACINTOSH_GREEK"; break;
+				case MUTT_MACINTOSH_RUSSIAN: return "MUTT_MACINTOSH_RUSSIAN"; break;
+				case MUTT_MACINTOSH_RSYMBOL: return "MUTT_MACINTOSH_RSYMBOL"; break;
+				case MUTT_MACINTOSH_DEVANAGARI: return "MUTT_MACINTOSH_DEVANAGARI"; break;
+				case MUTT_MACINTOSH_GURMUKHI: return "MUTT_MACINTOSH_GURMUKHI"; break;
+				case MUTT_MACINTOSH_GUJARATI: return "MUTT_MACINTOSH_GUJARATI"; break;
+				case MUTT_MACINTOSH_ODIA: return "MUTT_MACINTOSH_ODIA"; break;
+				case MUTT_MACINTOSH_BANGLA: return "MUTT_MACINTOSH_BANGLA"; break;
+				case MUTT_MACINTOSH_TAMIL: return "MUTT_MACINTOSH_TAMIL"; break;
+				case MUTT_MACINTOSH_TELUGU: return "MUTT_MACINTOSH_TELUGU"; break;
+				case MUTT_MACINTOSH_KANNADA: return "MUTT_MACINTOSH_KANNADA"; break;
+				case MUTT_MACINTOSH_MALAYALAM: return "MUTT_MACINTOSH_MALAYALAM"; break;
+				case MUTT_MACINTOSH_SINHALESE: return "MUTT_MACINTOSH_SINHALESE"; break;
+				case MUTT_MACINTOSH_BURMESE: return "MUTT_MACINTOSH_BURMESE"; break;
+				case MUTT_MACINTOSH_KHMER: return "MUTT_MACINTOSH_KHMER"; break;
+				case MUTT_MACINTOSH_THAI: return "MUTT_MACINTOSH_THAI"; break;
+				case MUTT_MACINTOSH_LAOTIAN: return "MUTT_MACINTOSH_LAOTIAN"; break;
+				case MUTT_MACINTOSH_GEORGIAN: return "MUTT_MACINTOSH_GEORGIAN"; break;
+				case MUTT_MACINTOSH_ARMENIAN: return "MUTT_MACINTOSH_ARMENIAN"; break;
+				case MUTT_MACINTOSH_CHINESE_SIMPLIFIED: return "MUTT_MACINTOSH_CHINESE_SIMPLIFIED"; break;
+				case MUTT_MACINTOSH_TIBETAN: return "MUTT_MACINTOSH_TIBETAN"; break;
+				case MUTT_MACINTOSH_MONGOLIAN: return "MUTT_MACINTOSH_MONGOLIAN"; break;
+				case MUTT_MACINTOSH_GEEZ: return "MUTT_MACINTOSH_GEEZ"; break;
+				case MUTT_MACINTOSH_SLAVIC: return "MUTT_MACINTOSH_SLAVIC"; break;
+				case MUTT_MACINTOSH_VIETNAMESE: return "MUTT_MACINTOSH_VIETNAMESE"; break;
+				case MUTT_MACINTOSH_SINDHI: return "MUTT_MACINTOSH_SINDHI"; break;
+				case MUTT_MACINTOSH_UNINTERPRETED: return "MUTT_MACINTOSH_UNINTERPRETED"; break;
+			}
+		}
+		MUDEF const char* mutt_macintosh_encoding_get_nice_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "Unknown"; break;
+				case MUTT_MACINTOSH_ROMAN: return "Roman"; break;
+				case MUTT_MACINTOSH_JAPANESE: return "Japanese"; break;
+				case MUTT_MACINTOSH_CHINESE_TRADITIONAL: return "Chinese (Traditional)"; break;
+				case MUTT_MACINTOSH_KOREAN: return "Korean"; break;
+				case MUTT_MACINTOSH_ARABIC: return "Arabic"; break;
+				case MUTT_MACINTOSH_HEBREW: return "Hebrew"; break;
+				case MUTT_MACINTOSH_GREEK: return "Greek"; break;
+				case MUTT_MACINTOSH_RUSSIAN: return "Russian"; break;
+				case MUTT_MACINTOSH_RSYMBOL: return "RSymbol"; break;
+				case MUTT_MACINTOSH_DEVANAGARI: return "Devanagari"; break;
+				case MUTT_MACINTOSH_GURMUKHI: return "Gurmukhi"; break;
+				case MUTT_MACINTOSH_GUJARATI: return "Gujarati"; break;
+				case MUTT_MACINTOSH_ODIA: return "Odia"; break;
+				case MUTT_MACINTOSH_BANGLA: return "Bangla"; break;
+				case MUTT_MACINTOSH_TAMIL: return "Tamil"; break;
+				case MUTT_MACINTOSH_TELUGU: return "Telugu"; break;
+				case MUTT_MACINTOSH_KANNADA: return "Kannada"; break;
+				case MUTT_MACINTOSH_MALAYALAM: return "Malayalam"; break;
+				case MUTT_MACINTOSH_SINHALESE: return "Sinhalese"; break;
+				case MUTT_MACINTOSH_BURMESE: return "Burmese"; break;
+				case MUTT_MACINTOSH_KHMER: return "Khmer"; break;
+				case MUTT_MACINTOSH_THAI: return "Thai"; break;
+				case MUTT_MACINTOSH_LAOTIAN: return "Laotian"; break;
+				case MUTT_MACINTOSH_GEORGIAN: return "Georgian"; break;
+				case MUTT_MACINTOSH_ARMENIAN: return "Armenian"; break;
+				case MUTT_MACINTOSH_CHINESE_SIMPLIFIED: return "Chinese (Simplified)"; break;
+				case MUTT_MACINTOSH_TIBETAN: return "Tibetan"; break;
+				case MUTT_MACINTOSH_MONGOLIAN: return "Mongolian"; break;
+				case MUTT_MACINTOSH_GEEZ: return "Geez"; break;
+				case MUTT_MACINTOSH_SLAVIC: return "Slavic"; break;
+				case MUTT_MACINTOSH_VIETNAMESE: return "Vietnamese"; break;
+				case MUTT_MACINTOSH_SINDHI: return "Sindhi"; break;
+				case MUTT_MACINTOSH_UNINTERPRETED: return "Uninterpreted"; break;
+			}
+		}
+
+		MUDEF const char* mutt_windows_encoding_get_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "MU_UNKNOWN"; break;
+				case MUTT_WINDOWS_SYMBOL: return "MUTT_WINDOWS_SYMBOL"; break;
+				case MUTT_WINDOWS_UNICODE_BMP: return "MUTT_WINDOWS_UNICODE_BMP"; break;
+				case MUTT_WINDOWS_SHIFTJIS: return "MUTT_WINDOWS_SHIFTJIS"; break;
+				case MUTT_WINDOWS_PRC: return "MUTT_WINDOWS_PRC"; break;
+				case MUTT_WINDOWS_BIG5: return "MUTT_WINDOWS_BIG5"; break;
+				case MUTT_WINDOWS_WANSUNG: return "MUTT_WINDOWS_WANSUNG"; break;
+				case MUTT_WINDOWS_JOHAB: return "MUTT_WINDOWS_JOHAB"; break;
+				case MUTT_WINDOWS_UNICODE: return "MUTT_WINDOWS_UNICODE"; break;
+			}
+		}
+		MUDEF const char* mutt_windows_encoding_get_nice_name(uint16_m encoding_id) {
+			switch (encoding_id) {
+				default: return "Unknown"; break;
+				case MUTT_WINDOWS_SYMBOL: return "Symbol"; break;
+				case MUTT_WINDOWS_UNICODE_BMP: return "Unicode (BMP only)"; break;
+				case MUTT_WINDOWS_SHIFTJIS: return "ShiftJIS"; break;
+				case MUTT_WINDOWS_PRC: return "PRC"; break;
+				case MUTT_WINDOWS_BIG5: return "Big5"; break;
+				case MUTT_WINDOWS_WANSUNG: return "Wansung"; break;
+				case MUTT_WINDOWS_JOHAB: return "Johab"; break;
+				case MUTT_WINDOWS_UNICODE: return "Unicode (full repertoire)"; break;
+			}
+		}
+
+		MUDEF const char* mutt_name_id_get_name(uint16_m name_id) {
+			switch (name_id) {
+				default: return "MU_UNKNOWN"; break;
+				case MUTT_NAME_COPYRIGHT_NOTICE: return "MUTT_NAME_COPYRIGHT_NOTICE"; break;
+				case MUTT_NAME_FONT_FAMILY: return "MUTT_NAME_FONT_FAMILY"; break;
+				case MUTT_NAME_FONT_SUBFAMILY: return "MUTT_NAME_FONT_SUBFAMILY"; break;
+				case MUTT_NAME_FONT_IDENTIFIER: return "MUTT_NAME_FONT_IDENTIFIER"; break;
+				case MUTT_NAME_FONT_FULL: return "MUTT_NAME_FONT_FULL"; break;
+				case MUTT_NAME_VERSION: return "MUTT_NAME_VERSION"; break;
+				case MUTT_NAME_POSTSCRIPT: return "MUTT_NAME_POSTSCRIPT"; break;
+				case MUTT_NAME_TRADEMARK: return "MUTT_NAME_TRADEMARK"; break;
+				case MUTT_NAME_MANUFACTURER: return "MUTT_NAME_MANUFACTURER"; break;
+				case MUTT_NAME_DESIGNER: return "MUTT_NAME_DESIGNER"; break;
+				case MUTT_NAME_DESCRIPTION: return "MUTT_NAME_DESCRIPTION"; break;
+				case MUTT_NAME_VENDOR_URL: return "MUTT_NAME_VENDOR_URL"; break;
+				case MUTT_NAME_DESIGNER_URL: return "MUTT_NAME_DESIGNER_URL"; break;
+				case MUTT_NAME_LICENSE: return "MUTT_NAME_LICENSE"; break;
+				case MUTT_NAME_LICENSE_URL: return "MUTT_NAME_LICENSE_URL"; break;
+				case MUTT_NAME_TYPOGRAPHIC_FAMILY: return "MUTT_NAME_TYPOGRAPHIC_FAMILY"; break;
+				case MUTT_NAME_TYPOGRAPHIC_SUBFAMILY: return "MUTT_NAME_TYPOGRAPHIC_SUBFAMILY"; break;
+				case MUTT_NAME_COMPATIBLE_FULL: return "MUTT_NAME_COMPATIBLE_FULL"; break;
+				case MUTT_NAME_SAMPLE_TEXT: return "MUTT_NAME_SAMPLE_TEXT"; break;
+				case MUTT_NAME_POSTSCRIPT_CID_FINDFONT: return "MUTT_NAME_POSTSCRIPT_CID_FINDFONT"; break;
+				case MUTT_NAME_WWS_FAMILY: return "MUTT_NAME_WWS_FAMILY"; break;
+				case MUTT_NAME_WWS_SUBFAMILY: return "MUTT_NAME_WWS_SUBFAMILY"; break;
+				case MUTT_NAME_LIGHT_BACKGROUND_PALETTE: return "MUTT_NAME_LIGHT_BACKGROUND_PALETTE"; break;
+				case MUTT_NAME_DARK_BACKGROUND_PALETTE: return "MUTT_NAME_DARK_BACKGROUND_PALETTE"; break;
+			}
+		}
+		MUDEF const char* mutt_name_id_get_nice_name(uint16_m name_id) {
+			switch (name_id) {
+				default: return "Unknown"; break;
+				case MUTT_NAME_COPYRIGHT_NOTICE: return "Copyright notice"; break;
+				case MUTT_NAME_FONT_FAMILY: return "Font family"; break;
+				case MUTT_NAME_FONT_SUBFAMILY: return "Font subfamily"; break;
+				case MUTT_NAME_FONT_IDENTIFIER: return "Unique font identifier"; break;
+				case MUTT_NAME_FONT_FULL: return "Full font name"; break;
+				case MUTT_NAME_VERSION: return "Version"; break;
+				case MUTT_NAME_POSTSCRIPT: return "Postscript name"; break;
+				case MUTT_NAME_TRADEMARK: return "Trademark"; break;
+				case MUTT_NAME_MANUFACTURER: return "Manufacturer"; break;
+				case MUTT_NAME_DESIGNER: return "Designer"; break;
+				case MUTT_NAME_DESCRIPTION: return "Description"; break;
+				case MUTT_NAME_VENDOR_URL: return "Vendor URL"; break;
+				case MUTT_NAME_DESIGNER_URL: return "Designer URL"; break;
+				case MUTT_NAME_LICENSE: return "License"; break;
+				case MUTT_NAME_LICENSE_URL: return "License URL"; break;
+				case MUTT_NAME_TYPOGRAPHIC_FAMILY: return "Typographic family"; break;
+				case MUTT_NAME_TYPOGRAPHIC_SUBFAMILY: return "Typographic subfamily"; break;
+				case MUTT_NAME_COMPATIBLE_FULL: return "Compatible full"; break;
+				case MUTT_NAME_SAMPLE_TEXT: return "Sample text"; break;
+				case MUTT_NAME_POSTSCRIPT_CID_FINDFONT: return "PostScript CID findfont"; break;
+				case MUTT_NAME_WWS_FAMILY: return "WWS family"; break;
+				case MUTT_NAME_WWS_SUBFAMILY: return "WWS subfamily"; break;
+				case MUTT_NAME_LIGHT_BACKGROUND_PALETTE: return "Light background palette"; break;
+				case MUTT_NAME_DARK_BACKGROUND_PALETTE: return "Dark background palette"; break;
 			}
 		}
 

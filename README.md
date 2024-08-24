@@ -339,13 +339,593 @@ All values provided in the `muttHmtx` struct (AKA the values in `muttLongHorMetr
 
 ## Loca table
 
-The union `muttLoca` is used to represent the loca table provided by a TrueTYpe font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
+The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
 
 * `uint16_m* offsets16` - equivalent to the short-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_16`.
 
 * `uint32_m* offsets32` - equivalent to the long-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_32`.
 
 The offsets are verified to be within range of the glyf table, along with all of the other rules within the specification.
+
+## Name table
+
+The struct `muttName` is used to represent the name table provided by a TrueType font, stored in the struct `muttFont` as the pointer mem ber "`name`", and loaded with the flag `MUTT_LOAD_NAME`. It has the following members:
+
+* `uint16_m version` - equivalent to "version" in the naming table header.
+
+* `uint16_m count` - the amount of name records specified; equivalent to "count" in the naming table header.
+
+* `muttNameRecord* name_records` - all [name records](#name-record) provided (length `count`); equivalent to "nameRecord" in the naming table header.
+
+* `uint16_m lang_tag_count` - the amount of language tags specified; equivalent to "langTagCount" in the naming table header.
+
+* `muttLangTagRecord* lang_tag_records` - all [language tag records](#lang-tag-record) provided (length `lang_tag_count`); equivalent to "langTagRecord" in the naming table header.
+
+* `muByte* string_data` - the raw string data provided by the name table. All pointers to strings provided by the name table are pointers to parts of this data.
+
+### Name record
+
+The struct `muttNameRecord` represents a name record in TrueType. It has the following members:
+
+* `uint16_m platform_id` - the [platform ID](#platform-id); equivalent to "platformID" in the name record.
+
+* `uint16_m encoding_id` - the [encoding ID](#encoding-id); equivalent to "encodingID" in the name record.
+
+* `uint16_m language_id` - the [language ID](#language-id); equivalent to "languageID" in the name record.
+
+* `uint16_m name_id` - the [name ID](#name-id); equivalent to "nameID" in the name record.
+
+* `uint16_m length` - the length of the string, in bytes; equivalent to "length" in the name record.
+
+* `muByte* string` - a pointer to the string data stored within `muttName->string_data` for this given name record.
+
+No platform, encoding, language, or name IDs give bad result values unless the specification explicitly states that the range of values that it's within will never be supported. The provided pointer for `string` is checked to be a pointer to valid data for the given length.
+
+### Lang tag record
+
+The struct `muttLangTagRecord` represents a language tag in TrueType. It has the following members:
+
+* `uint16_m length` - the length of the string, in bytes; equivalent to "length" in the lang tag record.
+
+* `muByte* lang_tag` - a pointer to the string data stored within `muttName->string_data` for this given name record.
+
+The provided pointer for `lang_tag` is checked to be a pointer to valid data for the given length.
+
+## String macros
+
+This section covers macros defined for platform, encoding, language, and name IDs. Note that values may be given that don't fit into any of the given macros.
+
+### Platform ID
+
+The following macros are defined for platform IDs:
+
+* [0x0000] `MUTT_PLATFORM_UNICODE` - [Unicode platform](#unicode-encoding).
+
+* [0x0001] `MUTT_PLATFORM_MACINTOSH` - [Macintosh platform](#macintosh-encoding).
+
+* [0x0002] `MUTT_PLATFORM_ISO` - [ISO platform](#iso-encoding).
+
+* [0x0003] `MUTT_PLATFORM_WINDOWS` - [Windows platform](#windows-encoding).
+
+* [0x0004] `MUTT_PLATFORM_CUSTOM` - custom encoding.
+
+#### Platform ID names
+
+The name function `mutt_platform_get_name` returns a `const char*` representation of a given platform ID (for example, `MUTT_PLATFORM_UNICODE` returns "MUTT_PLATFORM_UNICODE"), defined below: 
+
+```c
+MUDEF const char* mutt_platform_get_name(uint16_m platform_id);
+```
+
+
+This function returns "MU_UNKNOWN" in the case that `platform_id` is an unrecognized value.
+
+The name function `mutt_platform_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_PLATFORM_UNICODE` returns "Unicode"), defined below: 
+
+```c
+MUDEF const char* mutt_platform_get_nice_name(uint16_m platform_id);
+```
+
+
+This function returns "Unknown" in the case that `platform_id` is an unrecognized value.
+
+> Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+
+### Encoding ID
+
+The following macros are defined for various platform encoding IDs:
+
+#### Unicode encoding
+
+* [0x0000] `MUTT_UNICODE_1_0` - Unicode 1.0.
+
+* [0x0001] `MUTT_UNICODE_1_1` - Unicode 1.1.
+
+* [0x0002] `MUTT_UNICODE_ISO_IEC_10646` - ISO/IEC 10646.
+
+* [0x0003] `MUTT_UNICODE_2_0_BMP` - Unicode 2.0, BMP only.
+
+* [0x0004] `MUTT_UNICODE_2_0` - Unicode 2.0.
+
+* [0x0005] `MUTT_UNICODE_VARIATION` - Unicode variation sequences.
+
+* [0x0006] `MUTT_UNICODE_FULL` - Unicode "full repertoire".
+
+##### Unicode encoding names
+
+The name function `mutt_unicode_encoding_get_name` returns a `const char*` representation of a given Unicode encoding ID (for example, `MUTT_UNICODE_1_0` returns "MUTT_UNICODE_1_0"), defined below: 
+
+```c
+MUDEF const char* mutt_unicode_encoding_get_name(uint16_m encoding_id);
+```
+
+
+This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+The name function `mutt_unicode_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_UNICODE_1_0` returns "Unicode 1.0"), defined below: 
+
+```c
+MUDEF const char* mutt_unicode_encoding_get_nice_name(uint16_m encoding_id);
+```
+
+
+This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+> Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+
+#### Macintosh encoding
+
+* [0x0000] `MUTT_MACINTOSH_ROMAN` - Roman.
+
+* [0x0001] `MUTT_MACINTOSH_JAPANESE` - Japanese.
+
+* [0x0002] `MUTT_MACINTOSH_CHINESE_TRADITIONAL` - Chinese (Traditional).
+
+* [0x0003] `MUTT_MACINTOSH_KOREAN` - Korean.
+
+* [0x0004] `MUTT_MACINTOSH_ARABIC` - Arabic.
+
+* [0x0005] `MUTT_MACINTOSH_HEBREW` - Hebrew.
+
+* [0x0006] `MUTT_MACINTOSH_GREEK` - Greek.
+
+* [0x0007] `MUTT_MACINTOSH_RUSSIAN` - Russian.
+
+* [0x0008] `MUTT_MACINTOSH_RSYMBOL` - RSymbol.
+
+* [0x0009] `MUTT_MACINTOSH_DEVANAGARI` - Devanagari.
+
+* [0x000A] `MUTT_MACINTOSH_GURMUKHI` - Gurmukhi.
+
+* [0x000B] `MUTT_MACINTOSH_GUJARATI` - Gujarati.
+
+* [0x000C] `MUTT_MACINTOSH_ODIA` - Odia.
+
+* [0x000D] `MUTT_MACINTOSH_BANGLA` - Bangla.
+
+* [0x000E] `MUTT_MACINTOSH_TAMIL` - Tamil.
+
+* [0x000F] `MUTT_MACINTOSH_TELUGU` - Telugu.
+
+* [0x0010] `MUTT_MACINTOSH_KANNADA` - Kannada.
+
+* [0x0011] `MUTT_MACINTOSH_MALAYALAM` - Malayalam.
+
+* [0x0012] `MUTT_MACINTOSH_SINHALESE` - Sinhalese.
+
+* [0x0013] `MUTT_MACINTOSH_BURMESE` - Burmese.
+
+* [0x0014] `MUTT_MACINTOSH_KHMER` - Khmer.
+
+* [0x0015] `MUTT_MACINTOSH_THAI` - Thai.
+
+* [0x0016] `MUTT_MACINTOSH_LAOTIAN` - Laotian.
+
+* [0x0017] `MUTT_MACINTOSH_GEORGIAN` - Georgian.
+
+* [0x0018] `MUTT_MACINTOSH_ARMENIAN` - Armenian.
+
+* [0x0019] `MUTT_MACINTOSH_CHINESE_SIMPLIFIED` - Chinese (Simplified).
+
+* [0x001A] `MUTT_MACINTOSH_TIBETAN` - Tibetan.
+
+* [0x001B] `MUTT_MACINTOSH_MONGOLIAN` - Mongolian.
+
+* [0x001C] `MUTT_MACINTOSH_GEEZ` - Geez.
+
+* [0x001D] `MUTT_MACINTOSH_SLAVIC` - Slavic.
+
+* [0x001E] `MUTT_MACINTOSH_VIETNAMESE` - Vietnamese.
+
+* [0x001F] `MUTT_MACINTOSH_SINDHI` - Sindhi.
+
+* [0x0020] `MUTT_MACINTOSH_UNINTERPRETED` - Uninterpreted.
+
+##### Macintosh encoding names
+
+The name function `mutt_macintosh_encoding_get_name` returns a `const char*` representation of a given Macintosh encoding ID (for example, `MUTT_MACINTOSH_ROMAN` returns "MUTT_MACINTOSH_ROMAN"), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_encoding_get_name(uint16_m encoding_id);
+```
+
+
+This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+The name function `mutt_macintosh_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_MACINTOSH_ROMAN` returns "Roman"), defined below: 
+
+```c
+MUDEF const char* mutt_macintosh_encoding_get_nice_name(uint16_m encoding_id);
+```
+
+
+This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+> Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+
+#### ISO encoding
+
+* [0x0000] `MUTT_ISO_7_BIT_ASCII` - 7-bit ASCII.
+
+* [0x0001] `MUTT_ISO_10646` - ISO 10646.
+
+* [0x0002] `MUTT_ISO_8859_1` - ISO 8859-1.
+
+#### Windows encoding
+
+* [0x0000] `MUTT_WINDOWS_SYMBOL` - Symbol.
+
+* [0x0001] `MUTT_WINDOWS_UNICODE_BMP` - Unicode BMP.
+
+* [0x0002] `MUTT_WINDOWS_SHIFTJIS` - ShiftJIS.
+
+* [0x0003] `MUTT_WINDOWS_PRC` - PRC.
+
+* [0x0004] `MUTT_WINDOWS_BIG5` - Big5.
+
+* [0x0005] `MUTT_WINDOWS_WANSUNG` - Wansung.
+
+* [0x0006] `MUTT_WINDOWS_JOHAB` - Johab.
+
+* [0x000A] `MUTT_WINDOWS_UNICODE` - Unicode full repertoire.
+
+##### Windows encoding names
+
+The name function `mutt_windows_encoding_get_name` returns a `const char*` representation of a given Windows encoding ID (for example, `MUTT_WINDOWS_SYMBOL` returns "MUTT_WINDOWS_SYMBOL"), defined below: 
+
+```c
+MUDEF const char* mutt_windows_encoding_get_name(uint16_m encoding_id);
+```
+
+
+This function returns "MU_UNKNOWN" in the case that `encoding_id` is an unrecognized value.
+
+The name function `mutt_windows_encoding_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_WINDOWS_SYMBOL` returns "Symbol"), defined below: 
+
+```c
+MUDEF const char* mutt_windows_encoding_get_nice_name(uint16_m encoding_id);
+```
+
+
+This function returns "Unknown" in the case that `encoding_id` is an unrecognized value.
+
+> Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
+
+### Language ID
+
+The following macros are defined for various language IDs:
+
+#### Macintosh language
+
+* [0x0000] `MUTT_MACINTOSH_LANG_ENGLISH` - English.
+
+* [0x0001] `MUTT_MACINTOSH_LANG_FRENCH` - French.
+
+* [0x0002] `MUTT_MACINTOSH_LANG_GERMAN` - German.
+
+* [0x0003] `MUTT_MACINTOSH_LANG_ITALIAN` - Italian.
+
+* [0x0004] `MUTT_MACINTOSH_LANG_DUTCH` - Dutch.
+
+* [0x0005] `MUTT_MACINTOSH_LANG_SWEDISH` - Swedish.
+
+* [0x0006] `MUTT_MACINTOSH_LANG_SPANISH` - Spanish.
+
+* [0x0007] `MUTT_MACINTOSH_LANG_DANISH` - Danish.
+
+* [0x0008] `MUTT_MACINTOSH_LANG_PORTUGUESE` - Portuguese.
+
+* [0x0009] `MUTT_MACINTOSH_LANG_NORWEGIAN` - Norwegian.
+
+* [0x000A] `MUTT_MACINTOSH_LANG_HEBREW` - Hebrew.
+
+* [0x000B] `MUTT_MACINTOSH_LANG_JAPANESE` - Japanese.
+
+* [0x000C] `MUTT_MACINTOSH_LANG_ARABIC` - Arabic.
+
+* [0x000D] `MUTT_MACINTOSH_LANG_FINNISH` - Finnish.
+
+* [0x000E] `MUTT_MACINTOSH_LANG_GREEK` - Greek.
+
+* [0x000F] `MUTT_MACINTOSH_LANG_ICELANDIC` - Icelandic.
+
+* [0x0010] `MUTT_MACINTOSH_LANG_MALTESE` - Maltese.
+
+* [0x0011] `MUTT_MACINTOSH_LANG_TURKISH` - Turkish.
+
+* [0x0012] `MUTT_MACINTOSH_LANG_CROATIAN` - Croatian.
+
+* [0x0013] `MUTT_MACINTOSH_LANG_CHINESE_TRADITIONAL` - Chinese (traditional).
+
+* [0x0014] `MUTT_MACINTOSH_LANG_URDU` - Urdu.
+
+* [0x0015] `MUTT_MACINTOSH_LANG_HINDI` - Hindi.
+
+* [0x0016] `MUTT_MACINTOSH_LANG_THAI` - Thai.
+
+* [0x0017] `MUTT_MACINTOSH_LANG_KOREAN` - Korean.
+
+* [0x0018] `MUTT_MACINTOSH_LANG_LITHUANIAN` - Lithuanian.
+
+* [0x0019] `MUTT_MACINTOSH_LANG_POLISH` - Polish.
+
+* [0x001A] `MUTT_MACINTOSH_LANG_HUNGARIAN` - Hungarian.
+
+* [0x001B] `MUTT_MACINTOSH_LANG_ESTONIAN` - Estonian.
+
+* [0x001C] `MUTT_MACINTOSH_LANG_LATVIAN` - Latvian.
+
+* [0x001D] `MUTT_MACINTOSH_LANG_SAMI` - Sami.
+
+* [0x001E] `MUTT_MACINTOSH_LANG_FAROESE` - Faroese.
+
+* [0x001F] `MUTT_MACINTOSH_LANG_FARSI_PERSIAN` - Farsi/Persian.
+
+* [0x0020] `MUTT_MACINTOSH_LANG_RUSSIAN` - Russian.
+
+* [0x0021] `MUTT_MACINTOSH_LANG_CHINESE_SIMPLIFIED` - Chinese (simplified).
+
+* [0x0022] `MUTT_MACINTOSH_LANG_FLEMISH` - Flemish.
+
+* [0x0023] `MUTT_MACINTOSH_LANG_IRISH_GAELIC` - Irish Gaelic.
+
+* [0x0024] `MUTT_MACINTOSH_LANG_ALBANIAN` - Albanian.
+
+* [0x0025] `MUTT_MACINTOSH_LANG_ROMANIAN` - Romanian.
+
+* [0x0026] `MUTT_MACINTOSH_LANG_CZECH` - Czech.
+
+* [0x0027] `MUTT_MACINTOSH_LANG_SLOVAK` - Slovak.
+
+* [0x0028] `MUTT_MACINTOSH_LANG_SLOVENIAN` - Slovenian.
+
+* [0x0029] `MUTT_MACINTOSH_LANG_YIDDISH` - Yiddish.
+
+* [0x002A] `MUTT_MACINTOSH_LANG_SERBIAN` - Serbian.
+
+* [0x002B] `MUTT_MACINTOSH_LANG_MACEDONIAN` - Macedonian.
+
+* [0x002C] `MUTT_MACINTOSH_LANG_BULGARIAN` - Bulgarian.
+
+* [0x002D] `MUTT_MACINTOSH_LANG_UKRANIAN` - Ukrainian.
+
+* [0x002E] `MUTT_MACINTOSH_LANG_BYELORUSSIAN` - Byelorussian.
+
+* [0x002F] `MUTT_MACINTOSH_LANG_UZBEK` - Uzbek.
+
+* [0x0030] `MUTT_MACINTOSH_LANG_KAZAKH` - Kazakh.
+
+* [0x0031] `MUTT_MACINTOSH_LANG_AZERBAIJANI_CYRILLIC` - Azerbaijani (Cyrillic script).
+
+* [0x0032] `MUTT_MACINTOSH_LANG_AZERBAIJANI_ARABIC` - Azerbaijani (Arabic script).
+
+* [0x0033] `MUTT_MACINTOSH_LANG_ARMENIAN` - Armenian.
+
+* [0x0034] `MUTT_MACINTOSH_LANG_GEORGIAN` - Georgian.
+
+* [0x0035] `MUTT_MACINTOSH_LANG_MOLDAVIAN` - Moldavian.
+
+* [0x0036] `MUTT_MACINTOSH_LANG_KIRGHIZ` - Kirghiz.
+
+* [0x0037] `MUTT_MACINTOSH_LANG_TAJIKI` - Tajiki.
+
+* [0x0038] `MUTT_MACINTOSH_LANG_TURKMEN` - Turkmen.
+
+* [0x0039] `MUTT_MACINTOSH_LANG_MONGOLIAN` - Mongolian (Mongolian script).
+
+* [0x003A] `MUTT_MACINTOSH_LANG_MONGOLIAN_CYRILLIC` - Mongolian (Cyrillic script).
+
+* [0x003B] `MUTT_MACINTOSH_LANG_PASHTO` - Pashto.
+
+* [0x003C] `MUTT_MACINTOSH_LANG_KURDISH` - Kurdish.
+
+* [0x003D] `MUTT_MACINTOSH_LANG_KASHMIRI` - Kashmiri.
+
+* [0x003E] `MUTT_MACINTOSH_LANG_SINDHI` - Sindhi.
+
+* [0x003F] `MUTT_MACINTOSH_LANG_TIBETAN` - Tibetan.
+
+* [0x0040] `MUTT_MACINTOSH_LANG_NEPALI` - Nepali.
+
+* [0x0041] `MUTT_MACINTOSH_LANG_SANSKIRT` - Sanskrit.
+
+* [0x0042] `MUTT_MACINTOSH_LANG_MARATHI` - Marathi.
+
+* [0x0043] `MUTT_MACINTOSH_LANG_BENGALI` - Bengali.
+
+* [0x0044] `MUTT_MACINTOSH_LANG_ASSAMESE` - Assamese.
+
+* [0x0045] `MUTT_MACINTOSH_LANG_GUJARATI` - Gujarati.
+
+* [0x0046] `MUTT_MACINTOSH_LANG_PUNJABI` - Punjabi.
+
+* [0x0047] `MUTT_MACINTOSH_LANG_ORIYA` - Oriya.
+
+* [0x0048] `MUTT_MACINTOSH_LANG_MALAYALAM` - Malayalam.
+
+* [0x0049] `MUTT_MACINTOSH_LANG_KANNADA` - Kannada.
+
+* [0x004A] `MUTT_MACINTOSH_LANG_TAMIL` - Tamil.
+
+* [0x004B] `MUTT_MACINTOSH_LANG_TELUGU` - Telugu.
+
+* [0x004C] `MUTT_MACINTOSH_LANG_SINHALESE` - Sinhalese.
+
+* [0x004D] `MUTT_MACINTOSH_LANG_BURMESE` - Burmese.
+
+* [0x004E] `MUTT_MACINTOSH_LANG_KHMER` - Khmer.
+
+* [0x004F] `MUTT_MACINTOSH_LANG_LAO` - Lao.
+
+* [0x0050] `MUTT_MACINTOSH_LANG_VIETNAMESE` - Vietnamese.
+
+* [0x0051] `MUTT_MACINTOSH_LANG_INDONESIAN` - Indonesian.
+
+* [0x0052] `MUTT_MACINTOSH_LANG_TAGALOG` - Tagalog.
+
+* [0x0053] `MUTT_MACINTOSH_LANG_MALAY_ROMAN` - Malay (Roman script).
+
+* [0x0054] `MUTT_MACINTOSH_LANG_MALAY_ARABIC` - Malay (Arabic script).
+
+* [0x0055] `MUTT_MACINTOSH_LANG_AMHARIC` - Amharic.
+
+* [0x0056] `MUTT_MACINTOSH_LANG_TIGRINYA` - Tigrinya.
+
+* [0x0057] `MUTT_MACINTOSH_LANG_GALLA` - Galla.
+
+* [0x0058] `MUTT_MACINTOSH_LANG_SOMALI` - Somali.
+
+* [0x0059] `MUTT_MACINTOSH_LANG_SWAHILI` - Swahili.
+
+* [0x005A] `MUTT_MACINTOSH_LANG_KINYARWANDA_RUANDA` - Kinyarwanda/Ruanda.
+
+* [0x005B] `MUTT_MACINTOSH_LANG_RUNDI` - Rundi.
+
+* [0x005C] `MUTT_MACINTOSH_LANG_NYANJA_CHEWA` - Nyanja/Chewa.
+
+* [0x005D] `MUTT_MACINTOSH_LANG_MALAGASY` - Malagasy.
+
+* [0x005E] `MUTT_MACINTOSH_LANG_ESPERANTO` - Esperanto.
+
+* [0x0080] `MUTT_MACINTOSH_LANG_WELSH` - Welsh.
+
+* [0x0081] `MUTT_MACINTOSH_LANG_BASQUE` - Basque.
+
+* [0x0082] `MUTT_MACINTOSH_LANG_CATALAN` - Catalan.
+
+* [0x0083] `MUTT_MACINTOSH_LANG_LATIN` - Latin.
+
+* [0x0084] `MUTT_MACINTOSH_LANG_QUECHUA` - Quechua.
+
+* [0x0085] `MUTT_MACINTOSH_LANG_GUARANI` - Guarani.
+
+* [0x0086] `MUTT_MACINTOSH_LANG_AYMARA` - Aymara.
+
+* [0x0087] `MUTT_MACINTOSH_LANG_TATAR` - Tatar.
+
+* [0x0088] `MUTT_MACINTOSH_LANG_UIGHUR` - Uighur.
+
+* [0x0089] `MUTT_MACINTOSH_LANG_DZONGKHA` - Dzongkha.
+
+* [0x008A] `MUTT_MACINTOSH_LANG_JAVANESE_ROMAN` - Javanese (Roman script).
+
+* [0x008B] `MUTT_MACINTOSH_LANG_SUNDANESE_ROMAN` - Sundanese (Roman script).
+
+* [0x008C] `MUTT_MACINTOSH_LANG_GALICIAN` - Galician.
+
+* [0x008D] `MUTT_MACINTOSH_LANG_AFRIKAANS` - Afrikaans.
+
+* [0x008E] `MUTT_MACINTOSH_LANG_BRETON` - Breton.
+
+* [0x008F] `MUTT_MACINTOSH_LANG_INUKTITUT` - Inuktitut.
+
+* [0x0090] `MUTT_MACINTOSH_LANG_SCOTTISH_GAELIC` - Scottish Gaelic.
+
+* [0x0091] `MUTT_MACINTOSH_LANG_MANX_GAELIC` - Manx Gaelic.
+
+* [0x0092] `MUTT_MACINTOSH_LANG_IRISH_GAELIC_DOT_ABOVE` - Irish Gaelic (with dot above).
+
+* [0x0093] `MUTT_MACINTOSH_LANG_TONGAN` - Tongan.
+
+* [0x0094] `MUTT_MACINTOSH_LANG_GREEK_POLYTONIC` - Greek (polytonic).
+
+* [0x0095] `MUTT_MACINTOSH_LANG_GREENLANDIC` - Greenlandic.
+
+* [0x0096] `MUTT_MACINTOSH_LANG_AZERBAIJANI_ROMAN` - Azerbaijani (Roman script).
+
+### Name ID
+
+The follwing macros are defined for various name IDs:
+
+* [0x0000] `MUTT_NAME_COPYRIGHT_NOTICE` - "Copyright notice."
+
+* [0x0001] `MUTT_NAME_FONT_FAMILY` - "Font Family name."
+
+* [0x0002] `MUTT_NAME_FONT_SUBFAMILY` - "Font Subfamily name."
+
+* [0x0003] `MUTT_NAME_FONT_IDENTIFIER` - "Unique font identifier."
+
+* [0x0004] `MUTT_NAME_FONT_FULL` - "Full font name that reflects all family and relevant subfamily descriptors".
+
+* [0x0005] `MUTT_NAME_VERSION` - "Version string."
+
+* [0x0006] `MUTT_NAME_POSTSCRIPT` - "PostScript name for the font."
+
+* [0x0007] `MUTT_NAME_TRADEMARK` - "Trademark."
+
+* [0x0008] `MUTT_NAME_MANUFACTURER` - "Manufacturer Name."
+
+* [0x0009] `MUTT_NAME_DESIGNER` - "Designer."
+
+* [0x000A] `MUTT_NAME_DESCRIPTION` - "Description."
+
+* [0x000B] `MUTT_NAME_VENDOR_URL` - "URL of Vendor."
+
+* [0x000C] `MUTT_NAME_DESIGNER_URL` - "URL of Designer."
+
+* [0x000D] `MUTT_NAME_LICENSE` - "License Description."
+
+* [0x000E] `MUTT_NAME_LICENSE_URL` - "License Info URL."
+
+* [0x0010] `MUTT_NAME_TYPOGRAPHIC_FAMILY` - "Typographic Family name."
+
+* [0x0011] `MUTT_NAME_TYPOGRAPHIC_SUBFAMILY` - "Typographic Subfamily name."
+
+* [0x0012] `MUTT_NAME_COMPATIBLE_FULL` - "Compatible Full (Macintosh only)."
+
+* [0x0013] `MUTT_NAME_SAMPLE_TEXT` - "Sample text."
+
+* [0x0014] `MUTT_NAME_POSTSCRIPT_CID_FINDFONT` - "PostScript CID findfont name."
+
+* [0x0015] `MUTT_NAME_WWS_FAMILY` - "WWS Family Name."
+
+* [0x0016] `MUTT_NAME_WWS_SUBFAMILY` - "WWS Subfamily Name."
+
+* [0x0017] `MUTT_NAME_LIGHT_BACKGROUND_PALETTE` - "Light Background Palette."
+
+* [0x0018] `MUTT_NAME_DARK_BACKGROUND_PALETTE` - "Dark Background Palette."
+
+#### Name ID names
+
+The name function `mutt_name_id_get_name` returns a `const char*` representation of a given name ID (for example, `MUTT_NAME_COPYRIGHT_NOTICE` returns "MUTT_NAME_COPYRIGHT_NOTICE"), defined below: 
+
+```c
+MUDEF const char* mutt_name_id_get_name(uint16_m name_id);
+```
+
+
+This function returns "MU_UNKNOWN" in the case that `name_id` is an unrecognized value.
+
+The name function `mutt_name_id_get_nice_name` does the same thing, but returns a more readable version of it (for example, `MUTT_NAME_COPYRIGHT_NOTICE` returns "Copyright notice"), defined below: 
+
+```c
+MUDEF const char* mutt_name_id_get_nice_name(uint16_m name_id);
+```
+
+
+This function returns "Unknown" in the case that `name_id` is an unrecognized value.
+
+> Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
 
 # Result
 
@@ -446,6 +1026,8 @@ The following values are defined for `muttResult` (all values not explicitly sta
 * `MUTT_LOCA_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and loca requires maxp to be loaded.
 
 * `MUTT_LOCA_REQUIRES_HEAD` - the head table rather failed to load or was not requested for loading, and loca requires head to be loaded.
+
+### Name result values
 
 ## Check if result is fatal
 

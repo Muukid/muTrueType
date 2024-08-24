@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-22
+LAST UPDATED:       2024-08-25
 
 ============================================================
                         DEMO PURPOSE
@@ -59,6 +59,27 @@ More explicit license information at the end of file.
 				uint8_m val = (mem[byte] >> bit) & 1;
 				// Print bit value
 				printf("%" PRIu8 "", val);
+			}
+		}
+	}
+
+	// Prints a UTF16-BE string with the given tab level
+	void print_utf16_be(muByte* str, size_m size, uint16_m tab) {
+		// Create a null-terminated wide string with one character
+		wchar_t ws[2];
+		ws[1] = 0;
+
+		// Loop through each character in str:
+		for (size_m i = 0; i < size; ++i) {
+			// Set character in wide string to the value in str
+			ws[0] = (wchar_t)MU_RBEU16(&str[i]);
+			// Print character
+			printf("%ls", ws);
+			// Do tabs if it's a newline character
+			if (ws[0] == (wchar_t)'\n') {
+				for (uint16_m t = 0; t < tab; ++t) {
+					printf("\t");
+				}
 			}
 		}
 	}
@@ -318,6 +339,64 @@ int main(void)
 		printf("\n");
 	}
 	end_of_loca:
+
+	/* Print name */
+	{
+		printf("== Name ==\n");
+
+		// Case for if name failed to load
+		if (!font.name) {
+			printf("name failed to load: %s\n\n", mutt_result_get_name(font.name_res));
+			goto end_of_name;
+		}
+
+		// Loop through each name
+		printf("nameRecord[%" PRIu16 "]\n", font.name->count);
+		for (uint32_m r = 0; r < font.name->count; ++r) {
+			muttNameRecord rp = font.name->name_records[r];
+			// Print index
+			printf("\tnameRecord[%" PRIu16 "]\t = {\n", r);
+
+			// Print platform ID
+			printf("\t\tplatformID = %s (%" PRIu16 ")\n", mutt_platform_get_nice_name(rp.platform_id), rp.platform_id);
+
+			// Print encoding ID
+			switch (rp.platform_id) {
+				// - Unknown
+				default: {
+					printf("\t\tencodingID = Unknown (%" PRIu16 ")\n", rp.encoding_id);
+				} break;
+				// - Unicode
+				case MUTT_PLATFORM_UNICODE: {
+					printf("\t\tencodingID = %s (%" PRIu16 ")\n", mutt_unicode_encoding_get_nice_name(rp.encoding_id), rp.encoding_id);
+				} break;
+				// - Macintosh
+				case MUTT_PLATFORM_MACINTOSH: {
+					printf("\t\tencodingID = %s (%" PRIu16 ")\n", mutt_macintosh_encoding_get_nice_name(rp.encoding_id), rp.encoding_id);
+				} break;
+				// - Windows
+				case MUTT_PLATFORM_WINDOWS: {
+					printf("\t\tencodingID = %s (%" PRIu16 ")\n", mutt_windows_encoding_get_nice_name(rp.encoding_id), rp.encoding_id);
+				} break;
+			}
+
+			// Print language ID
+			printf("\t\tlanguageID = %" PRIu16 "\n", rp.language_id);
+			// Print name ID
+			printf("\t\tnameID = %" PRIu16 " (%s)\n", rp.name_id, mutt_name_id_get_nice_name(rp.name_id));
+
+			// Print name as UTF16-BE
+			// This will likely produce garbage in many cases
+			printf("\t\tname (read as UTF16-BE, may be garbage) {\n\t\t\t");
+			print_utf16_be(rp.string, rp.length, 3);
+			printf("\n\t\t}\n");
+
+			printf("\t}\n");
+		}
+
+		printf("\n");
+	}
+	end_of_name:
 
 	/* Deload font */
 	{
