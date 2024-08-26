@@ -11,7 +11,7 @@ More explicit license information at the end of file.
 
 # muTrueType v1.0.0
 
-muTrueType (acronymized to "mutt") is a public domain single-file C library for retrieving data from the TrueType file format via its tables (the "[low-level API](#low-level-api)"), rendering glyphs to a bitmap (the "[rendering API](#rendering-api)"), and handling the layout/placement/spacing of multiple glyphs in a graphical context (the "[layout API](#layout-api)"). Its header is automatically defined upon inclusion if not already included (`MUTT_H`), and the source code is defined if `MUTT_IMPLEMENTATION` is defined, following the internal structure of:
+muTrueType (acronymized to "mutt") is a public domain single-file C library for retrieving data from the TrueType file format via its tables (the "[low-level API](#low-level-api)"), rasterizing glyphs to a bitmap (the "[raster API](#raster-api)"), and handling the layout/placement/spacing of multiple glyphs in a graphical context (the "[layout API](#layout-api)"). Its header is automatically defined upon inclusion if not already included (`MUTT_H`), and the source code is defined if `MUTT_IMPLEMENTATION` is defined, following the internal structure of:
 
 ```c
 #ifndef MUTT_H
@@ -1165,7 +1165,7 @@ mutt is developed primarily off of these sources of documentation:
 
 		// @DOCLINE ## Loca table
 
-			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP` and `MUTT_LOAD_HEAD` must also be defined). It has the following members:
+			// @DOCLINE The union `muttLoca` is used to represent the loca table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`loca`", and loaded with the flag `MUTT_LOAD_LOCA` (`MUTT_LOAD_MAXP`, `MUTT_LOAD_HEAD`, and `MUTT_LOAD_GLYF` must also be defined). It has the following members:
 
 			union muttLoca {
 				// @DOCLINE * `@NLFT* offsets16` - equivalent to the short-format offsets array in the loca table. This member is to be read from if `head->index_to_loc_format` is equal to `MUTT_OFFSET_16`.
@@ -1181,7 +1181,7 @@ mutt is developed primarily off of these sources of documentation:
 			typedef struct muttNameRecord muttNameRecord;
 			typedef struct muttLangTagRecord muttLangTagRecord;
 
-			// @DOCLINE The struct `muttName` is used to represent the name table provided by a TrueType font, stored in the struct `muttFont` as the pointer mem ber "`name`", and loaded with the flag `MUTT_LOAD_NAME`. It has the following members:
+			// @DOCLINE The struct `muttName` is used to represent the name table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`name`", and loaded with the flag `MUTT_LOAD_NAME`. It has the following members:
 
 			struct muttName {
 				// @DOCLINE * `@NLFT version` - equivalent to "version" in the naming table header.
@@ -1231,6 +1231,233 @@ mutt is developed primarily off of these sources of documentation:
 				};
 
 				// @DOCLINE The provided pointer for `lang_tag` is checked to be a pointer to valid data for the given length.
+
+		// @DOCLINE ## Glyf table
+
+				typedef struct muttGlyphHeader muttGlyphHeader;
+				typedef struct muttSimpleGlyph muttSimpleGlyph;
+				typedef struct muttCompositeGlyph muttCompositeGlyph;
+
+				// @DOCLINE The struct `muttGlyf` is used to represent the glyf table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`glyf`", and loaded with the flag `MUTT_LOAD_GLYF` (`MUTT_LOAD_MAXP`, `MUTT_LOAD_HEAD`, and `MUTT_LOAD_LOCA` must also be defined). It has the following members:
+
+				struct muttGlyf {
+					// @DOCLINE * `@NLFT len` - the length of the glyf table, in bytes.
+					uint32_m len;
+					// @DOCLINE * `@NLFT* data` - the raw byte data of the glyf table (length `len`).
+					muByte* data;
+				};
+
+				// @DOCLINE Unlike most low-level table structs, `muttGlyf` provides virtually no information about any glyphs upfront. This is because expanding every single glyph's information can be taxing, so instead, an API is provided to load individual glyph information using the `muttGlyf` struct, which is described below.
+
+				// @DOCLINE ### Glyph header
+
+					// @DOCLINE Every glyph, simple or composite, is described initially by its header, which is represented in mutt with the struct `muttGlyphHeader`, which has the following members:
+
+					struct muttGlyphHeader {
+						// @DOCLINE * `@NLFT number_of_contours` - equivalent to "numberOfContours" in the glyph header; if this value is negative, the glyph is composite, and if positive or zero, it is simple.
+						int16_m number_of_contours;
+						// @DOCLINE * `@NLFT x_min` - equivalent to "xMin" in the glyph header; minimum for x-coordinate data.
+						int16_m x_min;
+						// @DOCLINE * `@NLFT y_min` - equivalent to "yMin" in the glyph header; minimum for y-coordinate data.
+						int16_m y_min;
+						// @DOCLINE * `@NLFT x_max` - equivalent to "xMax" in the glyph header; maximum for x-coordinate data.
+						int16_m x_max;
+						// @DOCLINE * `@NLFT y_max` - equivalent to "yMax" in the glyph header; maximum for y-coordinate data.
+						int16_m y_max;
+						// @DOCLINE * `@NLFT* data` - a pointer to byte data in `glyf->data` after the header. This is primarily used internally by mutt.
+						muByte* data;
+						// @DOCLINE * `@NLFT length` - the length of the data after the header in bytes. If this member is equal to 0, the given glyph has no outline, and should not be called with any functions.
+						uint32_m length;
+					};
+
+					// @DOCLINE The minimums and maximums for x- and y-coordinates within the glyph header are not checked initially (besides making sure the minimums are less than or equal to the maximums, and that they're within range of the values provided by the head table); if the actual glyph coordinates are not confined within the given minimums and maximums, a bad result will be provided upon loading the simple glyph data.
+
+					// @DOCLINE #### Get glyph header
+
+						// @DOCLINE In order to load a glyph header for a given glyph ID, the function `mutt_glyph_header` is used, defined below: @NLNT
+						MUDEF muttResult mutt_glyph_header(muttFont* font, uint16_m glyph_id, muttGlyphHeader* header);
+
+						// @DOCLINE Upon a non-fatal result, `header` is filled with valid header information for the given glyph ID. Upon a fatal result, the contents of `header` are undefined. The given header information is only valid for as long as `font` is not deloaded.
+
+						// @DOCLINE `glyph_id` must be a valid glyph ID for the given font (AKA less than `font->head->num_glyphs`).
+
+				// @DOCLINE ### Simple glyph
+
+					typedef struct muttGlyphPoint muttGlyphPoint;
+
+					// @DOCLINE The struct `muttSimpleGlyph` represents a simple glyph in mutt, and has the following members:
+
+					struct muttSimpleGlyph {
+						// @DOCLINE * `@NLFT* end_pts_of_contours` - equivalent to "endPtsOfContours" in the simple glyph table.
+						uint16_m* end_pts_of_contours;
+						// @DOCLINE * `@NLFT instruction_length` - equivalent to "instructionLength" in the simple glyph table; the length of `instructions`, in bytes.
+						uint16_m instruction_length;
+						// @DOCLINE * `@NLFT* instructions` - equivalent to "instructions" in the simple glyph table; the instructions for the given glyph.
+						uint8_m* instructions;
+						// @DOCLINE * `@NLFT* points` - each point for the simple glyph. The number of points is equal to `end_pts_of_contours[muttGlyphHeader->number_of_contours-1]+1` if `muttGlyphHeader->number_of_contours` is over 0; if `muttGlyphHeader->number_of_contours` is equal to 0, `points` will be equal to 0 as well.
+						muttGlyphPoint* points;
+					};
+
+					// @DOCLINE The struct `muttGlyphPoint` represents a point in a simple glyph, and has the following members:
+					struct muttGlyphPoint {
+						// @DOCLINE * `@NLFT flags` - equivalent to a value within the "flags" array in the simple glyph table; the [flags of the given point](#glyph-point-flags).
+						uint8_m flags;
+						// @DOCLINE * `@NLFT x` - the x-coordinate of the point, in FUnits.
+						int16_m x;
+						// @DOCLINE * `@NLFT y` - the y-coordinate of the point, in FUnits.
+						int16_m y;
+					};
+
+					// @DOCLINE #### Glyph point flags
+
+						// @DOCLINE The following macros are defined for bitmasking a glyph point's flags:
+
+						// @DOCLINE * [0x01] `MUTT_ON_CURVE_POINT`
+						#define MUTT_ON_CURVE_POINT 0x01
+						// @DOCLINE * [0x02] `MUTT_X_SHORT_VECTOR`
+						#define MUTT_X_SHORT_VECTOR 0x02
+						// @DOCLINE * [0x04] `MUTT_Y_SHORT_VECTOR`
+						#define MUTT_Y_SHORT_VECTOR 0x04
+						// @DOCLINE * [0x08] `MUTT_REPEAT_FLAG`
+						#define MUTT_REPEAT_FLAG 0x08
+						// @DOCLINE * [0x10] `MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR`
+						#define MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR 0x10
+						// @DOCLINE * [0x20] `MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR`
+						#define MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR 0x20
+						// @DOCLINE * [0x40] `MUTT_OVERLAP_SIMPLE`
+						#define MUTT_OVERLAP_SIMPLE 0x40
+
+						// @DOCLINE Note that since the value of `flags` is directly copied from the raw TrueType data, usage of these macros is optional, and the user can bitmask as they please in accordance to the TrueType specification.
+
+					// @DOCLINE #### Load simple glyph
+
+						// @DOCLINE In order to load a simple glyph, the function `mutt_simple_glyph` is used, defined below: @NLNT
+						MUDEF muttResult mutt_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muByte* data, uint32_m* written);
+
+						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid simple glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+					// @DOCLINE #### Simple glyph memory maximum
+
+						// @DOCLINE The maximum amount of memory that will be needed for loading a simple glyph, in bytes, is provided by the function `mutt_simple_glyph_max_size`, defined below: @NLNT
+						MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
+
+				// @DOCLINE ### Composite glyph
+
+					typedef struct muttComponentGlyph muttComponentGlyph;
+
+					// @DOCLINE The struct `muttCompositeGlyph` represents a composite glyph in mutt, and has the following members:
+
+					struct muttCompositeGlyph {
+						// @DOCLINE * `@NLFT component_count` - the number of components within the composite glyph.
+						uint16_m component_count;
+						// @DOCLINE * `@NLFT* components` - an array of each component within the composite glyph.
+						muttComponentGlyph* components;
+						// @DOCLINE * `@NLFT instruction_length` - the length of the instructions for the composite glyph, in bytes.
+						uint16_m instruction_length;
+						// @DOCLINE * `@NLFT* instructions` - the instructions for the composite glyph.
+						muByte* instructions;
+					};
+
+					// @DOCLINE The struct `muttComponentGlyph` represents a component in a composite glyph, and has the following members:
+					struct muttComponentGlyph {
+						// @DOCLINE * `@NLFT flags` - equivalent to "flags" in the component glyph record; the [flags for the given component glyph](#glyph-component-flags).
+						uint16_m flags;
+						// @DOCLINE * `@NLFT glyph_index` - equivalent to "glyphIndex" in the component glyph record; the glyph ID of the given component.
+						uint16_m glyph_index;
+						// @DOCLINE * `@NLFT argument1` - equivalent to "argument1" in the component glyph record.
+						int32_m argument1;
+						// @DOCLINE * `@NLFT argument2` - equivalent to "argument2" in the component glyph record.
+						int32_m argument2;
+						// @DOCLINE * `@NLFT scales[4]` - the transform data of the component.
+						float scales[4];
+					};
+
+					// @DOCLINE The data of `scales` depends on the value of `flags` (see TrueType/OpenType documentation for more information on how this data works); the following conditions exist:
+
+					// @DOCLINE * If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale.
+					// @DOCLINE * If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively.
+					// @DOCLINE * If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, yscale respectively).
+					// @DOCLINE * If none of the bits mentioned above are 1, the contents of `scales` are undefined.
+
+					// @DOCLINE The value for `glyph_index` is not verified to be a non-infinite loop of composite glyphs, and must be manually checked for by the user, unless being converted to a pixel glyph, in which case the conversion checks for this case.
+
+					// @DOCLINE #### Glyph component flags
+
+						// @DOCLINE The following macros are defined for bitmasking a glyph component's flags:
+
+						// @DOCLINE * [0x0001] `MUTT_ARG_1_AND_2_ARE_WORDS`
+						#define MUTT_ARG_1_AND_2_ARE_WORDS 0x0001
+						// @DOCLINE * [0x0002] `MUTT_ARGS_ARE_XY_VALUES`
+						#define MUTT_ARGS_ARE_XY_VALUES 0x0002
+						// @DOCLINE * [0x0004] `MUTT_ROUND_XY_TO_GRID`
+						#define MUTT_ROUND_XY_TO_GRID 0x0004
+						// @DOCLINE * [0x0008] `MUTT_WE_HAVE_A_SCALE`
+						#define MUTT_WE_HAVE_A_SCALE 0x0008
+						// @DOCLINE * [0x0020] `MUTT_MORE_COMPONENTS`
+						#define MUTT_MORE_COMPONENTS 0x0020
+						// @DOCLINE * [0x0040] `MUTT_WE_HAVE_AN_X_AND_Y_SCALE`
+						#define MUTT_WE_HAVE_AN_X_AND_Y_SCALE 0x0040
+						// @DOCLINE * [0x0080] `MUTT_WE_HAVE_A_TWO_BY_TWO`
+						#define MUTT_WE_HAVE_A_TWO_BY_TWO 0x0080
+						// @DOCLINE * [0x0100] `MUTT_WE_HAVE_INSTRUCTIONS`
+						#define MUTT_WE_HAVE_INSTRUCTIONS 0x0100
+						// @DOCLINE * [0x0200] `MUTT_USE_MY_METRICS`
+						#define MUTT_USE_MY_METRICS 0x0200
+						// @DOCLINE * [0x0400] `MUTT_OVERLAP_COMPOUND`
+						#define MUTT_OVERLAP_COMPOUND 0x0400
+						// @DOCLINE * [0x0800] `MUTT_SCALED_COMPONENT_OFFSET`
+						#define MUTT_SCALED_COMPONENT_OFFSET 0x0800
+						// @DOCLINE * [0x1000] `MUTT_UNSCALED_COMPONENT_OFFSET`
+						#define MUTT_UNSCALED_COMPONENT_OFFSET 0x1000
+
+						// @DOCLINE Note that since the value of `flags` is retrieved from the TrueType data, usage of these macros is optional, and the user can bitmask as they please in accordance to the TrueType specification.
+
+					// @DOCLINE #### Load composite glyph
+
+						// @DOCLINE In order to load a composite glyph, the function `mutt_composite_glyph` is used, defined below: @NLNT
+						MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written);
+
+						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+					// @DOCLINE #### Composite glyph memory maximum
+
+						// @DOCLINE The maximum amount of memory that will be needed for loading a composite glyph, in bytes, is provided by the function `mutt_composite_glyph_max_size`, defined below: @NLNT
+						MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font);
+
+				// @DOCLINE ### Max glyph size
+
+					// @DOCLINE The maximum amount of memory that will be needed for loading a glyph, simple or composite, in bytes, is provided by the function `mutt_glyph_max_size`, defined below: @NLNT
+					MUDEF uint32_m mutt_glyph_max_size(muttFont* font);
+
+					// @DOCLINE This function returns the largest value between `mutt_simple_glyph_max_size` and `mutt_composite_glyph_max_size`.
+
+		// @DOCLINE ## User allocated functions
+
+			/* @DOCBEGIN
+			"User-allocated functions" are functions used in mutt to allow the user to handle allocation of memory necessary to perform certain low-level operations. These functions usually have two distinct members that make this possible, `muByte* data` and `uint32_m* written`, with the functions usually following the format of:
+
+			```c
+			MUDEF muttResult mutt_whatever(muttFont* font, ... muByte* data, uint32_m* written);
+			```
+
+			The way these functions work depends on the value of `data`:
+
+			* If `data` is 0, `written` is dereferenced and set to how many bytes are needed within `data` in order to perform the operation.
+			
+			* If `data` is not 0, `data` is used as allocated memory to perform whatever task is needed, and assumes that `data` is large enough to perform the operation. If `written` is not 0 in this instance, `written` is dereferenced and set to how much data was used in the operation.
+
+			These functions are setup so that the user has full control over the allocation of the data for the given process.
+
+			If these functions are ever used to fill information about something (in particular, if it's filling up a struct like `mutt_simple_glyph` or `mutt_composite_glyph`), the filled-out structs use `data` as memory for the information provided by them. This means that the information with the struct is only valid for as long as `data` goes unmodified by the user.
+
+			User-allocated functions do not expect the given memory to be zero'd out, and the contents of `data`, once filled in, are undefined.
+
+			User-allocated functions usually also have provided maximums for the maximum amount of memory that will be needed to perform the operation for any given variables, which can be used to pre-allocate and use the same memory for multiple passes of the operation. For example, `mutt_simple_glyph` has a memory maximum provided by the function `mutt_simple_glyph_max_size`, which means that a user can allocate memory of byte-length `mutt_simple_glyph_max_size(...)` and use that same memory for a call to `mutt_simple_glyph` for any glyphs that they need to load, avoiding the need to reallocate any memory when processing simple glyphs, although at the cost of only being able to process one simple glyph at a time.
+			@DOCEND */
 
 		// @DOCLINE ## String macros
 
@@ -1850,14 +2077,38 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_LOCA_REQUIRES_MAXP 286
 			// @DOCLINE * `MUTT_LOCA_REQUIRES_HEAD` - the head table rather failed to load or was not requested for loading, and loca requires head to be loaded.
 			#define MUTT_LOCA_REQUIRES_HEAD 287
+			// @DOCLINE * `MUTT_LOCA_REQUIRES_GLYF` - the glyf table rather failed to load or was not requested for loading, and loca requires glyf to be loaded.
+			#define MUTT_LOCA_REQUIRES_GLYF 288
 
 		// @DOCLINE ### Name result values
 		// 448 -> 511 //
 
+			// @DOCLINE * `MUTT_INVALID_NAME_LENGTH` - the length of the name table was invalid.
 			#define MUTT_INVALID_NAME_LENGTH 448
+			// @DOCLINE * `MUTT_INVALID_NAME_VERSION` - the version of the name table was invalid/unsupported.
 			#define MUTT_INVALID_NAME_VERSION 449
+			// @DOCLINE * `MUTT_INVALID_NAME_STORAGE_OFFSET` - the offset given for the storage of string data within the name table was invalid / out of range.
 			#define MUTT_INVALID_NAME_STORAGE_OFFSET 450
+			// @DOCLINE * `MUTT_INVALID_NAME_LENGTH_OFFSET` - the length and offset given for a name record within the name table was invalid / out of range.
 			#define MUTT_INVALID_NAME_LENGTH_OFFSET 451
+
+		// @DOCLINE ### Glyf result values
+		// 512 -> 575 //
+
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_LENGTH` - the glyph header length given from values by the loca table were invalid; they were above 0, implying an outline, yet the length given was insufficient to store a glyph header.
+			#define MUTT_INVALID_GLYF_HEADER_LENGTH 512
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MIN` - the glyph header's xMin value was not in range of the head table's listed corresponding value.
+			#define MUTT_INVALID_GLYF_HEADER_X_MIN 513
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MIN` - the glyph header's yMin value was not in range of the head table's listed corresponding value.
+			#define MUTT_INVALID_GLYF_HEADER_Y_MIN 514
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MAX` - the glyph header's xMax value was not in range of the head table's listed corresponding value.
+			#define MUTT_INVALID_GLYF_HEADER_X_MAX 515
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MAX` - the glyph header's yMax value was not in range of the head table's listed corresponding value.
+			#define MUTT_INVALID_GLYF_HEADER_Y_MAX 516
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MIN_MAX` the glyph header's xMin value was greater than its xMax value or vice versa, which does not make sense.
+			#define MUTT_INVALID_GLYF_HEADER_X_MIN_MAX 517
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX` the glyph header's yMin value was greater than its yMax value or vice versa, which does not make sense.
+			#define MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX 518
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -2424,7 +2675,7 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Loads the loca table
-			// Req: maxp, head
+			// Req: maxp, head, glyf
 			void mutt_DeloadLoca(muttLoca* loca);
 			muttResult mutt_LoadLoca(muttFont* font, muByte* data, uint32_m datalen) {
 				// Allocate
@@ -2480,6 +2731,12 @@ mutt is developed primarily off of these sources of documentation:
 							mutt_DeloadLoca(loca);
 							return MUTT_INVALID_LOCA_OFFSET;
 						}
+						// Verify offset is within range of glyf
+						uint32_m offset = ((uint32_m)loca->offsets16[o]) * 2;
+						if (offset > font->glyf->len) {
+							mutt_DeloadLoca(loca);
+							return MUTT_INVALID_LOCA_OFFSET;
+						}
 					}
 				}
 				// - 32-bit
@@ -2490,6 +2747,11 @@ mutt is developed primarily off of these sources of documentation:
 						data += 4;
 						// Verify incremental order
 						if (o > 0 && loca->offsets32[o-1] > loca->offsets32[o]) {
+							mutt_DeloadLoca(loca);
+							return MUTT_INVALID_LOCA_OFFSET;
+						}
+						// Verify offset is within range of glyf
+						if (loca->offsets32[o] > font->glyf->len) {
 							mutt_DeloadLoca(loca);
 							return MUTT_INVALID_LOCA_OFFSET;
 						}
@@ -2672,6 +2934,45 @@ mutt is developed primarily off of these sources of documentation:
 				}
 			}
 
+			// Loads the glyf table
+			void mutt_DeloadGlyf(muttGlyf* glyf);
+			muttResult mutt_LoadGlyf(muttFont* font, muByte* data, uint32_m datalen) {
+				// Allocate glyf
+				muttGlyf* glyf = (muttGlyf*)mu_malloc(sizeof(muttGlyf));
+				if (!glyf) {
+					return MUTT_FAILED_MALLOC;
+				}
+				mu_memset(glyf, 0, sizeof(muttGlyf));
+
+				// Get glyf length
+				glyf->len = datalen;
+
+				if (glyf->len) {
+					// Allocate glyf data
+					glyf->data = (muByte*)mu_malloc(glyf->len);
+					if (!glyf->data) {
+						mutt_DeloadGlyf(glyf);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Copy over table memory
+					mu_memcpy(glyf->data, data, glyf->len);
+				}
+
+				font->glyf = glyf;
+				return MUTT_SUCCESS;
+			}
+
+			// Frees all allocated data for glyf
+			void mutt_DeloadGlyf(muttGlyf* glyf) {
+				if (glyf) {
+					if (glyf->data) {
+						mu_free(glyf->data);
+					}
+					mu_free(glyf);
+				}
+			}
+
 		/* Loading / Deloading */
 
 			// Initializes all flag/result states of each table to "failed to find"
@@ -2694,6 +2995,9 @@ mutt is developed primarily off of these sources of documentation:
 				// name
 				font->name_res = (load_flags & MUTT_LOAD_NAME) ? MUTT_FAILED_FIND_TABLE : 0;
 				font->fail_load_flags |= (load_flags & MUTT_LOAD_NAME);
+				// glyf
+				font->glyf_res = (load_flags & MUTT_LOAD_GLYF) ? MUTT_FAILED_FIND_TABLE : 0;
+				font->fail_load_flags |= (load_flags & MUTT_LOAD_GLYF);
 			}
 
 			// Does one pass through each table load
@@ -2832,7 +3136,7 @@ mutt is developed primarily off of these sources of documentation:
 							}
 						} break;
 
-						// loca; req maxp, head
+						// loca; req maxp, head, glyf
 						case 0x6C6F6361: {
 							// Account for first
 							if (dep_pass) {
@@ -2855,9 +3159,14 @@ mutt is developed primarily off of these sources of documentation:
 									font->loca_res = MUTT_LOCA_REQUIRES_HEAD;
 									break;
 								}
+								// glyf
+								if (!(*first & MUTT_LOAD_GLYF)) {
+									font->loca_res = MUTT_LOCA_REQUIRES_GLYF;
+									break;
+								}
 							}
 							// Continue if dependencies aren't processed
-							if (!(font->maxp) || !(font->head)) {
+							if (!(font->maxp) || !(font->head) || !(font->glyf)) {
 								*waiting |= MUTT_LOAD_LOCA;
 								break;
 							}
@@ -2896,6 +3205,28 @@ mutt is developed primarily off of these sources of documentation:
 								font->load_flags &= ~MUTT_LOAD_NAME;
 							}
 						} break;
+
+						// glyf
+						case 0x676C7966: {
+							// Account for first
+							if (dep_pass) {
+								*first |= MUTT_LOAD_GLYF;
+							}
+							// Skip if already processed
+							if (font->glyf_res != MUTT_FAILED_FIND_TABLE) {
+								break;
+							}
+
+							// Load
+							font->glyf_res = mutt_LoadGlyf(font, &data[rec.offset], rec.length);
+							if (font->glyf) {
+								font->load_flags |= MUTT_LOAD_GLYF;
+								font->fail_load_flags &= ~MUTT_LOAD_GLYF;
+							} else {
+								font->fail_load_flags |= MUTT_LOAD_GLYF;
+								font->load_flags &= ~MUTT_LOAD_GLYF;
+							}
+						} break;
 					}
 				}
 			}
@@ -2917,6 +3248,7 @@ mutt is developed primarily off of these sources of documentation:
 				mutt_DeloadHmtx(font->hmtx);
 				mutt_DeloadLoca(font->loca);
 				mutt_DeloadName(font->name);
+				mutt_DeloadGlyf(font->glyf);
 			}
 
 			MUDEF muttResult mutt_load(muByte* data, uint64_m datalen, muttFont* font, muttLoadFlags load_flags) {
@@ -2960,6 +3292,72 @@ mutt is developed primarily off of these sources of documentation:
 					mutt_DeloadTableDirectory(font->directory);
 					mu_free(font->directory);
 				}
+			}
+
+		/* Glyf stuff */
+
+			// Fills in the "muttGlyphHeader" struct
+			MUDEF muttResult mutt_glyph_header(muttFont* font, uint16_m glyph_id, muttGlyphHeader* header) {
+				// Get length and data of glyph
+				// - 16-bit
+				if (font->head->index_to_loc_format == 0) {
+					header->data = &font->glyf->data[((uint32_m)font->loca->offsets16[glyph_id])*2];
+					header->length = (((uint32_m)font->loca->offsets16[glyph_id+1])*2) - (((uint32_m)font->loca->offsets16[glyph_id])*2);
+				}
+				// - 32-bit
+				else {
+					header->data = &font->glyf->data[font->loca->offsets32[glyph_id]];
+					header->length = font->loca->offsets32[glyph_id+1] - font->loca->offsets32[glyph_id];
+				}
+
+				// If header length is 0, we set everything to 0 and return
+				// (because no outline)
+				if (header->length == 0) {
+					mu_memset(header, 0, sizeof(muttGlyphHeader));
+					return MUTT_SUCCESS;
+				}
+
+				// Verify minimum length for header
+				if (header->length < 10) {
+					return MUTT_INVALID_GLYF_HEADER_LENGTH;
+				}
+
+				// numberOfContours
+				header->number_of_contours = MU_RBES16(header->data);
+
+				// xMin
+				header->x_min = MU_RBES16(header->data+2);
+				if (header->x_min < font->head->x_min) {
+					return MUTT_INVALID_GLYF_HEADER_X_MIN;
+				}
+				// yMin
+				header->y_min = MU_RBES16(header->data+4);
+				if (header->y_min < font->head->y_min) {
+					return MUTT_INVALID_GLYF_HEADER_Y_MIN;
+				}
+				// xMax
+				header->x_max = MU_RBES16(header->data+6);
+				if (header->x_max > font->head->x_max) {
+					return MUTT_INVALID_GLYF_HEADER_X_MAX;
+				}
+				if (header->x_max < header->x_min) {
+					return MUTT_INVALID_GLYF_HEADER_X_MIN_MAX;
+				}
+				// yMax
+				header->y_max = MU_RBES16(header->data+8);
+				if (header->y_max > font->head->y_max) {
+					return MUTT_INVALID_GLYF_HEADER_Y_MAX;
+				}
+				if (header->y_max < header->y_min) {
+					return MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX;
+				}
+
+				// Subtract header data from length
+				header->length -= 10;
+				// ...and move data up past header
+				header->data += 10;
+
+				return MUTT_SUCCESS;
 			}
 
 	/* Result */
@@ -3018,6 +3416,18 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_LOCA_OFFSET: return "MUTT_INVALID_LOCA_OFFSET"; break;
 				case MUTT_LOCA_REQUIRES_MAXP: return "MUTT_LOCA_REQUIRES_MAXP"; break;
 				case MUTT_LOCA_REQUIRES_HEAD: return "MUTT_LOCA_REQUIRES_HEAD"; break;
+				case MUTT_LOCA_REQUIRES_GLYF: return "MUTT_LOCA_REQUIRES_GLYF"; break;
+				case MUTT_INVALID_NAME_LENGTH: return "MUTT_INVALID_NAME_LENGTH"; break;
+				case MUTT_INVALID_NAME_VERSION: return "MUTT_INVALID_NAME_VERSION"; break;
+				case MUTT_INVALID_NAME_STORAGE_OFFSET: return "MUTT_INVALID_NAME_STORAGE_OFFSET"; break;
+				case MUTT_INVALID_NAME_LENGTH_OFFSET: return "MUTT_INVALID_NAME_LENGTH_OFFSET"; break;
+				case MUTT_INVALID_GLYF_HEADER_LENGTH: return "MUTT_INVALID_GLYF_HEADER_LENGTH"; break;
+				case MUTT_INVALID_GLYF_HEADER_X_MIN: return "MUTT_INVALID_GLYF_HEADER_X_MIN"; break;
+				case MUTT_INVALID_GLYF_HEADER_Y_MIN: return "MUTT_INVALID_GLYF_HEADER_Y_MIN"; break;
+				case MUTT_INVALID_GLYF_HEADER_X_MAX: return "MUTT_INVALID_GLYF_HEADER_X_MAX"; break;
+				case MUTT_INVALID_GLYF_HEADER_Y_MAX: return "MUTT_INVALID_GLYF_HEADER_Y_MAX"; break;
+				case MUTT_INVALID_GLYF_HEADER_X_MIN_MAX: return "MUTT_INVALID_GLYF_HEADER_X_MIN_MAX"; break;
+				case MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX: return "MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX"; break;
 			}
 		}
 

@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-25
+LAST UPDATED:       2024-08-26
 
 ============================================================
                         DEMO PURPOSE
@@ -397,6 +397,57 @@ int main(void)
 		printf("\n");
 	}
 	end_of_name:
+
+	/* Print glyf */
+	{
+		printf("== Glyf ==\n");
+
+		// Case for if glyf failed to load
+		if (!font.glyf) {
+			printf("glyf failed to load: %s\n\n", mutt_result_get_name(font.glyf_res));
+			goto end_of_glyf;
+		}
+
+		// Loop through each power of 2 in glyph indexes
+		uint16_m prev_g = 0;
+		for (uint16_m g = 0; g < font.maxp->num_glyphs && prev_g <= g; (g==0) ?(g+=1) :(g*=2)) {
+			prev_g = g;
+			// Print index
+			printf("glyphID %" PRIu16 ":\n", g);
+
+			// Get glyph header
+			muttGlyphHeader header;
+			result = mutt_glyph_header(&font, g, &header);
+			// - Fail case:
+			if (mutt_result_is_fatal(result)) {
+				printf("\tFailed to load header: %s\n", mutt_result_get_name(result));
+				continue;
+			}
+
+			// Print number of contours
+			printf("\tnumberOfContours\t = %" PRIi16 " (", header.number_of_contours);
+			// + Simple/Composite
+			if (header.number_of_contours < 0) {
+				printf("composite)\n");
+			} else {
+				printf("simple)\n");
+			}
+
+			// Print xMin, xMax
+			printf("\txMin, xMax\t = [%" PRIi16 ", %" PRIi16 "]\n", header.x_min, header.x_max);
+			// Print yMin, yMax
+			printf("\tyMin, yMax\t = [%" PRIi16 ", %" PRIi16 "]\n", header.y_min, header.y_max);
+
+			// Print if it does not have an outline
+			if (header.length == 0) {
+				printf("\tGlyph has no outline, and thus no glyph data\n");
+				continue;
+			}
+		}
+
+		printf("\n");
+	}
+	end_of_glyf:
 
 	/* Deload font */
 	{
