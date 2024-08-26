@@ -487,6 +487,10 @@ Upon a non-fatal result, `glyph` is filled with valid simple glyph information f
 
 This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
+> This function checks if all of the values are compliant with information from other tables (especially maxp) and compliant with TrueType's specification with a few exceptions: as far as I'm aware, it's invalid to have a flag that uses values from a prior point (such as X_IS_SAME...) when the current flag is the first flag specified, since in that case, there's no "previous value" to repeat from. This is done in several common fonts, however, so mutt permits this, setting the value to 0 in this case.
+
+> It's also invalid (from what I'm aware) to have the first point be off-curve, but in the case that such happens, mutt permits this, pretending that the previous point was an on-curve point at (0,0). It's also invalid (from what I'm aware) to have a repeat flag count that exceeds the amount of points, but since it's easy to internally make sure to simply not go over the point count, mutt permits this.
+
 #### Simple glyph memory maximum
 
 The maximum amount of memory that will be needed for loading a simple glyph, in bytes, is provided by the function `mutt_simple_glyph_max_size`, defined below: 
@@ -1269,6 +1273,8 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_INVALID_GLYF_HEADER_LENGTH` - the glyph header length given from values by the loca table were invalid; they were above 0, implying an outline, yet the length given was insufficient to store a glyph header.
 
+* `MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS` - the number of contours within the glyph header exceeded the maximum set by the maxp table.
+
 * `MUTT_INVALID_GLYF_HEADER_X_MIN` - the glyph header's xMin value was not in range of the head table's listed corresponding value.
 
 * `MUTT_INVALID_GLYF_HEADER_Y_MIN` - the glyph header's yMin value was not in range of the head table's listed corresponding value.
@@ -1277,9 +1283,21 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_INVALID_GLYF_HEADER_Y_MAX` - the glyph header's yMax value was not in range of the head table's listed corresponding value.
 
-* `MUTT_INVALID_GLYF_HEADER_X_MIN_MAX` the glyph header's xMin value was greater than its xMax value or vice versa, which does not make sense.
+* `MUTT_INVALID_GLYF_HEADER_X_MIN_MAX` - the glyph header's xMin value was greater than its xMax value or vice versa, which does not make sense.
 
-* `MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX` the glyph header's yMin value was greater than its yMax value or vice versa, which does not make sense.
+* `MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX` - the glyph header's yMin value was greater than its yMax value or vice versa, which does not make sense.
+
+* `MUTT_INVALID_GLYF_SIMPLE_LENGTH` - the length of the simple glyph description is invalid/insufficient to describe the simple glyph.
+
+* `MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS` - a value within the endPtsOfContours array of the simple glyph was invalid; rather the value was non-incremental, or the last index was the invalid value 0xFFFF.
+
+* `MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT` - the amount of points specified within the simple glyph exceeded the maximum set by the maxp table.
+
+* `MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH` - the instruction length given by the simple glyph exceeded the maximum set by the maxp table.
+
+* `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its minimum/maximum values.
+
+* `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
 
 ## Check if result is fatal
 

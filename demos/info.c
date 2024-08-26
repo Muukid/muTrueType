@@ -26,6 +26,11 @@ More explicit license information at the end of file.
 ============================================================
 */
 
+/* Macros */
+	
+	// Comment/Uncomment this to not print or print glyph coordinates
+	#define PRINT_COORDS
+
 /* Inclusion */
 	
 	// Include muTrueType
@@ -408,6 +413,19 @@ int main(void)
 			goto end_of_glyf;
 		}
 
+		// Allocate data for glyphs
+		uint32_m glyfsize = mutt_glyph_max_size(&font);
+		printf("Memory allocated for loading a glyph (maximum): %" PRIu32 "\n", glyfsize);
+		muByte* glyfdata = 0;
+		if (glyfsize > 0) {
+			glyfdata = (muByte*)mu_malloc(glyfsize);
+			// Failure to allocate:
+			if (!glyfdata) {
+				printf("Unable to allocate enough memory\n");
+				goto end_of_glyf;
+			}
+		}
+
 		// Loop through each power of 2 in glyph indexes
 		uint16_m prev_g = 0;
 		for (uint16_m g = 0; g < font.maxp->num_glyphs && prev_g <= g; (g==0) ?(g+=1) :(g*=2)) {
@@ -443,6 +461,79 @@ int main(void)
 				printf("\tGlyph has no outline, and thus no glyph data\n");
 				continue;
 			}
+
+			// For simple glyph:
+			if (header.number_of_contours >= 0)
+			{
+				// Get simple glyph
+				uint32_m written;
+				muttSimpleGlyph glyph;
+				result = mutt_simple_glyph(&font, &header, &glyph, glyfdata, &written);
+				// - Fail case:
+				if (mutt_result_is_fatal(result)) {
+					printf("\tFailed to load simple glyph data: %s\n", mutt_result_get_name(result));
+					continue;
+				}
+
+				// Print memory usage info
+				// - Amount of bytes used
+				printf("\t%" PRIu32 " / %" PRIu32 " bytes used (", written, glyfsize);
+				// - Percentage of allocated memory
+				printf("%f%% of maximum glyph memory)\n", (((float)written) / ((float)glyfsize)) * 100.f);
+
+				// Print instruction length
+				printf("\tinstructionLength\t = %" PRIu16 "\n", glyph.instruction_length);
+
+				// Print coordinate info (if we should)
+				#ifdef PRINT_COORDS
+
+				// Print contours array init
+				printf("\tcontours[%" PRIu16 "] = {", header.number_of_contours);
+
+				// Don't go further if no contours (since we have no coordinates to specify)
+				if (header.number_of_contours == 0) {
+					printf(" }\n");
+					continue;
+				}
+ 
+				// Print initializer for this contour
+				printf("\n\t\t{ ");
+
+				// Loop through each point
+				uint16_m contour_id = 0;
+				uint16_m point_count = glyph.end_pts_of_contours[header.number_of_contours-1]+1;
+				for (uint16_m p = 0; p < point_count; ++p) {
+					// Increment contour ID if we've gone past the current contour's end point
+					if (p > glyph.end_pts_of_contours[contour_id]) {
+						++contour_id;
+						// + Reprint initializer
+						printf(" },\n\t\t{ ");
+					}
+					// If not, print comma for coordinates (if not first coordinates)
+					else if (p != 0) {
+						printf(",");
+					}
+
+					// Print point coordinates
+					printf("(%" PRIi16 ",%" PRIi16 ")", glyph.points[p].x, glyph.points[p].y);
+				}
+
+				// + Print finisher
+				printf("\n\t}\n");
+
+				#endif /* PRINT_COORDS */
+			}
+
+			// For composite glyph:
+			else
+			{
+
+			}
+		}
+
+		// Free glyf memory if needed
+		if (glyfdata) {
+			mu_free(glyfdata);
 		}
 
 		printf("\n");

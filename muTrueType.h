@@ -1338,6 +1338,10 @@ mutt is developed primarily off of these sources of documentation:
 
 						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
+						// @DOCLINE > This function checks if all of the values are compliant with information from other tables (especially maxp) and compliant with TrueType's specification with a few exceptions: as far as I'm aware, it's invalid to have a flag that uses values from a prior point (such as X_IS_SAME...) when the current flag is the first flag specified, since in that case, there's no "previous value" to repeat from. This is done in several common fonts, however, so mutt permits this, setting the value to 0 in this case.
+
+						// @DOCLINE > It's also invalid (from what I'm aware) to have the first point be off-curve, but in the case that such happens, mutt permits this, pretending that the previous point was an on-curve point at (0,0). It's also invalid (from what I'm aware) to have a repeat flag count that exceeds the amount of points, but since it's easy to internally make sure to simply not go over the point count, mutt permits this.
+
 					// @DOCLINE #### Simple glyph memory maximum
 
 						// @DOCLINE The maximum amount of memory that will be needed for loading a simple glyph, in bytes, is provided by the function `mutt_simple_glyph_max_size`, defined below: @NLNT
@@ -2097,18 +2101,32 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_LENGTH` - the glyph header length given from values by the loca table were invalid; they were above 0, implying an outline, yet the length given was insufficient to store a glyph header.
 			#define MUTT_INVALID_GLYF_HEADER_LENGTH 512
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS` - the number of contours within the glyph header exceeded the maximum set by the maxp table.
+			#define MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS 513
 			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MIN` - the glyph header's xMin value was not in range of the head table's listed corresponding value.
-			#define MUTT_INVALID_GLYF_HEADER_X_MIN 513
+			#define MUTT_INVALID_GLYF_HEADER_X_MIN 514
 			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MIN` - the glyph header's yMin value was not in range of the head table's listed corresponding value.
-			#define MUTT_INVALID_GLYF_HEADER_Y_MIN 514
+			#define MUTT_INVALID_GLYF_HEADER_Y_MIN 515
 			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MAX` - the glyph header's xMax value was not in range of the head table's listed corresponding value.
-			#define MUTT_INVALID_GLYF_HEADER_X_MAX 515
+			#define MUTT_INVALID_GLYF_HEADER_X_MAX 516
 			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MAX` - the glyph header's yMax value was not in range of the head table's listed corresponding value.
-			#define MUTT_INVALID_GLYF_HEADER_Y_MAX 516
-			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MIN_MAX` the glyph header's xMin value was greater than its xMax value or vice versa, which does not make sense.
-			#define MUTT_INVALID_GLYF_HEADER_X_MIN_MAX 517
-			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX` the glyph header's yMin value was greater than its yMax value or vice versa, which does not make sense.
-			#define MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX 518
+			#define MUTT_INVALID_GLYF_HEADER_Y_MAX 517
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_X_MIN_MAX` - the glyph header's xMin value was greater than its xMax value or vice versa, which does not make sense.
+			#define MUTT_INVALID_GLYF_HEADER_X_MIN_MAX 518
+			// @DOCLINE * `MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX` - the glyph header's yMin value was greater than its yMax value or vice versa, which does not make sense.
+			#define MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX 519
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_LENGTH` - the length of the simple glyph description is invalid/insufficient to describe the simple glyph.
+			#define MUTT_INVALID_GLYF_SIMPLE_LENGTH 520
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS` - a value within the endPtsOfContours array of the simple glyph was invalid; rather the value was non-incremental, or the last index was the invalid value 0xFFFF.
+			#define MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS 521
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT` - the amount of points specified within the simple glyph exceeded the maximum set by the maxp table.
+			#define MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT 522
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH` - the instruction length given by the simple glyph exceeded the maximum set by the maxp table.
+			#define MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH 523
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its minimum/maximum values.
+			#define MUTT_INVALID_GLYF_SIMPLE_X_COORD 524
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
+			#define MUTT_INVALID_GLYF_SIMPLE_Y_COORD 525
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -3324,6 +3342,9 @@ mutt is developed primarily off of these sources of documentation:
 
 				// numberOfContours
 				header->number_of_contours = MU_RBES16(header->data);
+				if (header->number_of_contours > font->maxp->max_contours) {
+					return MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS;
+				}
 
 				// xMin
 				header->x_min = MU_RBES16(header->data+2);
@@ -3358,6 +3379,350 @@ mutt is developed primarily off of these sources of documentation:
 				header->data += 10;
 
 				return MUTT_SUCCESS;
+			}
+
+			// Fills in (or calculates memory needed for) "muttSimpleGlyph" struct
+			MUDEF muttResult mutt_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muByte* data, uint32_m* written) {
+				// Verify length for endPtsOfContours and instructionLength
+				// (req is u64 to avoid possible overflow)
+				uint64_m req = (((uint32_m)header->number_of_contours)*2) + 2;
+				if (header->length < req) {
+					return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+				}
+
+				// Glyph data:
+				muByte* gdata = header->data;
+
+				// Memory size calculation:
+				if (!data) {
+					// Add endPtsOfContours to memory
+					uint32_m min_size = header->number_of_contours*2;
+
+					// To calculate amount of points:
+					uint16_m points = 0;
+					if (header->number_of_contours != 0) {
+						// Skip to last element of endPtsOfContours and read
+						gdata += (uint32_m)(header->number_of_contours-1)*2;
+						points = MU_RBEU16(gdata);
+
+						// Verify last element of endPtsOfContours
+						if (points == 0xFFFF) {
+							return MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS;
+						}
+
+						// Skip past last element
+						++points;
+						gdata += 2;
+					}
+
+					// Verify point count
+					if (points > font->maxp->max_points) {
+						return MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT;
+					}
+					// Add points to memory
+					min_size += ((uint32_m)points)*sizeof(muttGlyphPoint);
+
+					// Add instructions to memory
+					uint16_m instruction_length = MU_RBEU16(gdata);
+					if (instruction_length > font->maxp->max_size_of_instructions) {
+						return MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH;
+					}
+					min_size += instruction_length;
+
+					// Check for size fitting
+					// This should not need to be checked, as it is calculated via maxp,
+					// to which all of these values are also checked to not exceed.
+					/*if (min_size > mutt_simple_glyph_max_size(font)) {
+						return MUTT_INVALID_GLYF_SIMPLE_;
+					}*/
+
+					// Set memory req
+					*written = min_size;
+					return MUTT_SUCCESS;
+				}
+
+				// Store pointer to original data
+				muByte* orig_data = data;
+
+				// Allocate endPtsOfContours
+				glyph->end_pts_of_contours = (uint16_m*)data;
+				data += ((uint32_m)header->number_of_contours)*2;
+
+				// Loop through each contour
+				uint16_m points = 0;
+				for (uint16_m c = 0; c < header->number_of_contours; ++c) {
+					// Copy value for endPtsOfContour
+					glyph->end_pts_of_contours[c] = MU_RBEU16(gdata);
+
+					// Verify increasing order
+					if (c != 0) {
+						if (glyph->end_pts_of_contours[c] <= glyph->end_pts_of_contours[c-1]) {
+							return MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS;
+						}
+					}
+
+					// Get point count if we're on the last index
+					if (c == header->number_of_contours-1) {
+						points = glyph->end_pts_of_contours[c];
+						// Verify last element
+						if (points == 0xFFFF) {
+							return MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS;
+						}
+						// Increment points by one to get count (since last value is an index)
+						++points;
+					}
+
+					// Move to next entry in endPtsOfContours
+					gdata += 2;
+				}
+
+				// Verify point count
+				if (points > font->maxp->max_points) {
+					return MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT;
+				}
+
+				// instructionLength
+				glyph->instruction_length = MU_RBEU16(gdata);
+				gdata += 2;
+				// + Verify instructionLength
+				if (glyph->instruction_length > font->maxp->max_size_of_instructions) {
+					return MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH;
+				}
+
+				// For instructions:
+				if (glyph->instruction_length != 0) {
+					// Verify length for instructions
+					req += glyph->instruction_length;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+					}
+					// Allocate
+					glyph->instructions = (uint8_m*)data;
+					// Copy over
+					mu_memcpy(glyph->instructions, gdata, glyph->instruction_length);
+					// Move past instructions
+					data += glyph->instruction_length;
+					gdata += glyph->instruction_length;
+				}
+
+				// Allocate points
+				glyph->points = (muttGlyphPoint*)data;
+				data += points*sizeof(muttGlyphPoint);
+
+				// Loop through each flag
+				uint16_m pi = 0; // (point index)
+				uint16_m contour_id = 0;
+				while (pi < points) {
+					// Increment contour ID if we've gone over the end point of the current contour
+					if (pi > glyph->end_pts_of_contours[contour_id]) {
+						++contour_id;
+					}
+					// Verify length for this flag
+					if (header->length < ++req) {
+						return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+					}
+
+					// Get flag
+					uint8_m flags = *gdata;
+					glyph->points[pi].flags = flags;
+
+					// Verify that flag doesn't rely on prior values if this is the first flag
+					// (Some common fonts get this messed up; we're assuming 0 in these cases)
+					// This is brought up in the documentation.
+					// ...
+
+					// Verify that first point is on curve
+					// (Not checking for similar reasons above, also brought up in doc)
+					// ...
+
+					// Get implied length of x- and y-coordinates based on flag
+					uint8_m coord_length = 0;
+					// - x
+					if (flags & MUTT_X_SHORT_VECTOR) {
+						// 1-byte x-coordinate
+						coord_length += 1;
+					} else if (!(flags & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
+						// 2-byte x-coordinate
+						coord_length += 2;
+					}
+					// -y
+					if (flags & MUTT_Y_SHORT_VECTOR) {
+						// 1-byte y-coordinate
+						coord_length += 1;
+					} else if (!(flags & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
+						// 2-byte y-coordinate
+						coord_length += 2;
+					}
+
+					// Verify length based on coord length
+					req += coord_length;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+					}
+
+					// Increment past this point/flag
+					++pi;
+					++gdata;
+
+					// Handle repeating flags:
+					if (flags & MUTT_REPEAT_FLAG) {
+						// Verify length for next flag
+						if (header->length < ++req) {
+							return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+						}
+
+						// Get next flag as length
+						uint8_m next = *gdata++;
+						// (required length is checked next loop)
+						// - If next is 0, we don't repeat at all, and pretend
+						// like this never happened
+						if (next == 0) {
+							continue;
+						}
+
+						// Verify length for repeated coordinate flags
+						req += ((uint32_m)coord_length) * ((uint32_m)next-1);
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+						}
+
+						// Verify repeat count
+						// Not doing this since we can easily pretend like it didn't
+						// happen to no consequence.
+						// This is mentioned in documentation
+						/*if (pi+next > points) {
+							return MUTT_INVALID_GLYF_SIMPLE_FLAG_REPEAT_COUNT;
+						}*/
+
+						// Go through each repeat flag and copy it down
+						for (uint8_m r = 0; r < next && pi < points; ++r) {
+							glyph->points[pi++].flags = flags;
+						}
+					}
+				}
+
+				// Loop through each x-coordinate
+				pi = 0;
+				while (pi < points) {
+					// Get flags
+					uint8_m flags = glyph->points[pi].flags;
+
+					// Get x-coordinate
+					if (flags & MUTT_X_SHORT_VECTOR) {
+						// 1-byte
+						if (flags & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+							// Positive
+							glyph->points[pi].x = (int16_m)*gdata++;
+						} else {
+							// Negative
+							glyph->points[pi].x = -((int16_m)*gdata++);
+						}
+					} else {
+						if (flags & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+							// Repeated x-coordinate
+							glyph->points[pi].x = (pi!=0) ?(glyph->points[pi-1].x) :(0);
+							++pi;
+							// (Continue because no vector stuff is applied)
+							continue;
+						} else {
+							// 2-bytes, signed
+							glyph->points[pi].x = MU_RBES16(gdata);
+							gdata += 2;
+						}
+					}
+
+					// Add as vector to prior value
+					// - Get previous x value
+					int16_m prev_x = (pi!=0) ?(glyph->points[pi-1].x) :(0);
+					// - Compute the current coordinate based on previous
+					int32_m test_val = prev_x + glyph->points[pi].x;
+					// - Verify that the point is within range
+					if (test_val < header->x_min || test_val > header->x_max) {
+						return MUTT_INVALID_GLYF_SIMPLE_X_COORD;
+					}
+					// - Assign
+					glyph->points[pi++].x = (int16_m)test_val;
+				}
+
+				// Loop through each y-coordinate
+				pi = 0;
+				while (pi < points) {
+					// Get flags
+					uint8_m flags = glyph->points[pi].flags;
+
+					// Get y-coordinate
+					if (flags & MUTT_Y_SHORT_VECTOR) {
+						// 1-byte
+						if (flags & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+							// Positive
+							glyph->points[pi].y = (int16_m)*gdata++;
+						} else {
+							// Negative
+							glyph->points[pi].y = -((int16_m)*gdata++);
+						}
+					} else {
+						if (flags & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+							// Repeated y-coordinate
+							glyph->points[pi].y = (pi!=0) ?(glyph->points[pi-1].y) :(0);
+							++pi;
+							// (Continue because no vector stuff is applied)
+							continue;
+						} else {
+							// 2-bytes, signed
+							glyph->points[pi].y = MU_RBES16(gdata);
+							gdata += 2;
+						}
+					}
+
+					// Add as vector to prior value
+					// - Get previous y value
+					int16_m prev_y = (pi!=0) ?(glyph->points[pi-1].y) :(0);
+					// - Compute the current coordinate based on previous
+					int32_m test_val = prev_y + glyph->points[pi].y;
+					// - Verify that the point is within range
+					if (test_val < header->y_min || test_val > header->y_max) {
+						return MUTT_INVALID_GLYF_SIMPLE_Y_COORD;
+					}
+					// - Assign
+					glyph->points[pi++].y = (int16_m)test_val;
+				}
+
+				// Write how many bytes of data were used
+				if (written) {
+					*written = data-orig_data;
+				}
+				return MUTT_SUCCESS;
+			}
+
+			// Simple glyph memory maximum
+			MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font) {
+				return
+					// endPtsOfContours
+					(font->maxp->max_contours*2)
+					// instructions
+					+(font->maxp->max_size_of_instructions)
+					// maxPoints
+					+(font->maxp->max_points*sizeof(muttGlyphPoint))
+				;
+			}
+
+			// Fills in (or calculates memory needed for) "muttCompositeGlyph" struct
+			MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written);
+
+			// Composite glyph memory maximum
+			MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font) {
+				// (Filler for now)
+				return 0; if (font) {}
+			}
+
+			// Glyph memory maximum
+			MUDEF uint32_m mutt_glyph_max_size(muttFont* font) {
+				// Simple:
+				uint32_m s = mutt_simple_glyph_max_size(font);
+				// Composite:
+				uint32_m c = mutt_composite_glyph_max_size(font);
+				// Return greatest
+				return (s>c) ?(s) :(c);
 			}
 
 	/* Result */
@@ -3422,12 +3787,19 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_NAME_STORAGE_OFFSET: return "MUTT_INVALID_NAME_STORAGE_OFFSET"; break;
 				case MUTT_INVALID_NAME_LENGTH_OFFSET: return "MUTT_INVALID_NAME_LENGTH_OFFSET"; break;
 				case MUTT_INVALID_GLYF_HEADER_LENGTH: return "MUTT_INVALID_GLYF_HEADER_LENGTH"; break;
+				case MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS: return "MUTT_INVALID_GLYF_HEADER_NUMBER_OF_CONTOURS"; break;
 				case MUTT_INVALID_GLYF_HEADER_X_MIN: return "MUTT_INVALID_GLYF_HEADER_X_MIN"; break;
 				case MUTT_INVALID_GLYF_HEADER_Y_MIN: return "MUTT_INVALID_GLYF_HEADER_Y_MIN"; break;
 				case MUTT_INVALID_GLYF_HEADER_X_MAX: return "MUTT_INVALID_GLYF_HEADER_X_MAX"; break;
 				case MUTT_INVALID_GLYF_HEADER_Y_MAX: return "MUTT_INVALID_GLYF_HEADER_Y_MAX"; break;
 				case MUTT_INVALID_GLYF_HEADER_X_MIN_MAX: return "MUTT_INVALID_GLYF_HEADER_X_MIN_MAX"; break;
 				case MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX: return "MUTT_INVALID_GLYF_HEADER_Y_MIN_MAX"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_LENGTH: return "MUTT_INVALID_GLYF_SIMPLE_LENGTH"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS: return "MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT: return "MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH: return "MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_X_COORD: return "MUTT_INVALID_GLYF_SIMPLE_X_COORD"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_Y_COORD: return "MUTT_INVALID_GLYF_SIMPLE_Y_COORD"; break;
 			}
 		}
 
