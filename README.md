@@ -442,7 +442,7 @@ The struct `muttSimpleGlyph` represents a simple glyph in mutt, and has the foll
 
 * `uint16_m instruction_length` - equivalent to "instructionLength" in the simple glyph table; the length of `instructions`, in bytes.
 
-* `uint8_m* instructions` - equivalent to "instructions" in the simple glyph table; the instructions for the given glyph.
+* `muByte* instructions` - equivalent to "instructions" in the simple glyph table; the instructions for the given glyph.
 
 * `muttGlyphPoint* points` - each point for the simple glyph. The number of points is equal to `end_pts_of_contours[muttGlyphHeader->number_of_contours-1]+1` if `muttGlyphHeader->number_of_contours` is over 0; if `muttGlyphHeader->number_of_contours` is equal to 0, `points` will be equal to 0 as well.
 
@@ -526,13 +526,13 @@ The struct `muttComponentGlyph` represents a component in a composite glyph, and
 
 The data of `scales` depends on the value of `flags` (see TrueType/OpenType documentation for more information on how this data works); the following conditions exist:
 
-* If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale.
+* If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale; the contents of all other float indexes are undefined.
 
-* If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively.
+* If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively; the contents of all other float indexes are undefined.
 
 * If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, yscale respectively).
 
-* If none of the bits mentioned above are 1, the contents of `scales` are undefined.
+* If none of the bits mentioned above are 1, the values of `scales` are undefined.
 
 The value for `glyph_index` is not verified to be a non-infinite loop of composite glyphs, and must be manually checked for by the user, unless being converted to a pixel glyph, in which case the conversion checks for this case.
 
@@ -578,6 +578,8 @@ MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, m
 Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+This function performs no checks on the validity of the components' range within the minimum/maximum coordinate ranges specified for the glyph in the respective header. Therefore, this function does allow composite glyphs to successfully load that have points that are out of range. This is due to the fact that properly verifying the points' coordinates would entail fully decompressing the composite glyph's components, which is not performed in the lower-level API of mutt.
 
 #### Composite glyph memory maximum
 
@@ -1157,6 +1159,19 @@ This function returns "Unknown" in the case that `name_id` is an unrecognized va
 
 > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
 
+## Internally used low-level macros
+
+mutt uses several interal low-level macros for TrueType to make certain things easier to perform. This section is a list of them.
+
+### Reading F2DOT14 values
+
+The macro function `MUTT_F2DOT14` creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: 
+
+```c
+#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&b[1]) & 0xC0)) + (((float)(MU_RBEU16(b) & 0xFFFF)) / 16384.f))
+```
+
+
 # Result
 
 The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -1298,6 +1313,16 @@ The following values are defined for `muttResult` (all values not explicitly sta
 * `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its minimum/maximum values.
 
 * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_LENGTH` - the length of the composite glyph description is invalid/insufficient to describe the composite glyph.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH` - the instruction length given by the composite glyph exceeded the maximum set by the maxp table.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT` - the amount of components given in the composite glyph exceeded the maximum set by the maxp table.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX` - the value for "glyphIndex" in a component within the composite glyph was an invalid glyph index (out of range for the number of glyphs specified in maxp).
+
+* `MUTT_INVALID_GLYF_COMPOSITE_FLAGS` - the flags in a component within the composite glyph were invalid (multiple mutually exclusive transform data flags were set).
 
 ## Check if result is fatal
 

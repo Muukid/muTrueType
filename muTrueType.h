@@ -1293,7 +1293,7 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE * `@NLFT instruction_length` - equivalent to "instructionLength" in the simple glyph table; the length of `instructions`, in bytes.
 						uint16_m instruction_length;
 						// @DOCLINE * `@NLFT* instructions` - equivalent to "instructions" in the simple glyph table; the instructions for the given glyph.
-						uint8_m* instructions;
+						muByte* instructions;
 						// @DOCLINE * `@NLFT* points` - each point for the simple glyph. The number of points is equal to `end_pts_of_contours[muttGlyphHeader->number_of_contours-1]+1` if `muttGlyphHeader->number_of_contours` is over 0; if `muttGlyphHeader->number_of_contours` is equal to 0, `points` will be equal to 0 as well.
 						muttGlyphPoint* points;
 					};
@@ -1380,10 +1380,10 @@ mutt is developed primarily off of these sources of documentation:
 
 					// @DOCLINE The data of `scales` depends on the value of `flags` (see TrueType/OpenType documentation for more information on how this data works); the following conditions exist:
 
-					// @DOCLINE * If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale.
-					// @DOCLINE * If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively.
+					// @DOCLINE * If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale; the contents of all other float indexes are undefined.
+					// @DOCLINE * If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively; the contents of all other float indexes are undefined.
 					// @DOCLINE * If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, yscale respectively).
-					// @DOCLINE * If none of the bits mentioned above are 1, the contents of `scales` are undefined.
+					// @DOCLINE * If none of the bits mentioned above are 1, the values of `scales` are undefined.
 
 					// @DOCLINE The value for `glyph_index` is not verified to be a non-infinite loop of composite glyphs, and must be manually checked for by the user, unless being converted to a pixel glyph, in which case the conversion checks for this case.
 
@@ -1426,6 +1426,8 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+						// @DOCLINE This function performs no checks on the validity of the components' range within the minimum/maximum coordinate ranges specified for the glyph in the respective header. Therefore, this function does allow composite glyphs to successfully load that have points that are out of range. This is due to the fact that properly verifying the points' coordinates would entail fully decompressing the composite glyph's components, which is not performed in the lower-level API of mutt.
 
 					// @DOCLINE #### Composite glyph memory maximum
 
@@ -1966,6 +1968,15 @@ mutt is developed primarily off of these sources of documentation:
 					// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
 				#endif /* MUTT_NAMES */
 
+		// @DOCLINE ## Internally used low-level macros
+
+			// @DOCLINE mutt uses several interal low-level macros for TrueType to make certain things easier to perform. This section is a list of them.
+
+			// @DOCLINE ### Reading F2DOT14 values
+
+				// @DOCLINE The macro function `MUTT_F2DOT14` creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: @NLNT
+				#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&b[1]) & 0xC0)) + (((float)(MU_RBEU16(b) & 0xFFFF)) / 16384.f))
+
 	// @DOCLINE # Result
 
 		// @DOCLINE The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -2127,6 +2138,16 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_INVALID_GLYF_SIMPLE_X_COORD 524
 			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
 			#define MUTT_INVALID_GLYF_SIMPLE_Y_COORD 525
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_LENGTH` - the length of the composite glyph description is invalid/insufficient to describe the composite glyph.
+			#define MUTT_INVALID_GLYF_COMPOSITE_LENGTH 526
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH` - the instruction length given by the composite glyph exceeded the maximum set by the maxp table.
+			#define MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH 527
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT` - the amount of components given in the composite glyph exceeded the maximum set by the maxp table.
+			#define MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT 528
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX` - the value for "glyphIndex" in a component within the composite glyph was an invalid glyph index (out of range for the number of glyphs specified in maxp).
+			#define MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX 529
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_FLAGS` - the flags in a component within the composite glyph were invalid (multiple mutually exclusive transform data flags were set).
+			#define MUTT_INVALID_GLYF_COMPOSITE_FLAGS 530
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -3707,12 +3728,319 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Fills in (or calculates memory needed for) "muttCompositeGlyph" struct
-			MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written);
+			MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written) {
+				// Placeholder variables
+				uint32_m req = 0; // Required length
+				muByte* gdata = header->data; // Progressive data pointer
+
+				// For memory calculations:
+				if (!data) {
+					// Loop through each record
+					uint16_m flags = (header->length != 0) ?(MUTT_MORE_COMPONENTS) :(0);
+					uint32_m written_amt = 0;
+					muBool instructions = MU_FALSE;
+					uint32_m component_count = 0;
+
+					while (flags & MUTT_MORE_COMPONENTS) {
+						// Verify component count
+						if (++component_count > font->maxp->max_component_elements) {
+							return MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT;
+						}
+						// Add component to mem req
+						written_amt += sizeof(muttComponentGlyph);
+
+						// Verify length for flags and glyphIndex
+						req += 4;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+						// Read flags for if we have more components and instructions
+						uint16_m this_flags = MU_RBEU16(gdata);
+						flags = this_flags & MUTT_MORE_COMPONENTS;
+						if (this_flags & MUTT_WE_HAVE_INSTRUCTIONS) {
+							instructions = MU_TRUE;
+						}
+						// Skip past flags and glyphIndex
+						gdata += 4;
+
+						// Add arguments to req length and skip past
+						if (this_flags & MUTT_ARG_1_AND_2_ARE_WORDS) {
+							// 2 bytes per
+							req += 4;
+							gdata += 4;
+						}
+						else {
+							// 1 byte per
+							req += 2;
+							gdata += 2;
+						}
+
+						// Add transform to req length and skip past
+						// We're not checking for mutual exclusivity here, as
+						// it's not relevant to mem req
+						if (this_flags & MUTT_WE_HAVE_A_SCALE) {
+							// One F2DOT14
+							req += 2;
+							gdata += 2;
+						}
+						else if (this_flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+							// Two F2DOT14s
+							req += 4;
+							gdata += 4;
+						}
+						else if (this_flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+							// Four F2DOT14s
+							req += 8;
+							gdata += 8;
+						}
+
+						// Verify length for arguments and transform
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+					}
+
+					// Instruction handling
+					if (instructions) {
+						// Verify length for instruction length
+						req += 2;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read instruction length
+						uint16_m instruction_length = MU_RBEU16(gdata);
+						// Verify with maxp
+						if (instruction_length > font->maxp->max_size_of_instructions) {
+							return MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH;
+						}
+						// Verify length for instructions
+						// Unneeded here since we're just calculating mem req
+						// ...
+
+						// Add instructions to mem req
+						written_amt += instruction_length;
+					}
+
+					// Give mem req and exit
+					*written = written_amt;
+					return MUTT_SUCCESS;
+				}
+
+				// Placeholder variables:
+				muByte* orig_data = data; // (Used for memory usage at the end)
+				uint32_m component_count = 0; // (Used for counting components; u32 to avoid overflow)
+				muBool instructions = MU_FALSE; // (To see if we've found instructions)
+				uint16_m flags = (header->length != 0) ?(MUTT_MORE_COMPONENTS) :(0);
+
+				// Point components array to current data (what we're filling in)
+				glyph->components = (muttComponentGlyph*)data;
+				muttComponentGlyph* c = glyph->components;
+
+				// Loop through each component:
+				while (flags & MUTT_MORE_COMPONENTS) {
+					// Verify component count
+					if (component_count > font->maxp->max_component_elements) {
+						return MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT;
+					}
+
+					// Verify length for flags and glyphIndex
+					req += 4;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Read flags
+					c->flags = MU_RBEU16(gdata);
+					gdata += 2;
+					// Mark next component
+					flags = c->flags & MUTT_MORE_COMPONENTS;
+					// Mark instructions flag
+					if (c->flags & MUTT_WE_HAVE_INSTRUCTIONS) {
+						instructions = MU_TRUE;
+					}
+
+					// Read glyphIndex
+					c->glyph_index = MU_RBEU16(gdata);
+					gdata += 2;
+					// Verify index range
+					if (c->glyph_index >= font->maxp->num_glyphs) {
+						return MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX;
+					}
+
+					// Arguments handling:
+					if (c->flags & MUTT_ARG_1_AND_2_ARE_WORDS) {
+						// 2 bytes per argument
+
+						// Verify length
+						req += 4;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read values
+						if (c->flags & MUTT_ARGS_ARE_XY_VALUES) {
+							// int16 xy values
+							c->argument1 = MU_RBES16(gdata);
+							gdata += 2;
+							c->argument2 = MU_RBES16(gdata);
+							gdata += 2;
+						} else {
+							// uint16 point numbers
+							c->argument1 = MU_RBEU16(gdata);
+							gdata += 2;
+							c->argument2 = MU_RBEU16(gdata);
+							gdata += 2;
+						}
+					} else {
+						// 1 byte per argument
+
+						// Verify length
+						req += 2;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read values
+						if (c->flags & MUTT_ARGS_ARE_XY_VALUES) {
+							// int8 xy values
+							c->argument1 = MU_RBES8(gdata++);
+							c->argument2 = MU_RBES8(gdata++);
+						} else {
+							// uint8 point numbers
+							c->argument1 = *gdata++;
+							c->argument2 = *gdata++;
+						}
+					}
+
+					// Transform data handling
+					if (c->flags & MUTT_WE_HAVE_A_SCALE) {
+						// One F2DOT14
+
+						// Ensure flag exclusivity
+						if ((c->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) || (c->flags & MUTT_WE_HAVE_A_TWO_BY_TWO)) {
+							return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+						}
+
+						// Verify length
+						req += 2;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read
+						c->scales[0] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+					}
+					else if (c->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+						// Two F2DOT14s
+
+						// Ensure flag exclusivity
+						if ((c->flags & MUTT_WE_HAVE_A_SCALE) || (c->flags & MUTT_WE_HAVE_A_TWO_BY_TWO)) {
+							return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+						}
+
+						// Verify length
+						req += 4;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read
+						c->scales[0] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+						c->scales[1] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+					}
+					else if (c->flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+						// Four F2DOT14s
+
+						// Ensure flag exclusivity
+						if ((c->flags & MUTT_WE_HAVE_A_SCALE) || (c->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE)) {
+							return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+						}
+
+						// Verify length
+						req += 8;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Read
+						c->scales[0] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+						c->scales[1] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+						c->scales[2] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+						c->scales[3] = MUTT_F2DOT14(gdata);
+						gdata += 2;
+					}
+
+					// Increment handle for component and component count
+					++c;
+					++component_count;
+				}
+				// Verify component count
+				if (component_count > font->maxp->max_component_elements) {
+					return MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT;
+				}
+				// Move past component array
+				data += sizeof(muttComponentGlyph) * component_count;
+
+				// Instruction handling
+				if (instructions) {
+					// Point to data
+					glyph->instructions = data;
+
+					// Verify length for instruction length
+					req += 2;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Read instruction length
+					glyph->instruction_length = MU_RBEU16(gdata);
+					gdata += 2;
+					// Verify with maxp
+					if (glyph->instruction_length > font->maxp->max_size_of_instructions) {
+						return MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH;
+					}
+
+					if (glyph->instruction_length > 0) {
+						// Verify length for instructions
+						req += glyph->instruction_length;
+						if (header->length < req) {
+							return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+						}
+
+						// Memcpy instructions
+						mu_memcpy(glyph->instructions, gdata, glyph->instruction_length);
+						// Move data past instructions
+						data += glyph->instruction_length;
+					}
+				} else {
+					glyph->instruction_length = 0;
+					glyph->instructions = 0;
+				}
+
+				// Copy over component count
+				glyph->component_count = (uint16_m)component_count;
+				// Write data written
+				if (written) {
+					*written = data-orig_data;
+				}
+				return MUTT_SUCCESS;
+			}
 
 			// Composite glyph memory maximum
 			MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font) {
-				// (Filler for now)
-				return 0; if (font) {}
+				return
+					// components
+					(font->maxp->max_component_elements*sizeof(muttComponentGlyph))
+					// instructions
+					+(font->maxp->max_size_of_instructions)
+				;
 			}
 
 			// Glyph memory maximum
@@ -3800,6 +4128,11 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH: return "MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH"; break;
 				case MUTT_INVALID_GLYF_SIMPLE_X_COORD: return "MUTT_INVALID_GLYF_SIMPLE_X_COORD"; break;
 				case MUTT_INVALID_GLYF_SIMPLE_Y_COORD: return "MUTT_INVALID_GLYF_SIMPLE_Y_COORD"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_LENGTH: return "MUTT_INVALID_GLYF_COMPOSITE_LENGTH"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH: return "MUTT_INVALID_GLYF_COMPOSITE_INSTRUCTION_LENGTH"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT: return "MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX: return "MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_FLAGS: return "MUTT_INVALID_GLYF_COMPOSITE_FLAGS"; break;
 			}
 		}
 

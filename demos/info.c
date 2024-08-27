@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-26
+LAST UPDATED:       2024-08-27
 
 ============================================================
                         DEMO PURPOSE
@@ -527,7 +527,26 @@ int main(void)
 			// For composite glyph:
 			else
 			{
+				// Get composite glyph
+				uint32_m written;
+				muttCompositeGlyph glyph;
+				result = mutt_composite_glyph(&font, &header, &glyph, glyfdata, &written);
+				// - Fail case:
+				if (mutt_result_is_fatal(result)) {
+					printf("\tFailed to load composite glyph data: %s\n", mutt_result_get_name(result));
+					continue;
+				}
 
+				// Print memory usage info
+				// - Amount of bytes used
+				printf("\t%" PRIu32 " / %" PRIu32 " bytes used (", written, glyfsize);
+				// - Percentage of allocated memory
+				printf("%f%% of maximum glyph memory)\n", (((float)written) / ((float)glyfsize)) * 100.f);
+
+				// Print instruction length
+				printf("\tinstructionLength\t = %" PRIu16 "\n", glyph.instruction_length);
+				// Print component count
+				printf("\tcomponentCount\t = %" PRIu16 "\n", glyph.component_count);
 			}
 		}
 
