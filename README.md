@@ -58,6 +58,10 @@ mutt is meant to be fairly simplistic for now, so it only supports reading infor
 
 mutt currently does not have support for reading values from the post table, which is one of the 9 required tables in the TrueType specification.
 
+## Limited cmap format support
+
+Currently, mutt only supports loading cmap formats 0, 4, and 12. This should be okay for most cases, with Apple's TrueType spec. saying, "Modern font generation tools might not need to be able to write general-purpose cmaps in formats other than 4 and 12."
+
 # TrueType documentation
 
 Involved usage of the low-level API of mutt necessitates an understanding of the TrueType documentation. Terms from the TrueType documentation will be used with the assumption that the user has read it and understands these terms.
@@ -173,7 +177,7 @@ The font struct, `muttFont`, is the primary way of reading information from True
 
 * `muttResult loca_res` - the result of attempting to load the loca table.
 
-* `muttPost* post` - a pointer to the [post table](#post-table).
+* `muttPost* post` - a pointer to the post table.
 
 * `muttResult post_res` - the result of attempting to load the post table.
 
@@ -600,6 +604,176 @@ MUDEF uint32_m mutt_glyph_max_size(muttFont* font);
 
 
 This function returns the largest value between `mutt_simple_glyph_max_size` and `mutt_composite_glyph_max_size`.
+
+## Cmap table
+
+The struct `muttCmap` is used to represent the cmap table provided by a TrueType font, stored in the struct `muttFont` as the pointer member "`cmap`", and loaded with the flag `MUTT_LOAD_CMAP` (`MUTT_LOAD_MAXP` must also be defined). It has the following members:
+
+* `uint16_m num_tables` - equivalent to "numTables" in the cmap header; the number of encoding records in the `encoding_records` array.
+
+* `muttEncodingRecord* encoding_records` - equivalent to "encodingRecords" in the cmap header; an array of each encoding record in the cmap table.
+
+The union `muttCmapFormat` represents a cmap format for a cmap encoding record. It has the following members:
+
+* `muttCmap0* f0` - [format 0](#format-0).
+
+* `muttCmap4* f4` - [format 4](#format-4).
+
+* `muttCmap12* f12` - [format 12](#format-12).
+
+The struct `muttEncodingRecord` represents an encoding record in the cmap table. It has the following members:
+
+* `uint16_m platform_id` - equivalent to "platformID" in the cmap encoding record; the platform ID of the encoding record.
+
+* `uint16_m encoding_id` - equivalent to "encodingID" in the cmap encoding record; the encoding ID of the encoding record.
+
+* `uint16_m format` - equivalent to "format" in a given cmap subtable format; the format of the encoding record.
+
+* `muttCmapFormat encoding` - a union holding a pointer to the information for the cmap subtable format.
+
+* `muttResult result` - the result of attempting to load the cmap subtable format.
+
+If `result` is a fatal result (most commonly due to the format not being supported (`MUTT_INVALID_CMAP_ENCODING_RECORD_FORMAT`)), the relevant member of `encoding` is 0, unless the format is unsupported, in which case the value of `encoding` is undefined.
+
+The following sections detail how to convert codepoint values to glyph ID values and vice versa, using (at the highest level) the cmap table as a whole, and (at the lowest level) reading data from each format's struct. ***WARNING:*** The glyph ID values returned by a cmap format subtable are *not* checked to be valid upon loading; they are checked to be valid once a function is called for conversion. This means that if the user is using the structs of each format to get glyph ID values instead of using the respective functions, they need to check if the glyph ID values that they retrieve are valid or not, since they are unchecked.
+
+Codepoint values passed into functions for conversion can be invalid; 0 shall just be returned. Codepoint values returned by a conversion function may not be valid codepoint values for the relevant encoding; the user must check these values themselves. Invalid glyph ID values should not be passed into conversion functions, and conversion functions should not return invalid glyph ID values.
+
+### Top-level cmap
+
+Every implemented cmap format in mutt can retrieve a glyph ID based on a given codepoint and vice versa.
+
+The function `mutt_cmap_get_glyph` searches each cmap encoding record specified for the given font and attempts to convert the given codepoint value to a valid glyph ID, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap_get_glyph(muttFont* font, uint32_m codepoint);
+```
+
+
+The function `mutt_cmap_get_codepoint` searches each cmap encoding record specified for the given font and attempts to convert the given glyph ID to a codepoint value, defined below: 
+
+```c
+MUDEF uint32_m mutt_cmap_get_codepoint(muttFont* font, uint16_m glyph_id);
+```
+
+
+Both functions return 0 if no equivalent could be found in the conversion process for any cmap encoding record.
+
+### Cmap encoding
+
+The function `mutt_cmap_encoding_get_glyph` converts a given codepoint value to a glyph ID value using the given cmap encoding record, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap_encoding_get_glyph(muttFont* font, muttEncodingRecord* record, uint32_m codepoint);
+```
+
+
+The function `mutt_cmap_encoding_get_codepoint` converts a given glyph ID to a codepoint value using the given cmap encoding record, defined below: 
+
+```c
+MUDEF uint32_m mutt_cmap_encoding_get_codepoint(muttFont* font, muttEncodingRecord* record, uint16_m glyph_id);
+```
+
+
+Both functions return 0 if no equivalent could be found in the conversion process for the format of the given encoding record.
+
+### Format 0
+
+The struct `muttCmap0` represents a cmap format 0 subtable, and has the following members:
+
+* `uint16_m language` - equivalent to "language" in the cmap format 0 subtable.
+
+* `uint8_m glyph_ids[256]` - equivalent to "glyphIdArray" in the cmap format 0 subtable.
+
+The function `mutt_cmap0_get_glyph` converts a given codepoint value to a glyph ID value using the given format 0 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap0_get_glyph(muttFont* font, muttCmap0* f0, uint8_m codepoint);
+```
+
+
+The function `mutt_cmap0_get_codepoint` converts a given glyph ID to a codepoint value using the given format 0 cmap subtable, defined below: 
+
+```c
+MUDEF uint8_m mutt_cmap0_get_codepoint(muttFont* font, muttCmap0* f0, uint16_m glyph);
+```
+
+
+Both functions return 0 if no equivalent could be found in the conversion process.
+
+### Format 4
+
+The struct `muttCmap4` represents a cmap format 4 subtable, and has the following members:
+
+* `uint16_m language` - equivalent to "language" in the cmap format 4 subtable.
+
+* `uint16_m seg_count` - equivalent to half of "segCountX2" in the cmap format 4 subtable; the amount of segments in the `seg` array.
+
+* `muttCmap4Segment* seg` - an array of each segment within the cmap format 4 subtable.
+
+* `uint16_m* glyph_ids` - equivalent to "glyphIdArray" in the cmap format 4 subtable; the glyph index array that each segment should return indexes into.
+
+The struct `muttCmap4Segment` represents a segment in the cmap format 4 subtable, and has the following members:
+
+* `uint16_m end_code` - equivalent to the value for the given segment in the "endCode" array in the cmap format 4 subtable; the end character code for the given segment.
+
+* `uint16_m start_code` - equivalent to the value for the given segment in the "startCode" array in the cmap format 4 subtable; the start character code for the given segment.
+
+* `int16_m id_delta` - equivalent to the value for the given segment in the "idDelta" array in the cmap format 4 subtable; the delta for the character codes of the given segment.
+
+* `uint16_m id_range_offset` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable, but divided by 2 and with (`muttCmap4->seg_count` - the index for the given segment) subtracted; the start code index offset into `muttCmap4->glyph_ids`.
+
+> In TrueType, idRangeOffset is stored as an offset into the glyphIdArray for the start code, to which every code in the segment adds an offset to get the next value (`codepoint-start_code` incrementally offsets, beginning at the start code as 0). However, this offset is stored relative to `&idRangeOffset[segment]`, so this offset is accounted for when loading the format in mutt by subtracting `seg_count-segment` for each value in idRangeOffset. The value is also first divided by 2 (before the subtraction) since, internally, the value is accessed by directly indexing into `glyph_ids`, but idRangeOffset values store actual byte offsets, so the 2 bytes per glyph ID must be accounted for. Glyph IDs are then internally retrieved (after being verified to be valid offsets) via `f4->glyph_ids[seg->id_range_offset + (codepoint - seg->start_code)]`, and this is how the user should also retrieve them when manually reading from the `muttCmap4` struct.
+
+The function `mutt_cmap4_get_glyph` converts a given codepoint value to a glyph ID value using the given format 4 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap4_get_glyph(muttFont* font, muttCmap4* f4, uint16_m codepoint);
+```
+
+
+The function `mutt_cmap4_get_codepoint` converts a given glyph ID to a codepoint value using the given format 4 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap4_get_codepoint(muttFont* font, muttCmap4* f4, uint16_m glyph);
+```
+
+
+Both functions return 0 if no equivalent could be found in the conversion process.
+
+### Format 12
+
+The struct `muttCmap12` represents a cmap format 12 subtable, and has the following members:
+
+* `uint16_m language` - equivalent to "language" in the cmap format 12 subtable.
+
+* `uint32_m num_groups` - equivalent to "numGroups" in the cmap format 12 subtable; the amount of groups in the `groups` array.
+
+* `muttCmap12Group* groups` - equivalent to "groups" in the cmap format 12 subtable; an array of each map group.
+
+The struct `muttCmap12Group` represents a sequential map group in the cmap format 12 subtable, and has the following members:
+
+* `uint32_m start_char_code` - equivalent to "startCharCode" in the sequential map group record; the first character code for the given group.
+
+* `uint32_m end_char_code` - equivalent to "endCharCode" in the sequential map group record; the last character code for the given group.
+
+* `uint32_m start_glyph_id` - equivalent to "startGlyphID" in the sequential map group record; the glyph ID for the first character code.
+
+The function `mutt_cmap12_get_glyph` converts a given codepoint value to a glyph ID value using the given format 12 cmap subtable, defined below: 
+
+```c
+MUDEF uint16_m mutt_cmap12_get_glyph(muttFont* font, muttCmap12* f12, uint32_m codepoint);
+```
+
+
+The function `mutt_cmap12_get_codepoint` converts a given glyph ID to a codepoint value using the given format 12 cmap subtable, defined below: 
+
+```c
+MUDEF uint32_m mutt_cmap12_get_codepoint(muttFont* font, muttCmap12* f12, uint16_m glyph);
+```
+
+
+Both functions return 0 if no equivalent could be found in the conversion process.
 
 ## User allocated functions
 
@@ -1323,6 +1497,22 @@ The following values are defined for `muttResult` (all values not explicitly sta
 * `MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX` - the value for "glyphIndex" in a component within the composite glyph was an invalid glyph index (out of range for the number of glyphs specified in maxp).
 
 * `MUTT_INVALID_GLYF_COMPOSITE_FLAGS` - the flags in a component within the composite glyph were invalid (multiple mutually exclusive transform data flags were set).
+
+### Cmap result values
+
+* `MUTT_INVALID_CMAP_LENGTH` - the length of the cmap table was invalid.
+
+* `MUTT_INVALID_CMAP_VERSION` - the version of the cmap table was invalid/unsupported.
+
+* `MUTT_INVALID_CMAP_ENCODING_RECORD_OFFSET` - an encoding record's subtable offset was invalid (AKA out of range for the cmap table).
+
+* `MUTT_INVALID_CMAP_ENCODING_RECORD_LENGTH` - an encoding record's subtable length was invalid (AKA the offset's distance from the end of the cmap table was not long enough to figure out its format).
+
+* `MUTT_INVALID_CMAP_ENCODING_RECORD_FORMAT` - the encoding record's format was invalid/unsupported.
+
+* `MUTT_INVALID_CMAP0_LENGTH` - the length of the cmap format 0 subtable was invalid.
+
+* `MUTT_CMAP_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and cmap requires maxp to be loaded.
 
 ## Check if result is fatal
 

@@ -5,7 +5,7 @@
 DEMO NAME:          info.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-08-18
-LAST UPDATED:       2024-08-27
+LAST UPDATED:       2024-08-28
 
 ============================================================
                         DEMO PURPOSE
@@ -558,6 +558,57 @@ int main(void)
 		printf("\n");
 	}
 	end_of_glyf:
+
+	/* Print cmap */
+	{
+		printf("== Cmap ==\n");
+
+		// Case for if cmap failed to load
+		if (!font.cmap) {
+			printf("cmap failed to load: %s\n\n", mutt_result_get_name(font.cmap_res));
+			goto end_of_cmap;
+		}
+
+		// Print # of tables
+		printf("encodingRecords[%" PRIu16 "]\n", font.cmap->num_tables);
+
+		// Loop through each table
+		for (uint16_m t = 0; t < font.cmap->num_tables; ++t) {
+			muttEncodingRecord r = font.cmap->encoding_records[t];
+			printf("#%" PRIu16 ":\n", t);
+
+			// platformID
+			printf("\tplatformID\t = %s (%" PRIu16 ")\n", mutt_platform_get_nice_name(r.platform_id), r.platform_id);
+
+			// Print encoding ID
+			switch (r.platform_id) {
+				// Unknown
+				default: {
+					printf("\tencodingID\t = Unknown (%" PRIu16 ")\n", r.encoding_id);
+				} break;
+				// Unicode
+				case MUTT_PLATFORM_UNICODE: {
+					printf("\tencodingID\t = %s (%" PRIu16 ")\n", mutt_unicode_encoding_get_nice_name(r.encoding_id), r.encoding_id);
+				} break;
+				// Macintosh
+				case MUTT_PLATFORM_MACINTOSH: {
+					printf("\tencodingID\t = %s (%" PRIu16 ")\n", mutt_macintosh_encoding_get_nice_name(r.encoding_id), r.encoding_id);
+				} break;
+				// Windows
+				case MUTT_PLATFORM_WINDOWS: {
+					printf("\tencodingID\t = %s (%" PRIu16 ")\n", mutt_windows_encoding_get_nice_name(r.encoding_id), r.encoding_id);
+				} break;
+			}
+
+			// Print format
+			printf("\tformat\t = %" PRIu16 "\n", r.format);
+			// Print result of loading
+			printf("\tresult\t = %s\n", mutt_result_get_name(r.result));
+		}
+
+		printf("\n");
+	}
+	end_of_cmap:
 
 	/* Deload font */
 	{
