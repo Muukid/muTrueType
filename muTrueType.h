@@ -71,6 +71,10 @@ mutt currently does not have support for reading values from the post table, whi
 
 Currently, mutt only supports loading cmap formats 0, 4, and 12. This should be okay for most cases, with Apple's TrueType spec. saying, "Modern font generation tools might not need to be able to write general-purpose cmaps in formats other than 4 and 12."
 
+## Optimal cmap conversions
+
+mutt does not use the most efficient algorithms to convert codepoints to glyph IDs and vice versa for cmap formats.
+
 # TrueType documentation
 
 Involved usage of the low-level API of mutt necessitates an understanding of the TrueType documentation. Terms from the TrueType documentation will be used with the assumption that the user has read it and understands these terms.
@@ -1488,7 +1492,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE If `result` is a fatal result (most commonly due to the format not being supported (`MUTT_INVALID_CMAP_ENCODING_RECORD_FORMAT`)), the relevant member of `encoding` is 0, unless the format is unsupported, in which case the value of `encoding` is undefined.
 
-			// @DOCLINE The following sections detail how to convert codepoint values to glyph ID values and vice versa, using (at the highest level) the cmap table as a whole, and (at the lowest level) reading data from each format's struct. ***WARNING:*** The glyph ID values returned by a cmap format subtable are *not* checked to be valid upon loading; they are checked to be valid once a function is called for conversion. This means that if the user is using the structs of each format to get glyph ID values instead of using the respective functions, they need to check if the glyph ID values that they retrieve are valid or not, since they are unchecked.
+			// @DOCLINE The following sections detail how to convert codepoint values to glyph ID values and vice versa, using (at the highest level) the cmap table as a whole, and (at the lowest level) reading data from each format's struct. ***WARNING:*** The glyph ID values returned by a cmap format subtable are *not* checked to be valid upon loading; they are checked to be valid once a function is called for conversion. This means that if the user is using the structs of each format to get glyph ID values instead of using the respective functions, they need to check if the glyph ID values that they retrieve are valid or not, since they are unchecked. Normal checks for all values being within data range are still performed; for example, the loading of format 4 checks if all values within its segments generate a valid index into its glyphIdArray, it just doesn't check if the values within glyphIdArray are valid glyph IDs, that it performed in `mutt_cmap4_get_glyph`.
 
 			// @DOCLINE Codepoint values passed into functions for conversion can be invalid; 0 shall just be returned. Codepoint values returned by a conversion function may not be valid codepoint values for the relevant encoding; the user must check these values themselves. Invalid glyph ID values should not be passed into conversion functions, and conversion functions should not return invalid glyph ID values.
 
@@ -1496,11 +1500,11 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE Every implemented cmap format in mutt can retrieve a glyph ID based on a given codepoint and vice versa.
 
-				// @DOCLINE The function `mutt_cmap_get_glyph` searches each cmap encoding record specified for the given font and attempts to convert the given codepoint value to a valid glyph ID, defined below: @NLNT
-				MUDEF uint16_m mutt_cmap_get_glyph(muttFont* font, uint32_m codepoint);
+				// @DOCLINE The function `mutt_get_glyph` searches each cmap encoding record specified for the given font and attempts to convert the given codepoint value to a valid glyph ID, defined below: @NLNT
+				MUDEF uint16_m mutt_get_glyph(muttFont* font, uint32_m codepoint);
 
-				// @DOCLINE The function `mutt_cmap_get_codepoint` searches each cmap encoding record specified for the given font and attempts to convert the given glyph ID to a codepoint value, defined below: @NLNT
-				MUDEF uint32_m mutt_cmap_get_codepoint(muttFont* font, uint16_m glyph_id);
+				// @DOCLINE The function `mutt_get_codepoint` searches each cmap encoding record specified for the given font and attempts to convert the given glyph ID to a codepoint value, defined below: @NLNT
+				MUDEF uint32_m mutt_get_codepoint(muttFont* font, uint16_m glyph_id);
 
 				// @DOCLINE Both functions return 0 if no equivalent could be found in the conversion process for any cmap encoding record.
 
@@ -1548,6 +1552,8 @@ mutt is developed primarily off of these sources of documentation:
 					uint16_m* glyph_ids;
 				};
 
+				// @DOCLINE Internally, mutt does not verify or use the values for "searchRange", "entrySelector", or "rangeShift".
+
 				// @DOCLINE The struct `muttCmap4Segment` represents a segment in the cmap format 4 subtable, and has the following members:
 				struct muttCmap4Segment {
 					// @DOCLINE * `@NLFT end_code` - equivalent to the value for the given segment in the "endCode" array in the cmap format 4 subtable; the end character code for the given segment.
@@ -1558,9 +1564,13 @@ mutt is developed primarily off of these sources of documentation:
 					int16_m id_delta;
 					// @DOCLINE * `@NLFT id_range_offset` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable, but divided by 2 and with (`muttCmap4->seg_count` - the index for the given segment) subtracted; the start code index offset into `muttCmap4->glyph_ids`.
 					uint16_m id_range_offset;
+					// @DOCLINE * `@NLFT start_glyph_id` - the calculated first glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
+					uint16_m start_glyph_id;
+					// @DOCLINE * `@NLFT end_glyph_id` - the calculated last glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
+					uint16_m end_glyph_id;
 				};
 
-				// @DOCLINE > In TrueType, idRangeOffset is stored as an offset into the glyphIdArray for the start code, to which every code in the segment adds an offset to get the next value (`codepoint-start_code` incrementally offsets, beginning at the start code as 0). However, this offset is stored relative to `&idRangeOffset[segment]`, so this offset is accounted for when loading the format in mutt by subtracting `seg_count-segment` for each value in idRangeOffset. The value is also first divided by 2 (before the subtraction) since, internally, the value is accessed by directly indexing into `glyph_ids`, but idRangeOffset values store actual byte offsets, so the 2 bytes per glyph ID must be accounted for. Glyph IDs are then internally retrieved (after being verified to be valid offsets) via `f4->glyph_ids[seg->id_range_offset + (codepoint - seg->start_code)]`, and this is how the user should also retrieve them when manually reading from the `muttCmap4` struct.
+				// @DOCLINE > In TrueType, idRangeOffset is stored as an offset into the glyphIdArray for the start code, to which every code in the segment adds an offset to get the next value (`codepoint-start_code` incrementally offsets, beginning at the start code as 0). However, this offset is stored relative to `&idRangeOffset[segment]`, so this offset is accounted for when loading the format in mutt by subtracting `seg_count-segment` for each value in idRangeOffset. The value is also first divided by 2 (before the subtraction) since, internally, the value is accessed by directly indexing into `glyph_ids`, but idRangeOffset values store actual byte offsets, so the 2 bytes per glyph ID must be accounted for. Glyph IDs are then internally retrieved (after being verified to be valid offsets) via `f4->glyph_ids[seg->id_range_offset + (codepoint - seg->start_code)]` (followed by delta logic), and this is how the user should also retrieve them when manually reading from the `muttCmap4` struct.
 
 				// @DOCLINE The function `mutt_cmap4_get_glyph` converts a given codepoint value to a glyph ID value using the given format 4 cmap subtable, defined below: @NLNT
 				MUDEF uint16_m mutt_cmap4_get_glyph(muttFont* font, muttCmap4* f4, uint16_m codepoint);
@@ -1577,7 +1587,7 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE The struct `muttCmap12` represents a cmap format 12 subtable, and has the following members:
 				struct muttCmap12 {
 					// @DOCLINE * `@NLFT language` - equivalent to "language" in the cmap format 12 subtable.
-					uint16_m language;
+					uint32_m language;
 					// @DOCLINE * `@NLFT num_groups` - equivalent to "numGroups" in the cmap format 12 subtable; the amount of groups in the `groups` array.
 					uint32_m num_groups;
 					// @DOCLINE * `@NLFT* groups` - equivalent to "groups" in the cmap format 12 subtable; an array of each map group.
@@ -2129,14 +2139,19 @@ mutt is developed primarily off of these sources of documentation:
 					// @DOCLINE > Note that these are name functions, and are only defined if `MUTT_NAMES` is also defined.
 				#endif /* MUTT_NAMES */
 
-		// @DOCLINE ## Internally used low-level macros
+		// @DOCLINE ## Internally used low-level functionality
 
-			// @DOCLINE mutt uses several interal low-level macros for TrueType to make certain things easier to perform. This section is a list of them.
+			// @DOCLINE mutt uses several internally-defined low-level things to make certain things easier to perform. This section is a list of them.
 
 			// @DOCLINE ### Reading F2DOT14 values
 
 				// @DOCLINE The macro function `MUTT_F2DOT14` creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: @NLNT
 				#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&b[1]) & 0xC0)) + (((float)(MU_RBEU16(b) & 0xFFFF)) / 16384.f))
+
+			// @DOCLINE ### Delta logic
+
+				// @DOCLINE Some cmap formats use fairly weird logic when using "idDelta" values. The function `mutt_id_delta` figures this logic out automatically, defined below: @NLNT
+				MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 
 	// @DOCLINE # Result
 
@@ -2329,6 +2344,26 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE * `MUTT_INVALID_CMAP0_LENGTH` - the length of the cmap format 0 subtable was invalid.
 			#define MUTT_INVALID_CMAP0_LENGTH 581
+
+			// @DOCLINE * `MUTT_INVALID_CMAP4_LENGTH` - the length of the cmap format 4 subtable was invalid/insufficient to define the data needed.
+			#define MUTT_INVALID_CMAP4_LENGTH 582
+			// @DOCLINE * `MUTT_INVALID_CMAP4_SEG_COUNT_X2` - the value given for "segCountX2" in the cmap format 4 subtable was not divisible by 2, and was therefore an invalid value.
+			#define MUTT_INVALID_CMAP4_SEG_COUNT_X2 583
+			// @DOCLINE * `MUTT_INVALID_CMAP4_END_CODE` - an "endCode" value for a segment in the cmap format 4 subtable broke the incremental order of the endCode values.
+			#define MUTT_INVALID_CMAP4_END_CODE 584
+			// @DOCLINE * `MUTT_INVALID_CMAP4_LAST_END_CODE` - the last "endCode" value in the cmap format 4 subtable was not 0xFFFF, which is required in the TrueType specification.
+			#define MUTT_INVALID_CMAP4_LAST_END_CODE 585
+			// @DOCLINE * `MUTT_INVALID_CMAP4_START_CODE` - a "startCode" value for a segment in the cmap format 4 subtable was greater than its endCode.
+			#define MUTT_INVALID_CMAP4_START_CODE 586
+			// @DOCLINE * `MUTT_INVALID_CMAP4_ID_RANGE_OFFSET` - an "idRangeOffset" value for a segment in the cmap format 4 subtable was rather out of range for indexes into glyphIdArray, or was not divisible by 2 (which it must be, since it's a byte-offset into a 2-byte-integer array, starting from a 2-byte-integer array).
+			#define MUTT_INVALID_CMAP4_ID_RANGE_OFFSET 587
+
+			// @DOCLINE * `MUTT_INVALID_CMAP12_LENGTH` - the length of the cmap format 12 subtable was invalid/in sufficient to define the data needed.
+			#define MUTT_INVALID_CMAP12_LENGTH 588
+			// @DOCLINE * `MUTT_INVALID_CMAP12_START_CHAR_CODE` - a "startCharCode" value for a map group in the cmap format 12 subtable was not incremental compared to the previous group.
+			#define MUTT_INVALID_CMAP12_START_CHAR_CODE 589
+			// @DOCLINE * `MUTT_INVALID_CMAP12_END_CHAR_CODE` - an "endCharCode" value for a map group in the cmap format 12 subtable was not less than the startCharCode value of the next group.
+			#define MUTT_INVALID_CMAP12_END_CHAR_CODE 590
 
 			// @DOCLINE * `MUTT_CMAP_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and cmap requires maxp to be loaded.
 			#define MUTT_CMAP_REQUIRES_MAXP 639
@@ -3207,6 +3242,10 @@ mutt is developed primarily off of these sources of documentation:
 						return MUTT_INVALID_CMAP0_LENGTH;
 					}
 
+					// length
+					if (MU_RBEU16(data+2) > datalen) {
+						return MUTT_INVALID_CMAP0_LENGTH;
+					}
 					// language
 					f0->language = MU_RBEU16(data+4);
 					// glyphIdArray
@@ -3225,6 +3264,7 @@ mutt is developed primarily off of these sources of documentation:
 					return (glyph < font->maxp->num_glyphs) ?(glyph) :(0);
 				}
 
+				// Glyph ID -> codepoint
 				MUDEF uint8_m mutt_cmap0_get_codepoint(muttFont* font, muttCmap0* f0, uint16_m glyph) {
 					// Loop through each element in glyph ID array
 					for (uint16_m i = 0; i < 256; ++i) {
@@ -3236,6 +3276,359 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					// No glyph ID equivalent found; return nada
+					return 0; if (font) {}
+				}
+
+			/* Format 4 */
+
+				// Loads format 4
+				void mutt_f4Deload(muttCmap4* f4);
+				muttResult mutt_f4Load(muttFont* font, muttCmap4* f4, muByte* data, uint32_m datalen) {
+					// Verify length for format...rangeShift
+					// 32 is ok because length is u16 in subtable
+					uint32_m req = 14;
+					if (datalen < req) {
+						return MUTT_INVALID_CMAP4_LENGTH;
+					}
+					// length
+					uint16_m length = MU_RBEU16(data+2);
+					if (length > datalen || length < req) {
+						return MUTT_INVALID_CMAP4_LENGTH;
+					}
+
+					// language
+					f4->language = MU_RBEU16(data+4);
+
+					// segCountX2
+					f4->seg_count = MU_RBEU16(data+6);
+					if ((f4->seg_count%2) != 0) {
+						return MUTT_INVALID_CMAP4_SEG_COUNT_X2;
+					}
+					f4->seg_count /= 2;
+					// - Edge case for seg_count being 0
+					if (f4->seg_count == 0) {
+						f4->seg = 0;
+						f4->glyph_ids = 0;
+						return MUTT_SUCCESS;
+					}
+
+					// Verify length for endCode...idRangeOffset
+					req += 2+(8*f4->seg_count);
+					if (length < req) {
+						return MUTT_INVALID_CMAP4_LENGTH;
+					}
+
+					// glyphIdArray length
+					uint16_m glyph_id_array_len = length-req;
+					if ((glyph_id_array_len%2) != 0) {
+						//return MUTT_INVALID_CMAP4_GLYPH_ID_ARRAY_LENGTH;
+						// Subtracting 1 instead, just feels better...
+						glyph_id_array_len -= 1;
+					}
+					glyph_id_array_len /= 2;
+
+					// Allocate segments
+					f4->seg = (muttCmap4Segment*)mu_malloc(f4->seg_count*sizeof(muttCmap4Segment));
+					if (!f4->seg) {
+						return MUTT_FAILED_MALLOC;
+					}
+					// Allocate glyph IDs
+					f4->glyph_ids = (uint16_m*)mu_malloc(glyph_id_array_len*2);
+					if (!f4->glyph_ids) {
+						mu_free(f4->seg);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Placeholder values for progress in data:
+					muByte* end_code = data+14;
+					muByte* start_code = end_code+(f4->seg_count*2)+2;
+					muByte* id_delta = start_code+(f4->seg_count*2);
+					muByte* id_range_offset = id_delta+(f4->seg_count*2);
+					muByte* glyph_id_array = id_range_offset+(f4->seg_count*2);
+
+					// Loop through each glyphIdArray element
+					for (uint16_m g = 0; g < glyph_id_array_len; ++g) {
+						// Read value
+						f4->glyph_ids[g] = MU_RBEU16(glyph_id_array);
+						// Move to next element
+						glyph_id_array += 2;
+					}
+
+					// Loop through each segment
+					for (uint16_m s = 0; s < f4->seg_count; ++s) {
+						// Get segment
+						muttCmap4Segment* ps = &f4->seg[s];
+
+						// endCode
+						ps->end_code = MU_RBEU16(end_code);
+						// - Verify incremental
+						if (s > 0) {
+							if (ps->end_code <= (ps-1)->end_code) {
+								mutt_f4Deload(f4);
+								return MUTT_INVALID_CMAP4_END_CODE;
+							}
+						}
+						// - Verify last = 0xFFFF
+						if (s+1 == f4->seg_count && ps->end_code != 0xFFFF) {
+							mutt_f4Deload(f4);
+							return MUTT_INVALID_CMAP4_LAST_END_CODE;
+						}
+
+						// startCode
+						ps->start_code = MU_RBEU16(start_code);
+						// - Verify startCode <= endCode
+						if (ps->start_code > ps->end_code) {
+							mutt_f4Deload(f4);
+							return MUTT_INVALID_CMAP4_START_CODE;
+						}
+
+						// idDelta
+						ps->id_delta = MU_RBES16(id_delta);
+
+						// idRangeOffset
+						ps->id_range_offset = MU_RBEU16(id_range_offset);
+						// Further verification is only cared about if idRangeOffset is not 0,
+						// since logic with it is only performed under that circumstance
+						if (ps->id_range_offset != 0) {
+							// - Divide by 2 to account for 2-byte-per offset
+							if ((ps->id_range_offset%2) != 0) {
+								// Not divisible by 2 :L
+								mutt_f4Deload(f4);
+								return MUTT_INVALID_CMAP4_ID_RANGE_OFFSET;
+							}
+							ps->id_range_offset /= 2;
+							// - Subtract seg_count-s to counteract offset being relative to &idRangeOffset[s]
+							//   (only applies if idRangeOffset is not 0)
+							if (ps->id_range_offset < f4->seg_count-s) {
+								// Offset is out of range (before glyphIdArray)
+								mutt_f4Deload(f4);
+								return MUTT_INVALID_CMAP4_ID_RANGE_OFFSET;
+							}
+							ps->id_range_offset -= f4->seg_count-s;
+							// - Ensure within range of glyphIdArray at max distance from it
+							if (ps->id_range_offset + (ps->start_code - ps->end_code) >= glyph_id_array_len) {
+								mutt_f4Deload(f4);
+								return MUTT_INVALID_CMAP4_ID_RANGE_OFFSET;
+							}
+
+							// Calculate starting glyph ID
+							ps->start_glyph_id = f4->glyph_ids[ps->id_range_offset];
+							// - If it's not 0, idDelta logic is performed
+							if (ps->start_glyph_id != 0) {
+								ps->start_glyph_id = mutt_id_delta(ps->start_glyph_id, ps->id_delta);
+							}
+							// + Ending glyph ID
+							ps->end_glyph_id = f4->glyph_ids[ps->id_range_offset+(ps->start_code-ps->end_code)];
+							if (ps->end_glyph_id != 0) {
+								ps->end_glyph_id = mutt_id_delta(ps->end_glyph_id, ps->id_delta);
+							}
+						}
+						// If idRangeOffset IS 0, calculaing starting/ending glyph ID is just idDelta
+						else {
+							ps->start_glyph_id = mutt_id_delta(ps->start_code, ps->id_delta);
+							ps->end_glyph_id = mutt_id_delta(ps->end_code, ps->id_delta);
+						}
+						// Now, we can be sure that for any segment:
+						// glyphIdArray[idRangeOffset+(codepoint-startCode)]
+						// is a valid index into glyphIdArray (besides idRangeOffset==0).
+						// idDelta logic goes unverified at this point.
+
+						// Increment relevant placeholder values
+						end_code += 2;
+						start_code += 2;
+						id_delta += 2;
+						id_range_offset += 2;
+					}
+
+					return MUTT_SUCCESS; if (font) {}
+				}
+
+				// Deloads format 4
+				void mutt_f4Deload(muttCmap4* f4) {
+					if (f4) {
+						if (f4->seg) {
+							mu_free(f4->seg);
+						}
+						if (f4->glyph_ids) {
+							mu_free(f4->glyph_ids);
+						}
+						// (Purposely not freeing f4)
+					}
+				}
+
+				// Codepoint -> glyph ID
+				MUDEF uint16_m mutt_cmap4_get_glyph(muttFont* font, muttCmap4* f4, uint16_m codepoint) {
+					// Loop through each segment
+					for (uint16_m s = 0; s < f4->seg_count; ++s) {
+						// Continue on if the codepoint is not within this segment
+						if (codepoint < f4->seg[s].start_code || codepoint > f4->seg[s].end_code) {
+							continue;
+						}
+						// If we're here, the segment contains our codepoint
+						uint16_m glyph;
+						muttCmap4Segment* seg = &f4->seg[s];
+
+						// If idRangeOffset is 0, we're only performing delta logic
+						if (seg->id_range_offset == 0) {
+							glyph = mutt_id_delta(codepoint, seg->id_delta);
+						}
+						// If idRangeOffset isn't 0, we must index into glyphIdArray
+						else {
+							// (This is verified to be valid in mutt_f4Load)
+							glyph = f4->glyph_ids[seg->id_range_offset+(codepoint-seg->start_code)];
+							// + idDelta if not 0
+							if (glyph != 0) {
+								glyph = mutt_id_delta(glyph, seg->id_delta);
+							}
+						}
+
+						// Return glyph if it's valid and not 0
+						if (glyph < font->maxp->num_glyphs && glyph != 0) {
+							return glyph;
+						}
+					}
+
+					// Codepoint does not lie within a defined segment
+					return 0;
+				}
+
+				// Glyph ID -> codepoint
+				MUDEF uint16_m mutt_cmap4_get_codepoint(muttFont* font, muttCmap4* f4, uint16_m glyph) {
+					// Loop through each segment
+					for (uint16_m s = 0; s < f4->seg_count; ++s) {
+						// If segment is fully continuous:
+						if (f4->seg[s].start_glyph_id <= f4->seg[s].end_glyph_id) {
+							// If glyph ID is within this range:
+							if (glyph >= f4->seg[s].start_glyph_id && glyph <= f4->seg[s].end_glyph_id) {
+								// Just return character code based on offset into glyph ID range
+								return f4->seg[s].start_code + (glyph - f4->seg[s].start_glyph_id);
+							}
+						}
+						// For non-continuous segments:
+						else {
+							// @TODO
+						}
+					}
+
+					// Glyph ID is not given in any segment
+					return 0; if (font) {}
+				}
+
+			/* Format 12 */
+
+				// Loads format 12
+				void mutt_f12Deload(muttCmap12* f12);
+				muttResult mutt_f12Load(muttFont* font, muttCmap12* f12, muByte* data, uint32_m datalen) {
+					// Verify length for format...numGroups
+					uint64_m req = 16;
+					if (datalen < req) {
+						return MUTT_INVALID_CMAP12_LENGTH;
+					}
+					// length
+					uint32_m length = MU_RBEU32(data+4);
+					if (length > datalen || length < req) {
+						return MUTT_INVALID_CMAP12_LENGTH;
+					}
+
+					// language
+					f12->language = MU_RBEU32(data+8);
+
+					// numGroups
+					f12->num_groups = MU_RBEU32(data+12);
+					// Exit early if no groups
+					if (f12->num_groups == 0) {
+						f12->groups = 0;
+						return MUTT_SUCCESS;
+					}
+
+					// Verify length for groups
+					req += f12->num_groups*12;
+					if (length < req) {
+						return MUTT_INVALID_CMAP12_LENGTH;
+					}
+					// Allocate groups
+					f12->groups = (muttCmap12Group*)mu_malloc(sizeof(muttCmap12Group)*f12->num_groups);
+					if (!f12->groups) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Loop through each group
+					data += 16;
+					for (uint32_m g = 0; g < f12->num_groups; ++g) {
+						// startCharCode
+						f12->groups[g].start_char_code = MU_RBEU32(data);
+						// endCharCode
+						f12->groups[g].end_char_code = MU_RBEU32(data+4);
+
+						// Logic for groups that have a previous group:
+						if (g > 0) {
+							// Verify incremental startCharCode ordering
+							if (f12->groups[g].start_char_code <= f12->groups[g-1].start_char_code) {
+								mutt_f12Deload(f12);
+								return MUTT_INVALID_CMAP12_START_CHAR_CODE;
+							}
+							// Verify [-1].end < [0].start
+							if (f12->groups[g-1].end_char_code >= f12->groups[g].start_char_code) {
+								mutt_f12Deload(f12);
+								return MUTT_INVALID_CMAP12_END_CHAR_CODE;
+							}
+						}
+
+						// startGlyphID
+						f12->groups[g].start_glyph_id = MU_RBEU32(data+8);
+						// Increment data to next group
+						data += 12;
+					}
+
+					return MUTT_SUCCESS; if (font) {}
+				}
+
+				// Deloads format 12
+				void mutt_f12Deload(muttCmap12* f12) {
+					if (f12->groups) {
+						mu_free(f12->groups);
+						// (Purposely not freeing f12)
+					}
+				}
+
+				// Codepoint -> glyph ID
+				MUDEF uint16_m mutt_cmap12_get_glyph(muttFont* font, muttCmap12* f12, uint32_m codepoint) {
+					// Loop through each group
+					for (uint32_m g = 0; g < f12->num_groups; ++g) {
+						// Pass if codepoint is not in range
+						if (codepoint < f12->groups[g].start_char_code || codepoint > f12->groups[g].end_char_code) {
+							continue;
+						}
+
+						// Get glyph ID via start glyph ID and distance from startCharCode
+						uint32_m glyph = f12->groups[g].start_glyph_id + (codepoint - f12->groups[g].start_char_code);
+						// Return if non-zero and in range
+						if (glyph != 0 && glyph < font->maxp->num_glyphs) {
+							return (uint16_m)glyph;
+						}
+					}
+
+					// No good glyph value could be found
+					return 0;
+				}
+
+				// Glyph ID -> codepoint
+				MUDEF uint32_m mutt_cmap12_get_codepoint(muttFont* font, muttCmap12* f12, uint16_m glyph) {
+					// Loop through each group
+					for (uint32_m g = 0; g < f12->num_groups; ++g) {
+						// Pass if glyph is not in range
+						if (
+							glyph < f12->groups[g].start_glyph_id || 
+							glyph > f12->groups[g].start_glyph_id + (f12->groups[g].end_char_code - f12->groups[g].start_char_code)
+						) {
+							continue;
+						}
+
+						// Return codepoint via startCharCode and distance from startGlyphID
+						return f12->groups[g].start_char_code + (f12->groups[g].start_glyph_id - glyph);
+					}
+
+					// Glyph value was never specified in a range
 					return 0; if (font) {}
 				}
 
@@ -3264,9 +3657,42 @@ mutt is developed primarily off of these sources of documentation:
 							}
 							return res;
 						} break;
+
+						// Format 4
+						case 4: {
+							// Allocate
+							pformat->f4 = (muttCmap4*)mu_malloc(sizeof(muttCmap4));
+							if (!pformat->f4) {
+								return MUTT_FAILED_MALLOC;
+							}
+							// Load
+							muttResult res = mutt_f4Load(font, pformat->f4, data, datalen);
+							if (mutt_result_is_fatal(res)) {
+								mu_free(pformat->f4);
+								pformat->f4 = 0;
+							}
+							return res;
+						} break;
+
+						// Format 12
+						case 12: {
+							// Allocate
+							pformat->f12 = (muttCmap12*)mu_malloc(sizeof(muttCmap12));
+							if (!pformat->f12) {
+								return MUTT_FAILED_MALLOC;
+							}
+							// Load
+							muttResult res = mutt_f12Load(font, pformat->f12, data, datalen);
+							if (mutt_result_is_fatal(res)) {
+								mu_free(pformat->f12);
+								pformat->f12 = 0;
+							}
+							return res;
+						} break;
 					}
 				}
 
+				// Deloads a given format
 				void mutt_DeloadCmapFormat(uint16_m format, muttCmapFormat* pformat) {
 					switch (format) {
 						default: break;
@@ -3276,6 +3702,52 @@ mutt is developed primarily off of these sources of documentation:
 							// Deallocate
 							mu_free(pformat->f0);
 						} break;
+
+						// Format 4
+						case 4: {
+							// Deload
+							mutt_f4Deload(pformat->f4);
+							// Deallocate
+							mu_free(pformat->f4);
+						} break;
+
+						// Format 12
+						case 12: {
+							// Deload
+							mutt_f12Deload(pformat->f12);
+							// Deallocate
+							mu_free(pformat->f12);
+						} break;
+					}
+				}
+
+				// Glyph -> codepoint, for a given format
+				MUDEF uint16_m mutt_cmap_encoding_get_glyph(muttFont* font, muttEncodingRecord* record, uint32_m codepoint) {
+					switch (record->format) {
+						// Unknown
+						default: return 0; break;
+
+						// Format 0
+						case 0: return mutt_cmap0_get_glyph(font, record->encoding.f0, codepoint); break;
+						// Format 4
+						case 4: return mutt_cmap4_get_glyph(font, record->encoding.f4, codepoint); break;
+						// Format 12
+						case 12: return mutt_cmap12_get_glyph(font, record->encoding.f12, codepoint); break;
+					}
+				}
+
+				// Codepoint -> glyph, for a given format
+				MUDEF uint32_m mutt_cmap_encoding_get_codepoint(muttFont* font, muttEncodingRecord* record, uint16_m glyph_id) {
+					switch (record->format) {
+						// Unknown
+						default: return 0; break;
+
+						// Format 0
+						case 0: return mutt_cmap0_get_codepoint(font, record->encoding.f0, glyph_id); break;
+						// Format 4
+						case 4: return mutt_cmap4_get_codepoint(font, record->encoding.f4, glyph_id); break;
+						// Format 12
+						case 12: return mutt_cmap12_get_codepoint(font, record->encoding.f12, glyph_id); break;
 					}
 				}
 
@@ -3366,6 +3838,7 @@ mutt is developed primarily off of these sources of documentation:
 					return MUTT_SUCCESS;
 				}
 
+				// Deloads the cmap table
 				void mutt_DeloadCmap(muttCmap* cmap) {
 					// cmap:
 					if (cmap) {
@@ -3374,7 +3847,7 @@ mutt is developed primarily off of these sources of documentation:
 							// Per encoding record:
 							for (uint16_m t = 0; t < cmap->num_tables; ++t) {
 								// Deload format if necessary
-								if (mutt_result_is_fatal(cmap->encoding_records[t].result)) {
+								if (!mutt_result_is_fatal(cmap->encoding_records[t].result)) {
 									mutt_DeloadCmapFormat(cmap->encoding_records[t].format, &cmap->encoding_records[t].encoding);
 								}
 							}
@@ -3382,6 +3855,38 @@ mutt is developed primarily off of these sources of documentation:
 						}
 						mu_free(cmap);
 					}
+				}
+
+				// Glyph -> codepoint, for all cmap formats
+				MUDEF uint16_m mutt_get_glyph(muttFont* font, uint32_m codepoint) {
+					// Loop through each encoding record
+					for (uint16_m t = 0; t < font->cmap->num_tables; ++t) {
+						// Try getting glyph ID for the encoding record
+						uint16_m glyph = mutt_cmap_encoding_get_glyph(font, &font->cmap->encoding_records[t], codepoint);
+						// Return if not 0
+						if (glyph != 0) {
+							return glyph;
+						}
+					}
+
+					// Non-zero glyph ID couldn't be found
+					return 0;
+				}
+
+				// Codepoint -> glyph, for all cmap formats
+				MUDEF uint32_m mutt_get_codepoint(muttFont* font, uint16_m glyph_id) {
+					// Loop through each encoding record
+					for (uint16_m t = 0; t < font->cmap->num_tables; ++t) {
+						// Try getting codepoint for the encoding record
+						uint32_m codepoint = mutt_cmap_encoding_get_codepoint(font, &font->cmap->encoding_records[t], glyph_id);
+						// Return if not 0
+						if (codepoint != 0) {
+							return codepoint;
+						}
+					}
+
+					// Non-zero codepoint couldn't be found
+					return 0;
 				}
 
 		/* Loading / Deloading */
@@ -4464,6 +4969,25 @@ mutt is developed primarily off of these sources of documentation:
 				return (s>c) ?(s) :(c);
 			}
 
+		/* Misc. */
+
+			// Performs idDelta logic
+			MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta) {
+				// Just return if idDelta is 0
+				if (delta == 0) {
+					return character_code;
+				}
+
+				// Do modulo 65536 on a larger type to add without overflow
+				int32_m big_id = (int32_m)(character_code + delta) % 65536;
+				// Prevent negative cases by adding 65536 for cases under 0
+				if (big_id < 0) {
+					big_id += 65536;
+				}
+				// Return that but now u16, which (I think) big_id is guaranteed to fit in
+				return (uint16_m)big_id;
+			}
+
 	/* Result */
 
 		MUDEF muBool mutt_result_is_fatal(muttResult result) {
@@ -4550,6 +5074,15 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_CMAP_ENCODING_RECORD_LENGTH: return "MUTT_INVALID_CMAP_ENCODING_RECORD_LENGTH"; break;
 				case MUTT_INVALID_CMAP_ENCODING_RECORD_FORMAT: return "MUTT_INVALID_CMAP_ENCODING_RECORD_FORMAT"; break;
 				case MUTT_INVALID_CMAP0_LENGTH: return "MUTT_INVALID_CMAP0_LENGTH"; break;
+				case MUTT_INVALID_CMAP4_LENGTH: return "MUTT_INVALID_CMAP4_LENGTH"; break;
+				case MUTT_INVALID_CMAP4_SEG_COUNT_X2: return "MUTT_INVALID_CMAP4_SEG_COUNT_X2"; break;
+				case MUTT_INVALID_CMAP4_END_CODE: return "MUTT_INVALID_CMAP4_END_CODE"; break;
+				case MUTT_INVALID_CMAP4_LAST_END_CODE: return "MUTT_INVALID_CMAP4_LAST_END_CODE"; break;
+				case MUTT_INVALID_CMAP4_START_CODE: return "MUTT_INVALID_CMAP4_START_CODE"; break;
+				case MUTT_INVALID_CMAP4_ID_RANGE_OFFSET: return "MUTT_INVALID_CMAP4_ID_RANGE_OFFSET"; break;
+				case MUTT_INVALID_CMAP12_LENGTH: return "MUTT_INVALID_CMAP12_LENGTH"; break;
+				case MUTT_INVALID_CMAP12_START_CHAR_CODE: return "MUTT_INVALID_CMAP12_START_CHAR_CODE"; break;
+				case MUTT_INVALID_CMAP12_END_CHAR_CODE: return "MUTT_INVALID_CMAP12_END_CHAR_CODE"; break;
 				case MUTT_CMAP_REQUIRES_MAXP: return "MUTT_CMAP_REQUIRES_MAXP"; break;
 			}
 		}
