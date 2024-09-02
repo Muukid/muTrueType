@@ -2153,6 +2153,155 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE Some cmap formats use fairly weird logic when using "idDelta" values. The function `mutt_id_delta` figures this logic out automatically, defined below: @NLNT
 				MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 
+	// @DOCLINE # Raster API
+
+		// @DOCLINE The raster API has the ability to [rasterize](#rasterize-glyph) [TrueType-like glyphs](#raster-glyph) onto [a bitmap](#raster-bitmap).
+
+		// @DOCLINE ## Raster glyph
+
+			// @DOCLINE A "raster glyph" (often shortened to "rglyph", respective struct [`muttRGlyph`](#rglyph-struct)) is a glyph described for rasterization in the raster API, being similar to how a simple glyph is defined in the low-level API, and is heavily based on how glyphs are specified in TrueType.
+
+			// @DOCLINE The most common usage of rglyphs is for rasterizing given glyphs in a TrueType font. This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do automatically via rendering a glyph purely based on its glyph ID.
+
+			// @DOCLINE Rglyphs don't necessarily need to come from a simple or composite glyph, however. The user can pass in their own rglyphs, and as long as they use the struct correctly, the raster API will rasterize it correctly.
+
+			// @DOCLINE ### Rglyph struct
+
+				typedef uint8_m muttRFlags;
+				typedef struct muttRPoint muttRPoint;
+				typedef struct muttRGlyph muttRGlyph;
+
+				// @DOCLINE An rglyph is represented via the struct `muttRGlyph`, which has the following members:
+
+				struct muttRGlyph {
+					// @DOCLINE * `@NLFT num_points` - the number of points in the `points` array. This value must be at least 1.
+					uint16_m num_points;
+					// @DOCLINE * `@NLFT* points` - each point for the glyph.
+					muttRPoint* points;
+					// @DOCLINE * `@NLFT num_contours` - the number of contours in the glyph.
+					uint16_m num_contours;
+					// @DOCLINE * `@NLFT* contour_ends` - the last point index of each contour, in increasing order. `contour_ends[num_contours-1]+1` must equal `num_points`.
+					uint16_m* contour_ends;
+					// @DOCLINE * `@NLFT x_max` - the greatest x-coordinate value of any point within the glyph.
+					float x_max;
+					// @DOCLINE * `@NLFT y_max` - the greatest y-coordinate value of any point within the glyph.
+					float y_max;
+				};
+
+				// @DOCLINE A point in an rglyph is represented with the struct `muttRPoint`, which has the following members:
+				struct muttRPoint {
+					// @DOCLINE * `@NLFT x` - the x-coordinate of the point, in [pixel units](#raster-bitmap).
+					float x;
+					// @DOCLINE * `@NLFT y` - the y-coordinate of the point, in [pixel units](#raster-bitmap).
+					float y;
+					// @DOCLINE * `@NLFT flags` - the [flags](#rglyph-flags) of the point.
+					muttRFlags flags;
+				};
+
+				// @DOCLINE No coordinate values in any point within an rglyph should be negative, or exceed the values indicated by `x_max` and `y_max`.
+
+				// @DOCLINE The ordering of points should follow the non-zero winding number rule that TrueType glyphs also follow: "[Points that have a non-zero winding number are inside the glyph. All other points are outside the glyph.](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM02/Chap2.html#distinguishing)"
+
+				// @DOCLINE All contours must start with an on-curve point.
+
+				// @DOCLINE Some rendering methods have the possibility of "[bleeding](#raster-bleeding)" over pixels that mathematically are completely outside of the glyph, but are one pixel away from another pixel who is at least partially inside of the glyph. For this reason, it is recommended to have each points' coordinates offset by at least 1 pixel, so that no pixel coordinate is exactly at 0. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
+
+			// @DOCLINE #### Rglyph flags
+
+				// @DOCLINE The type `muttRFlags` (typedef for `uint8_m`) represents the flags of a given point in an rglyph. It has the following defined values for bitmasking:
+
+				// @DOCLINE * [0x00] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
+				#define MUTTR_ON_CURVE 0x00
+
+				// @DOCLINE No other bits other than the ones defined above are read for any point in an rglyph.
+
+		// @DOCLINE ## Raster bitmap
+
+			typedef struct muttRBitmap muttRBitmap;
+			typedef uint8_m muttRIOColor;
+			typedef uint16_m muttRChannels;
+
+			// @DOCLINE Rasterization of an rglyph is performed on a bitmap. The information about the bitmap is provided by the struct `muttRBitmap`, which has the following members:
+
+			struct muttRBitmap {
+				// @DOCLINE * `@NLFT width` - the width of the bitmap, in pixels.
+				uint32_m width;
+				// @DOCLINE * `@NLFT height` - the height of the bitmap, in pixels.
+				uint32_m height;
+				// @DOCLINE * `@NLFT channels` - the [channels](#raster-channels) of the bitmap.
+				muttRChannels channels;
+				// @DOCLINE * `@NLFT stride` - the amount of bytes to move by for each horizontal row of pixels.
+				uint32_m stride;
+				// @DOCLINE * `@NLFT* pixels` - the pixel data for the bitmap to be filled in, stored from left to right, top to bottom. All values within the pixel data are expected to be pre-initialized to the appropriate out-of-glyph color indicated by `io_color`.
+				uint8_m* pixels;
+				// @DOCLINE * `@NLFT io_color` - the [in/out color](#raster-in-out-color) of the bitmap.
+				muttRIOColor io_color;
+			};
+
+			// @DOCLINE ### Raster channels
+
+				// @DOCLINE The type `muttRChannels` (typedef for `uint16_m`) represents the channels of a bitmap. It has the following defined values:
+
+				// @DOCLINE * [0x0000] `MUTTR_R` - one color channel per pixel, corresponding to one value representing how far a pixel is *in* or *out* of the glyph.
+				#define MUTTR_R 0x0000
+				// @DOCLINE * [0x0002] `MUTTR_RGB` - three color channels: red, green, and blue in that order per pixel.
+				#define MUTTR_RGB 0x0002
+				// @DOCLINE * [0x0003] `MUTTR_RGBA` - four color channels: red, green, blue, and alpha in that order per pixel.
+				#define MUTTR_RGBA 0x0003
+
+				// @DOCLINE How non-singular channel values represent how far a pixel is *in* or *out* of the glyph is dependent on the [raster method](#raster-method).
+
+			// @DOCLINE ### Raster in out color
+
+				// @DOCLINE The type `muttRIOColor` (typedef for `uint8_m`) represents what values indicate whether or not a pixel is *inside* of the glyph or *outside* of the glyph (and the corresponding possible mixing between the two values). It has the following defined values:
+
+				// @DOCLINE * [0x00] `MUTTR_BW` - a smaller value indicates being more outside the glyph, and a larger value indicates being more inside the glyph.
+				#define MUTTR_BW 0x00
+				// @DOCLINE * [0x01] `MUTTR_WB` - a larger value indicates being more outside the glyph, and a smaller value indicates being more inside the glyph.
+				#define MUTTR_WB 0x01
+
+				// @DOCLINE The rules of these values applies to all channels, including alpha.
+
+		// @DOCLINE ## Rasterize glyph
+
+			typedef uint16_m muttRMethod;
+
+			// @DOCLINE Rasterizing a glyph is performed with the function `mutt_raster_glyph`, defined below: @NLNT
+			MUDEF muttResult mutt_raster_glyph(muttRGlyph* glyph, muttRBitmap* bitmap, muttRMethod method);
+
+			// @DOCLINE ### Raster method
+
+				// @DOCLINE The type `muttRMethod` (typedef for `uint16_m`) represents what rasterization method to use when rasterizing a glyph. It has the following defined values:
+
+				// @DOCLINE * [0x0000] `MUTTR_FULL_PIXEL_BI_LEVEL` - [full-pixel](#full-pixel) [bi-level](#bi-level) rasterization.
+				#define MUTTR_FULL_PIXEL_BI_LEVEL 0x0000
+				// @DOCLINE * [0x0001] `MUTTR_FULL_PIXEL_AA2X2` - [full-pixel](#full-pixel) two-by-two [anti-aliased](#anti-aliasing) rasterization.
+				#define MUTTR_FULL_PIXEL_AA2X2 0x0001
+
+				// @DOCLINE Most of the terms used to describe these rendering methods are taken from terms used in [The Raster Tragedy](http://rastertragedy.com).
+
+			// @DOCLINE ### Full-pixel
+
+				// @DOCLINE The term "full-pixel" means that each pixel is used as one value indicating how much a pixel is *inside* or *outside* of the glyph. Each pixel is treated pixel-coordinate-wise as being directly in the center of a pixel in the pixel coordinate grid; for example, the coordinates of the top-leftest pixel in a bitmap is (0.5, 0.5) when internally calculating how much a pixel is inside or outside of the glyph.
+
+			// @DOCLINE ### Bi-level
+
+				// @DOCLINE The term "bi-level" means that each pixel is rather fully inside or outside of the glyph, with no possibility of intermediate values.
+
+			// @DOCLINE ### Anti-aliasing
+
+				// @DOCLINE Anti-aliasing is used in rasterization to smooth jagged edges, taking multiple samples per pixel, calculating whether or not each one is inside or outside of the glyph, and averaging all of those values for the calculated value of a given pixel. This allows for pixels to exist that are *partially* inside or outside of the glyph, and whose pixel values indicate as such, which is the opposite of [bi-level rasterization](#bi-level).
+
+				// @DOCLINE The amount of samples per pixel in the x- and y-direction is controlled by its dimensions, splitting up the pixel into multiple sub-pixels to then be individually calculated. For example, two-by-two anti-aliasing implies taking two samples on the x- and y-axis per pixel, so the top-leftest pixel (coordinates (0.5, 0.5)) would be split up into coordinates (0.25, 0.25), (0.75, 0.25), (0.25, 0.75), and (0.75, 0.75), in no particular order, and individually calculated & averaged for the final pixel value.
+
+			// @DOCLINE ### Raster bleeding
+
+				// @DOCLINE Some rasterization methods have a possibility of setting pixels as (at least partially) inside of the glyph that aren't mathematically inside of the glyph to any degree, but are one pixel away from another pixel that *is* (at least partially) inside of the glyph. This effect is called "bleeding", and can cause pixels to be inside of the glyph that are outside of the range of the glyph's coordinates.
+
+				// @DOCLINE In terms of rglyphs, this is prevented by offsetting the coordinates of each point by 1 pixel, ensuring that there is at least a single pixel to the left and top and of any pixel that is mathematically inside of the glyph, and thus can catch any theoretical bleeding. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
+
+				// @DOCLINE In terms of rasterization, this is prevented by increasing the width and height of the bitmap to be 1 pixel greater than the maximum x- and y-coordinates within the glyph (`glyph->x_max` and `glyph->y_max`). The conversion from the decimal values of `x_max` and `y_max` to an integer width and height should be performed via a ceiling of the final result.
+
 	// @DOCLINE # Result
 
 		// @DOCLINE The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -2368,6 +2517,12 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `MUTT_CMAP_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and cmap requires maxp to be loaded.
 			#define MUTT_CMAP_REQUIRES_MAXP 639
 
+		// @DOCLINE ### Rasterization result values
+		// 640 -> 703 //
+
+			// @DOCLINE * `MUTT_UNKNOWN_RASTER_METHOD` - the given raster method value was unrecognized.
+			#define MUTT_UNKNOWN_RASTER_METHOD 640
+
 		// @DOCLINE ## Check if result is fatal
 
 			// @DOCLINE The function `mutt_result_is_fatal` returns whether or not a given `muttResult` value is fatal, defined below: @NLNT
@@ -2388,14 +2543,14 @@ mutt is developed primarily off of these sources of documentation:
 
 			#endif
 
-
 	// @DOCLINE # C standard library dependencies
 
 		// @DOCLINE mutt has several C standard library dependencies, all of which are overridable by defining them before the inclusion of its header. The following is a list of those dependencies.
 
 		#if !defined(mu_malloc) || \
 			!defined(mu_free) || \
-			!defined(mu_realloc)
+			!defined(mu_realloc) || \
+			!defined(mu_qsort)
 
 			// @DOCLINE ## `stdlib.h` dependencies
 			#include <stdlib.h>
@@ -2413,6 +2568,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_realloc` - equivalent to `realloc`.
 			#ifndef mu_realloc
 				#define mu_realloc realloc
+			#endif
+
+			// @DOCLINE * `mu_qsort` equivalent to `qsort`.
+			#ifndef mu_qsort
+				#define mu_qsort qsort
 			#endif
 
 		#endif /* stdlib.h */
@@ -2434,6 +2594,18 @@ mutt is developed primarily off of these sources of documentation:
 			#endif
 
 		#endif /* string.h */
+
+		#if !defined(mu_fabsf)
+
+			// @DOCLINE ## `math.h` dependencies
+			#include <math.h>
+
+			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
+			#ifndef mu_fabsf
+				#define mu_fabsf fabsf
+			#endif
+
+		#endif /* math.h */
 
 	MU_CPP_EXTERN_END
 #endif /* MUTT_H */
@@ -4988,6 +5160,493 @@ mutt is developed primarily off of these sources of documentation:
 				return (uint16_m)big_id;
 			}
 
+	/* Raster API */
+
+		/* Math */
+
+			// Float epsilon macro used for countering floating point imprecision in line calculations
+			// This value is unabashedly stolen from stb_truetype, but it works real well
+			#define MUTTR_LINE_EPSILON32 (1.f/1024.f)
+
+			// Double epsilon macro used for same purpose as MUTTR_LINE_EPSILON32; not used as of right now
+			// This value should be tested and vetted more thoroughly if it's going to be used
+			#define MUTTR_LINE_EPSILON64 0.00000001
+
+			// Calculates IF a ray intersects a line
+			static inline muBool muttR_LineRay(float ry, float y0, float y1) {
+				// Any of these conditions must be true for intersection:
+				return
+					// Ray y is between y0 and y1 with forgiving epsilons:
+					(ry >= y0-MUTTR_LINE_EPSILON32 && ry <= y1+MUTTR_LINE_EPSILON32) ||
+					(ry >= y1-MUTTR_LINE_EPSILON32 && ry <= y0+MUTTR_LINE_EPSILON32)
+					// Line is horizontal:
+					|| (y1-y0 == 0.f)
+				;
+			}
+
+			// Calculates the x-value intersection of a ray and a line
+			static inline float muttR_LineRayHit(float ry, float x0, float y0, float x1, float y1) {
+				// (https://math.stackexchange.com/a/2297532)
+				return x0 + (
+					((ry-y0) * (x1-x0))
+					/
+					(y1-y0)
+				);
+			}
+
+			// Calculates the x- and y-value of a point on a Bezier curve (on, off, on) given t.
+			static inline void muttR_Bezier(float t,
+				float x0, float y0, float x1, float y1, float x2, float y2,
+				float* x, float* y
+			) {
+				// I think this can be optimized, but idk...
+				*x = ((1.f-t)*(1.f-t)*x0) + (2.f*(1.f-t)*t*x1) + (t*t*x2);
+				*y = ((1.f-t)*(1.f-t)*y0) + (2.f*(1.f-t)*t*y1) + (t*t*y2);
+			}
+
+		/* Raster shape setup */
+
+			/* Definitions */
+
+				// A raster shape is made up of lines, a line is defined by two points
+				struct muttR_Line {
+					// 0 is bottom, 1 is top (y0 <= y1)
+					float x0;
+					float y0;
+					float x1;
+					float y1;
+					// vec = y1-y0 (for direction)
+					float vec;
+				};
+				typedef struct muttR_Line muttR_Line;
+
+				// Used to sort the lines in DECREASING order of top point
+				int muttR_CompareLines(const void* p, const void* q) {
+					// Get lines
+					muttR_Line* l0 = (muttR_Line*)p, * l1 = (muttR_Line*)q;
+					// Return value to indicate smallest y1 value
+					if (l0->y1 < l1->y1) {
+						return 1;
+					} else if (l0->y1 > l1->y1) {
+						return -1;
+					}
+					return 0;
+				}
+
+				// Calculates the winding for a given line
+				static inline int8_m muttR_LineWinding(float ry, muttR_Line* line) {
+					// Don't consider winding if we're directly intersecting the high point of line
+					if (mu_fabsf(ry - line->y0) <= MUTTR_LINE_EPSILON32) {
+						return 0;
+					}
+
+					// Return winding order based on vector; down is +1, up is -1, neither is 0
+					if (line->vec < 0.f) {
+						return 1;
+					} else if (line->vec > 0.f) {
+						return -1;
+					}
+					return 0;
+				}
+
+				// A raster shape is just a collection of lines representing a glyph
+				struct muttR_Shape {
+					uint32_m num_lines;
+					muttR_Line* lines;
+					float x_max;
+					float y_max;
+				};
+				typedef struct muttR_Shape muttR_Shape;
+
+				// Sorts the lines of a shape in DECREASING order of top point
+				void muttR_ShapeSort(muttR_Shape* shape) {
+					// Just call qsort for the job
+					mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Shape), muttR_CompareLines);
+				}
+
+			/* Conversions */
+
+				// Converts two points to a line
+				void muttR_GlyphLine(muttR_Line* line, float x0, float y0, float x1, float y1) {
+					// Determine lowest y0 value
+					if (y0 < y1) {
+						line->x0 = x0;
+						line->y0 = y0;
+						line->x1 = x1;
+						line->y1 = y1;
+					}
+					else {
+						line->x0 = x1;
+						line->y0 = y1;
+						line->x1 = x0;
+						line->y1 = y0;
+					}
+					// Calculate vec
+					line->vec = y1-y0;
+				}
+
+				// Converts three-point Bezier (on, off, on) to lines
+				// - Constants:
+				#define MUTTR_LINES_PER_BEZIER 25
+				static const float MUTTR_LINES_PER_BEZIER_F = ((float)MUTTR_LINES_PER_BEZIER);
+				static const float MUTTR_LINES_PER_BEZIER_INV = 1.f / ((float)MUTTR_LINES_PER_BEZIER);
+				// - Function:
+				static inline void muttR_GlyphCurve(muttR_Line* line, float x0, float y0, float x1, float y1, float x2, float y2) {
+					// Loop through each line per Bezier
+					for (uint32_m l = 0; l < MUTTR_LINES_PER_BEZIER; ++l) {
+						// Calculate Bezier for the first point
+						float t = ((float)l) / MUTTR_LINES_PER_BEZIER_F;
+						float bx0, by0;
+						muttR_Bezier(t, x0, y0, x1, y1, x2, y2, &bx0, &by0);
+						
+						// + Second point
+						float bx1, by1;
+						muttR_Bezier(t+MUTTR_LINES_PER_BEZIER_INV, x0, y0, x1, y1, x2, y2, &bx1, &by1);
+
+						// Make line based on this strip of the Bezier
+						muttR_GlyphLine(line++, bx0, by0, bx1, by1);
+					}
+				}
+
+				// Calculates the amount of lines needed to represent a glyph
+				uint32_m muttR_GlyphLineCount(muttRGlyph* glyph) {
+					// Keep count of lines:
+					uint32_m count = 0;
+					// Keep count of contours:
+					uint16_m c = 0;
+
+					// Loop through each point
+					for (uint16_m p = 0; p < glyph->num_points; ++p) {
+						// Add 1 line if on-curve, lines per bezier if off-curve
+						count += (glyph->points[p].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
+						// Consider the first point of each contour twice for loop-back line/curve
+						if (glyph->contour_ends[c] == p) {
+							// First point is 0 if contour is 0; contour_ends[c-1] if otherwise
+							uint16_m cp = (c == 0) ?(0) :(glyph->contour_ends[c-1]);
+							count += (glyph->points[cp].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
+							// Increment contour
+							++c;
+						}
+					}
+
+					// Return final count
+					return count;
+				}
+
+				// Gets the next point of a glyph based on the contour ends
+				static inline muttRPoint* muttR_GlyphNextPoint(muttRGlyph* glyph, uint32_m p, uint32_m i, uint32_m c) {
+					// The next point is p incremented
+					muttRPoint* pn = &glyph->points[p+i];
+					// ...unless this is the last point of the contour:
+					if (p+i > glyph->contour_ends[c]) {
+						// ..in which case the next point wraps back around to the first
+						// point of the contour
+						pn -= glyph->contour_ends[c]+1;
+						if (c > 0) {
+							pn += glyph->contour_ends[c-1]+1;
+						}
+					}
+					return pn;
+				}
+
+				// Converts an rglyph to a shape
+				muttResult muttR_ShapeCreate(muttRGlyph* glyph, muttR_Shape* shape) {
+					// Calculate number of lines needed
+					shape->num_lines = muttR_GlyphLineCount(glyph);
+					// Allocate lines
+					shape->lines = (muttR_Line*)mu_malloc(sizeof(muttR_Line)*shape->num_lines);
+					if (!shape->lines) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Loop through each point
+					uint32_m c = 0; // (contour tracker)
+					muttR_Line* l = shape->lines; // (shape tracker)
+					for (uint32_m p = 0; p < glyph->num_points;) {
+						// Increment contour ID if necessary
+						if (p > glyph->contour_ends[c]) {
+							++c;
+						}
+
+						// Get current point
+						muttRPoint* p0 = &glyph->points[p];
+
+						// If current point is ON curve (ON...):
+						if (p0->flags & MUTTR_ON_CURVE) {
+							// Get next point
+							muttRPoint* p1 = muttR_GlyphNextPoint(glyph, p, 1, c);
+							// If next point is ON curve (ON, ON):
+							if (p1->flags & MUTTR_ON_CURVE) {
+								// Form line between two points and move on by one
+								muttR_GlyphLine(l++, p0->x, p0->y, p1->x, p1->y);
+								++p;
+								continue;
+							}
+
+							// If we're here, the next point is OFF curve (ON, OFF...)
+							// Get next-next point
+							muttRPoint* p2 = muttR_GlyphNextPoint(glyph, p, 2, c);
+							// If next-next point is ON the curve (ON, OFF, ON):
+							if (p2->flags & MUTTR_ON_CURVE) {
+								// Form basic Bezier and move on
+								muttR_GlyphCurve(l, p0->x, p0->y, p1->x, p1->y, p2->x, p2->y);
+								l += MUTTR_LINES_PER_BEZIER;
+								p += 2;
+								continue;
+							}
+
+							// If we're here, the next-next point is OFF the curve: (ON, OFF, OFF):
+							else {
+								// Bezier, with last point needing to be mid-pointed
+								muttR_GlyphCurve(l, p0->x, p0->y, p1->x, p1->y,
+									(p1->x + p2->x) / 2.f, (p1->y + p2->y) / 2.f
+								);
+								l += MUTTR_LINES_PER_BEZIER;
+								p += 2;
+								continue;
+							}
+						}
+
+						// If we're here, the current point is OFF curve (OFF...)
+						// From that, we know that the previous point has to also
+						// be OFF curve (OFF, OFF[0]...) due to the logic of this
+						// loop.
+						// Get previous point:
+						muttRPoint* pn1 = &glyph->points[p-1];
+						// Get next point:
+						muttRPoint* p1 = muttR_GlyphNextPoint(glyph, p, 1, c);
+
+						// x0 and y0 must be midpointed between pn1 and p0 since
+						// both are OFF curve:
+						float x0 = (pn1->x + p0->x) / 2.f;
+						float y0 = (pn1->y + p0->y) / 2.f;
+						// x1 and y1 are just p0 since it's OFF curve:
+						float x1 = p0->x;
+						float y1 = p0->y;
+						// x2 and y2 are just p1:
+						float x2 = p1->x;
+						float y2 = p1->y;
+						// ...unless it's OFF curve, in which case it must be
+						// midpointed:
+						if (!(p1->flags & MUTTR_ON_CURVE)) {
+							x2 = (x1 + x2) / 2.f;
+							y2 = (y1 + y2) / 2.f;
+						}
+
+						// Bezier and move on:
+						muttR_GlyphCurve(l, x0, y0, x1, y1, x2, y2);
+						l += MUTTR_LINES_PER_BEZIER;
+						++p;
+						//continue;
+					}
+
+					// Sort all lines
+					muttR_ShapeSort(shape);
+					// Set max x/y
+					shape->x_max = glyph->x_max;
+					shape->y_max = glyph->y_max;
+
+					return MUTT_SUCCESS;
+				}
+
+				// Frees all memory used by a shape
+				void muttR_ShapeDestroy(muttR_Shape* shape) {
+					if (shape->lines) {
+						mu_free(shape->lines);
+					}
+				}
+
+		/* Intersection/Hit logic */
+
+			// A hit:
+			struct muttR_Hit {
+				// The x-value of the intersection
+				float x;
+				// The line which it intersected with
+				uint32_m l;
+			};
+			typedef struct muttR_Hit muttR_Hit;
+
+			// Used to sort intersections in order of increasing x-value
+			int muttR_HitCompare(const void* p, const void* q) {
+				// Get hits
+				muttR_Hit* h0 = (muttR_Hit*)p, * h1 = (muttR_Hit*)q;
+				// Indicate which hit's x-value is greater
+				if (h0->x < h1->x) {
+					return -1;
+				} else if (h0->x > h1->x) {
+					return 1;
+				}
+				return 0;
+			}
+
+			// Updates the active line list based on the ray
+			static inline void muttR_ActiveLines(muttR_Line* lines, uint32_m num_lines, uint32_m* first, uint32_m* len, float ry) {
+				// Increase length to include possible new in-rage lines
+				while (*first + *len < num_lines) {
+					if (ry <= lines[*first + *len].y1 + MUTTR_LINE_EPSILON32) {
+						++*len;
+					} else {
+						break;
+					}
+				}
+
+				// Move up the first active line until we're in range of the next nearest line
+				while (*len != 0) {
+					if (ry <= lines[*first].y0 + MUTTR_LINE_EPSILON32) {
+						++*first;
+						--*len;
+					} else {
+						break;
+					}
+				}
+			}
+
+			// Calculates all hits for a given ray and its active lines
+			// Returns amount of hits, and gives winding as well
+			static inline uint32_m muttR_Hits(muttR_Line* lines, uint32_m num_lines, float ry, muttR_Hit* hits, int32_m* winding) {
+				uint32_m num_hits = 0;
+
+				// Loop through each line
+				for (uint32_m l = 0; l < num_lines; ++l) {
+					// If ray intersects with line:
+					if (muttR_LineRay(ry, lines[l].y0, lines[l].y1)) {
+						// Add intersection values
+						float x = muttR_LineRayHit(ry, lines[l].x0, lines[l].y0, lines[l].x1, lines[l].y1);
+						// Add if intersection is valid
+						if (x >= 0.f) {
+							hits[num_hits  ].x = x;
+							hits[num_hits++].l = l;
+						}
+					}
+				}
+
+				// Sort hits
+				mu_qsort(hits, num_hits, sizeof(muttR_Hit), muttR_HitCompare);
+
+				// Calculate total winding order
+				*winding = 0;
+				for (uint32_m hitw = 0; hitw < num_hits; ++hitw) {
+					winding += muttR_LineWinding(ry, &lines[hits[hitw].l]);
+				}
+
+				return num_hits;
+			}
+
+		/* Rasterization per method */
+
+			// MUTTR_FULL_PIXEL_BI_LEVEL
+			muttResult muttR_FullPixelBiLevel(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, uint8_m in, uint8_m out) {
+				// Allocate hit tracker
+				muttR_Hit* hits = (muttR_Hit*)mu_malloc(shape->num_lines*sizeof(muttR_Hit));
+				if (!hits) {
+					return MUTT_FAILED_MALLOC;
+				}
+
+				// Initialize active lines
+				uint32_m first_line = 0;
+				uint32_m line_len = 0;
+
+				// Loop through each horizontal strip
+				for (uint32_m h = 0; h < bitmap->height; ++h) {
+					// Calculate horizontal pixel offset
+					uint64_m hpix_offset = bitmap->stride*h;
+
+					// Just fill all x-values with out if the height is now outside of the glyph range
+					// (+ double-pixel extra for bleeding and ceiling)
+					if (h > shape->y_max+2) {
+						mu_memset(&bitmap->pixels[hpix_offset], out, bitmap->width*adv);
+						continue;
+					}
+
+					// Calculate y-value of ray (middle of pixel)
+					float ray_y = ((float)h) + .5f;
+
+					// Update active line list
+					muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
+					// Calculate all hits with active lines (+ winding)
+					int32_m winding;
+					uint32_m num_hits = muttR_Hits(shape->lines, shape->num_lines, ray_y, hits, &winding);
+
+					// Loop through each x-value
+					uint32_m ih = 0; // (Upcoming hit)
+					for (uint32_m w = 0; w < bitmap->width; ++w) {
+						// Just fill all remaining x-values with out if width is now outside of glyph range
+						// (+ double-pixel extra for bleeding and ceiling)
+						if (w > shape->x_max+2) {
+							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, (bitmap->width-w)*adv);
+							continue;
+						}
+
+						// Calculate x-coordinate (middle of pixel)
+						float ray_x = ((float)w) + .5f;
+
+						// Skip over every hit we've passed, and remove their windings
+						// "ray_x > ..." ensures rule 2 of scan converting:
+						// "If a contour falls exactly on a pixel’s center, that pixel is turned on."
+						while (ih < num_hits && ray_x > hits[ih].x) {
+							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[ih++].l]);
+						}
+
+						// Set pixel to whether or not we're in glyph
+						// Winding == 0 means in the glyph, and vice versa
+						mu_memset(
+							&bitmap->pixels[hpix_offset+(w*adv)], 
+							(winding==0) ?(out) :(in),
+							adv
+						);
+					}
+				}
+
+				mu_free(hits);
+				return MUTT_SUCCESS;
+			}
+
+		/* Rasterization */
+
+			// Converts channels to advance
+			uint8_m muttR_ChannelsAdv(muttRChannels channels) {
+				switch (channels) {
+					default: return 1; break;
+					case MUTTR_R: return 1; break;
+					case MUTTR_RGB: return 3; break;
+					case MUTTR_RGBA: return 4; break;
+				}
+			}
+
+			// Rasterizes a glyph
+			MUDEF muttResult mutt_raster_glyph(muttRGlyph* glyph, muttRBitmap* bitmap, muttRMethod method) {
+				// Convert rglyph to shape
+				muttR_Shape shape;
+				muttResult res = muttR_ShapeCreate(glyph, &shape);
+				if (mutt_result_is_fatal(res)) {
+					return res;
+				}
+
+				// Per-pixel advance based on channels:
+				uint8_m adv = muttR_ChannelsAdv(bitmap->channels);
+				// In/Out value based on io_color:
+				uint8_m in  = (bitmap->io_color == MUTTR_BW) ?(255) :(0);
+				uint8_m out = ~in;
+
+				// Render shape based on method
+				switch (method) {
+					// Unrecognized method:
+					default: {
+						res = MUTT_UNKNOWN_RASTER_METHOD;
+					} break;
+
+					// Full-pixel bi-level
+					case MUTTR_FULL_PIXEL_BI_LEVEL: {
+						res = muttR_FullPixelBiLevel(&shape, bitmap, adv, in, out);
+					} break;
+				}
+
+				// Free resources and return latest non-fatal result
+				muttR_ShapeDestroy(&shape);
+				return res;
+			}
+
 	/* Result */
 
 		MUDEF muBool mutt_result_is_fatal(muttResult result) {
@@ -5084,6 +5743,7 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_CMAP12_START_CHAR_CODE: return "MUTT_INVALID_CMAP12_START_CHAR_CODE"; break;
 				case MUTT_INVALID_CMAP12_END_CHAR_CODE: return "MUTT_INVALID_CMAP12_END_CHAR_CODE"; break;
 				case MUTT_CMAP_REQUIRES_MAXP: return "MUTT_CMAP_REQUIRES_MAXP"; break;
+				case MUTT_UNKNOWN_RASTER_METHOD: return "MUTT_UNKNOWN_RASTER_METHOD"; break;
 			}
 		}
 

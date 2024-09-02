@@ -1365,6 +1365,137 @@ MUDEF uint16_m mutt_id_delta(uint16_m character_code, int16_m delta);
 ```
 
 
+# Raster API
+
+The raster API has the ability to [rasterize](#rasterize-glyph) [TrueType-like glyphs](#raster-glyph) onto [a bitmap](#raster-bitmap).
+
+## Raster glyph
+
+A "raster glyph" (often shortened to "rglyph", respective struct [`muttRGlyph`](#rglyph-struct)) is a glyph described for rasterization in the raster API, being similar to how a simple glyph is defined in the low-level API, and is heavily based on how glyphs are specified in TrueType.
+
+The most common usage of rglyphs is for rasterizing given glyphs in a TrueType font. This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do automatically via rendering a glyph purely based on its glyph ID.
+
+Rglyphs don't necessarily need to come from a simple or composite glyph, however. The user can pass in their own rglyphs, and as long as they use the struct correctly, the raster API will rasterize it correctly.
+
+### Rglyph struct
+
+An rglyph is represented via the struct `muttRGlyph`, which has the following members:
+
+* `uint16_m num_points` - the number of points in the `points` array. This value must be at least 1.
+
+* `muttRPoint* points` - each point for the glyph.
+
+* `uint16_m num_contours` - the number of contours in the glyph.
+
+* `uint16_m* contour_ends` - the last point index of each contour, in increasing order. `contour_ends[num_contours-1]+1` must equal `num_points`.
+
+* `float x_max` - the greatest x-coordinate value of any point within the glyph.
+
+* `float y_max` - the greatest y-coordinate value of any point within the glyph.
+
+A point in an rglyph is represented with the struct `muttRPoint`, which has the following members:
+
+* `float x` - the x-coordinate of the point, in [pixel units](#raster-bitmap).
+
+* `float y` - the y-coordinate of the point, in [pixel units](#raster-bitmap).
+
+* `muttRFlags flags` - the [flags](#rglyph-flags) of the point.
+
+No coordinate values in any point within an rglyph should be negative, or exceed the values indicated by `x_max` and `y_max`.
+
+The ordering of points should follow the non-zero winding number rule that TrueType glyphs also follow: "[Points that have a non-zero winding number are inside the glyph. All other points are outside the glyph.](https://developer.apple.com/fonts/TrueType-Reference-Manual/RM02/Chap2.html#distinguishing)"
+
+All contours must start with an on-curve point.
+
+Some rendering methods have the possibility of "[bleeding](#raster-bleeding)" over pixels that mathematically are completely outside of the glyph, but are one pixel away from another pixel who is at least partially inside of the glyph. For this reason, it is recommended to have each points' coordinates offset by at least 1 pixel, so that no pixel coordinate is exactly at 0. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
+
+#### Rglyph flags
+
+The type `muttRFlags` (typedef for `uint8_m`) represents the flags of a given point in an rglyph. It has the following defined values for bitmasking:
+
+* [0x00] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
+
+No other bits other than the ones defined above are read for any point in an rglyph.
+
+## Raster bitmap
+
+Rasterization of an rglyph is performed on a bitmap. The information about the bitmap is provided by the struct `muttRBitmap`, which has the following members:
+
+* `uint32_m width` - the width of the bitmap, in pixels.
+
+* `uint32_m height` - the height of the bitmap, in pixels.
+
+* `muttRChannels channels` - the [channels](#raster-channels) of the bitmap.
+
+* `uint32_m stride` - the amount of bytes to move by for each horizontal row of pixels.
+
+* `uint8_m* pixels` - the pixel data for the bitmap to be filled in, stored from left to right, top to bottom. All values within the pixel data are expected to be pre-initialized to the appropriate out-of-glyph color indicated by `io_color`.
+
+* `muttRIOColor io_color` - the [in/out color](#raster-in-out-color) of the bitmap.
+
+### Raster channels
+
+The type `muttRChannels` (typedef for `uint16_m`) represents the channels of a bitmap. It has the following defined values:
+
+* [0x0000] `MUTTR_R` - one color channel per pixel, corresponding to one value representing how far a pixel is *in* or *out* of the glyph.
+
+* [0x0002] `MUTTR_RGB` - three color channels: red, green, and blue in that order per pixel.
+
+* [0x0003] `MUTTR_RGBA` - four color channels: red, green, blue, and alpha in that order per pixel.
+
+How non-singular channel values represent how far a pixel is *in* or *out* of the glyph is dependent on the [raster method](#raster-method).
+
+### Raster in out color
+
+The type `muttRIOColor` (typedef for `uint8_m`) represents what values indicate whether or not a pixel is *inside* of the glyph or *outside* of the glyph (and the corresponding possible mixing between the two values). It has the following defined values:
+
+* [0x00] `MUTTR_BW` - a smaller value indicates being more outside the glyph, and a larger value indicates being more inside the glyph.
+
+* [0x01] `MUTTR_WB` - a larger value indicates being more outside the glyph, and a smaller value indicates being more inside the glyph.
+
+The rules of these values applies to all channels, including alpha.
+
+## Rasterize glyph
+
+Rasterizing a glyph is performed with the function `mutt_raster_glyph`, defined below: 
+
+```c
+MUDEF muttResult mutt_raster_glyph(muttRGlyph* glyph, muttRBitmap* bitmap, muttRMethod method);
+```
+
+
+### Raster method
+
+The type `muttRMethod` (typedef for `uint16_m`) represents what rasterization method to use when rasterizing a glyph. It has the following defined values:
+
+* [0x0000] `MUTTR_FULL_PIXEL_BI_LEVEL` - [full-pixel](#full-pixel) [bi-level](#bi-level) rasterization.
+
+* [0x0001] `MUTTR_FULL_PIXEL_AA2X2` - [full-pixel](#full-pixel) two-by-two [anti-aliased](#anti-aliasing) rasterization.
+
+Most of the terms used to describe these rendering methods are taken from terms used in [The Raster Tragedy](http://rastertragedy.com).
+
+### Full-pixel
+
+The term "full-pixel" means that each pixel is used as one value indicating how much a pixel is *inside* or *outside* of the glyph. Each pixel is treated pixel-coordinate-wise as being directly in the center of a pixel in the pixel coordinate grid; for example, the coordinates of the top-leftest pixel in a bitmap is (0.5, 0.5) when internally calculating how much a pixel is inside or outside of the glyph.
+
+### Bi-level
+
+The term "bi-level" means that each pixel is rather fully inside or outside of the glyph, with no possibility of intermediate values.
+
+### Anti-aliasing
+
+Anti-aliasing is used in rasterization to smooth jagged edges, taking multiple samples per pixel, calculating whether or not each one is inside or outside of the glyph, and averaging all of those values for the calculated value of a given pixel. This allows for pixels to exist that are *partially* inside or outside of the glyph, and whose pixel values indicate as such, which is the opposite of [bi-level rasterization](#bi-level).
+
+The amount of samples per pixel in the x- and y-direction is controlled by its dimensions, splitting up the pixel into multiple sub-pixels to then be individually calculated. For example, two-by-two anti-aliasing implies taking two samples on the x- and y-axis per pixel, so the top-leftest pixel (coordinates (0.5, 0.5)) would be split up into coordinates (0.25, 0.25), (0.75, 0.25), (0.25, 0.75), and (0.75, 0.75), in no particular order, and individually calculated & averaged for the final pixel value.
+
+### Raster bleeding
+
+Some rasterization methods have a possibility of setting pixels as (at least partially) inside of the glyph that aren't mathematically inside of the glyph to any degree, but are one pixel away from another pixel that *is* (at least partially) inside of the glyph. This effect is called "bleeding", and can cause pixels to be inside of the glyph that are outside of the range of the glyph's coordinates.
+
+In terms of rglyphs, this is prevented by offsetting the coordinates of each point by 1 pixel, ensuring that there is at least a single pixel to the left and top and of any pixel that is mathematically inside of the glyph, and thus can catch any theoretical bleeding. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
+
+In terms of rasterization, this is prevented by increasing the width and height of the bitmap to be 1 pixel greater than the maximum x- and y-coordinates within the glyph (`glyph->x_max` and `glyph->y_max`). The conversion from the decimal values of `x_max` and `y_max` to an integer width and height should be performed via a ceiling of the final result.
+
 # Result
 
 The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -1551,6 +1682,10 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_CMAP_REQUIRES_MAXP` - the maxp table rather failed to load or was not requested for loading, and cmap requires maxp to be loaded.
 
+### Rasterization result values
+
+* `MUTT_UNKNOWN_RASTER_METHOD` - the given raster method value was unrecognized.
+
 ## Check if result is fatal
 
 The function `mutt_result_is_fatal` returns whether or not a given `muttResult` value is fatal, defined below: 
@@ -1587,8 +1722,14 @@ mutt has several C standard library dependencies, all of which are overridable b
 
 * `mu_realloc` - equivalent to `realloc`.
 
+* `mu_qsort` equivalent to `qsort`.
+
 ## `string.h` dependencies
 
 * `mu_memcpy` - equivalent to `memcpy`.
 
 * `mu_memset`- equivalent to `memset`.
+
+## `math.h` dependencies
+
+* `mu_fabsf` - equivalent to `fabsf`.
