@@ -2210,8 +2210,8 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE The type `muttRFlags` (typedef for `uint8_m`) represents the flags of a given point in an rglyph. It has the following defined values for bitmasking:
 
-				// @DOCLINE * [0x00] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
-				#define MUTTR_ON_CURVE 0x00
+				// @DOCLINE * [0x01] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
+				#define MUTTR_ON_CURVE 0x01
 
 				// @DOCLINE No other bits other than the ones defined above are read for any point in an rglyph.
 
@@ -5261,7 +5261,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Sorts the lines of a shape in DECREASING order of top point
 				void muttR_ShapeSort(muttR_Shape* shape) {
 					// Just call qsort for the job
-					mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Shape), muttR_CompareLines);
+					mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Line), muttR_CompareLines);
 				}
 
 			/* Conversions */
@@ -5313,20 +5313,22 @@ mutt is developed primarily off of these sources of documentation:
 					// Keep count of lines:
 					uint32_m count = 0;
 					// Keep count of contours:
-					uint16_m c = 0;
+					//uint16_m c = 0;
 
 					// Loop through each point
 					for (uint16_m p = 0; p < glyph->num_points; ++p) {
 						// Add 1 line if on-curve, lines per bezier if off-curve
 						count += (glyph->points[p].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
+
 						// Consider the first point of each contour twice for loop-back line/curve
-						if (glyph->contour_ends[c] == p) {
+						// Note: I don't think this should be done from what I can tell...
+						/*if (glyph->contour_ends[c] == p) {
 							// First point is 0 if contour is 0; contour_ends[c-1] if otherwise
 							uint16_m cp = (c == 0) ?(0) :(glyph->contour_ends[c-1]);
 							count += (glyph->points[cp].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
 							// Increment contour
 							++c;
-						}
+						}*/
 					}
 
 					// Return final count
@@ -5545,7 +5547,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Initialize active lines
 				uint32_m first_line = 0;
-				uint32_m line_len = 0;
+				uint32_m line_len = shape->num_lines;
 
 				// Loop through each horizontal strip
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
@@ -5590,11 +5592,7 @@ mutt is developed primarily off of these sources of documentation:
 
 						// Set pixel to whether or not we're in glyph
 						// Winding == 0 means in the glyph, and vice versa
-						mu_memset(
-							&bitmap->pixels[hpix_offset+(w*adv)], 
-							(winding==0) ?(out) :(in),
-							adv
-						);
+						bitmap->pixels[hpix_offset+(w*adv)] = (winding==0) ?(out) :(in);
 					}
 				}
 

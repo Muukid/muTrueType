@@ -1413,7 +1413,7 @@ Some rendering methods have the possibility of "[bleeding](#raster-bleeding)" ov
 
 The type `muttRFlags` (typedef for `uint8_m`) represents the flags of a given point in an rglyph. It has the following defined values for bitmasking:
 
-* [0x00] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
+* [0x01] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
 
 No other bits other than the ones defined above are read for any point in an rglyph.
 
