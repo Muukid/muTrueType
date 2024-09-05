@@ -1342,7 +1342,7 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE In order to load a simple glyph, the function `mutt_simple_glyph` is used, defined below: @NLNT
 						MUDEF muttResult mutt_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muByte* data, uint32_m* written);
 
-						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid simple glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid simple glyph information for the given glyph ID using memory from `data`. Upon a fatal result, the contents of `glyph` and `data` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
@@ -1431,7 +1431,7 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE In order to load a composite glyph, the function `mutt_composite_glyph` is used, defined below: @NLNT
 						MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muByte* data, uint32_m* written);
 
-						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+						// @DOCLINE Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID using memory from `data`. Upon a fatal result, the contents of `glyph` and `data` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
@@ -2161,7 +2161,7 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE A "raster glyph" (often shortened to "rglyph", respective struct [`muttRGlyph`](#rglyph-struct)) is a glyph described for rasterization in the raster API, being similar to how a simple glyph is defined in the low-level API, and is heavily based on how glyphs are specified in TrueType.
 
-			// @DOCLINE The most common usage of rglyphs is for rasterizing given glyphs in a TrueType font. This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do automatically via rendering a glyph purely based on its glyph ID.
+			// @DOCLINE The most common usage of rglyphs is for [rasterizing given glyphs in a TrueType font](#rasterization-of-truetype-glyphs). This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do [automatically via rendering a glyph purely based on its glyph ID](#rasterize-glyph-id).
 
 			// @DOCLINE Rglyphs don't necessarily need to come from a simple or composite glyph, however. The user can pass in their own rglyphs, and as long as they use the struct correctly, the raster API will rasterize it correctly.
 
@@ -2301,6 +2301,71 @@ mutt is developed primarily off of these sources of documentation:
 				// @DOCLINE In terms of rglyphs, this is prevented by offsetting the coordinates of each point by 1 pixel, ensuring that there is at least a single pixel to the left and top and of any pixel that is mathematically inside of the glyph, and thus can catch any theoretical bleeding. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
 
 				// @DOCLINE In terms of rasterization, this is prevented by increasing the width and height of the bitmap to be 1 pixel greater than the maximum x- and y-coordinates within the glyph (`glyph->x_max` and `glyph->y_max`). The conversion from the decimal values of `x_max` and `y_max` to an integer width and height should be performed via a ceiling of the final result.
+
+		// @DOCLINE ## Rasterization of TrueType glyphs
+
+			// @DOCLINE The raster API gives access to rasterizing TrueType glyphs by converting them to an rglyph, which can then be [rasterized directly](#rasterize-glyph). This conversion can be done rather by the user directly [giving a simple glyph](#simple-glyph-to-rglyph), [giving a composite glyph](#composite-glyph-to-rglyph), or by [giving the header of a simple or composite glyph](#glyph-header-to-rglyph).
+
+			// @DOCLINE This conversion can also automatically be performed internally via [rasterizing the glyph based on a given glyph ID](#rasterize-glyph-id), handling all of the allocation and conversions. This can be inefficient to call on large groups of glyphs, as new memory has to be repeatedly allocated and deallocated.
+
+			// @DOCLINE ### Font units to pixel units
+
+				// @DOCLINE The rasterization of any TrueType glyph involves converting the Truetype "font units" (FUnits) to pixel units (which is what a raster glyph uses). This conversion requires a [point size](https://en.wikipedia.org/wiki/Point_(typography)) and the [pixels per inch](https://en.wikipedia.org/wiki/Pixel_density), or PPI, of the display (usually 72 or 96). These two variables allow the coordinates of an rglyph to be rasterized at a predictable and calculatable physical size when displayed.
+
+				// @DOCLINE The function `mutt_funits_to_punits` performs the conversion described above for a given font based on its unitsPerEm value (stored in the head table), defined below: @NLNT
+				MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi);
+
+				// @DOCLINE Although the font unit range in TrueType can be expressed with a signed 16-bit integer, `funits` is a `float` for the sake of being able to perform the conversion on transformed coordinates in composite glyphs, which can result in decimal numbers.
+
+			// @DOCLINE ### Simple glyph to rglyph
+
+				// @DOCLINE The function `mutt_simple_rglyph` converts a simple glyph to an rglyph, defined below: @NLNT
+				MUDEF muttResult mutt_simple_rglyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// @DOCLINE Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given simple glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+				// @DOCLINE The given simple glyph must have at least one contour, and that one contour must have points. The simple glyph given must be valid.
+
+				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+				// @DOCLINE #### Simple glyph to rglyph memory maximum
+
+					// @DOCLINE The maximum amount of memory that will be needed for converting a simple glyph to a raster glyph for a given font, in bytes, is provided by the function `mutt_simple_rglyph_max`, defined below: @NLNT
+					MUDEF uint32_m mutt_simple_rglyph_max(muttFont* font);
+
+			// @DOCLINE ### Composite glyph to rglyph
+
+				// @DOCLINE The function `mutt_composite_rglyph` converts a composite glyph to an rglyph, defined below: @NLNT
+				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// @DOCLINE Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given composite glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+				// @DOCLINE The given composite glyph must have at least one contour, and that one contour must have points. The composite glyph given must be valid.
+
+				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+				// @DOCLINE #### Composite glyph to rglyph memory maximum
+
+					// @DOCLINE The maximum amount of memory that will be needed for converting a composite glyph to a raster glyph for a given font, in bytes, is provided by the function `mutt_composite_rglyph_max`, defined below: @NLNT
+					MUDEF uint32_m mutt_composite_rglyph_max(muttFont* font);
+
+			// @DOCLINE ### Glyph header to rglyph
+
+				// @DOCLINE The function `mutt_header_rglyph` converts a glyph header to a glyph, defined below: @NLNT
+				MUDEF muttResult mutt_header_rglyph(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// @DOCLINE Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given glyph based on its header, using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+				// @DOCLINE The given glyph must have at least one contour, and that one contour must have points. The glyph header given must be valid.
+
+				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+				// @DOCLINE #### Glyph header to rglyph memory maximum
+
+					// @DOCLINE The maximum amount of memory that will be needed for converting a glyph header to a raster glyph for a given font, in bytes, is provided by the function `mutt_header_rglyph_max`, defined below: @NLNT
+					MUDEF uint32_m mutt_header_rglyph_max(muttFont* font);
+
+					// @DOCLINE This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
 
 	// @DOCLINE # Result
 
@@ -5226,9 +5291,9 @@ mutt is developed primarily off of these sources of documentation:
 					muttR_Line* l0 = (muttR_Line*)p, * l1 = (muttR_Line*)q;
 					// Return value to indicate smallest y1 value
 					if (l0->y1 < l1->y1) {
-						return 1;
-					} else if (l0->y1 > l1->y1) {
 						return -1;
+					} else if (l0->y1 > l1->y1) {
+						return 1;
 					}
 					return 0;
 				}
@@ -5495,7 +5560,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Move up the first active line until we're in range of the next nearest line
 				while (*len != 0) {
-					if (ry <= lines[*first].y0 + MUTTR_LINE_EPSILON32) {
+					if (ry <= lines[*first].y0 - MUTTR_LINE_EPSILON32) {
 						++*first;
 						--*len;
 					} else {
@@ -5547,12 +5612,12 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Initialize active lines
 				uint32_m first_line = 0;
-				uint32_m line_len = shape->num_lines;
+				uint32_m line_len = 0;
 
 				// Loop through each horizontal strip
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
 					// Calculate horizontal pixel offset
-					uint64_m hpix_offset = bitmap->stride*h;
+					uint64_m hpix_offset = bitmap->stride*((bitmap->height-h)-1);
 
 					// Just fill all x-values with out if the height is now outside of the glyph range
 					// (+ double-pixel extra for bleeding and ceiling)
@@ -5644,6 +5709,167 @@ mutt is developed primarily off of these sources of documentation:
 				muttR_ShapeDestroy(&shape);
 				return res;
 			}
+
+		/* Conversion */
+
+			// FUnits to pixel-units
+			MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi) {
+				return point_size * funits * ppi / (72.f * font->head->units_per_em);
+			}
+
+			/* Simple */
+
+				// Simple glyph -> raster glyph
+				MUDEF muttResult mutt_simple_rglyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written) {
+					// For written calculations:
+					if (!data) {
+						uint32_m write = 0;
+						// points
+						write += sizeof(muttRPoint) * (glyph->end_pts_of_contours[header->number_of_contours-1] + 1);
+						// contour_ends
+						write += sizeof(uint16_m) * header->number_of_contours;
+						// Write data needed
+						*written = write;
+						return MUTT_SUCCESS;
+					}
+
+					// Get data for arrays
+					muByte* orig_data = data;
+					// - points
+					rglyph->num_points = glyph->end_pts_of_contours[header->number_of_contours-1] + 1;
+					rglyph->points = (muttRPoint*)data;
+					data += sizeof(muttRPoint) * ((uint32_m)rglyph->num_points);
+					// - contour_ends
+					rglyph->num_contours = header->number_of_contours;
+					rglyph->contour_ends = (uint16_m*)data;
+					data += sizeof(uint16_m) * ((uint32_m)rglyph->num_contours);
+					// Write written data amount
+					if (written) {
+						*written = data-orig_data;
+					}
+
+					// Calculate point offsets based on glyph's min/max values
+					float px = -mutt_funits_to_punits(font, header->x_min, point_size, ppi) + 1.f;
+					float py = -mutt_funits_to_punits(font, header->y_min, point_size, ppi) + 1.f;
+
+					// Loop through each point
+					for (uint16_m p = 0; p < rglyph->num_points; ++p) {
+						// X and Y
+						rglyph->points[p].x = px + mutt_funits_to_punits(font, glyph->points[p].x, point_size, ppi);
+						rglyph->points[p].y = py + mutt_funits_to_punits(font, glyph->points[p].y, point_size, ppi);
+						// Flags
+						rglyph->points[p].flags = (glyph->points[p].flags & MUTT_ON_CURVE_POINT) ?(MUTTR_ON_CURVE) :(0);
+					}
+
+					// Copy over contour ends
+					mu_memcpy(rglyph->contour_ends, glyph->end_pts_of_contours, sizeof(uint16_m) * ((uint32_m)rglyph->num_contours));
+
+					// Caclculate x_max and y_max
+					rglyph->x_max = px + mutt_funits_to_punits(font, header->x_max, point_size, ppi);
+					rglyph->y_max = py + mutt_funits_to_punits(font, header->y_max, point_size, ppi);
+
+					return MUTT_SUCCESS;
+				}
+
+				// Memory maximum
+				MUDEF uint32_m mutt_simple_rglyph_max(muttFont* font) {
+					return
+						// points
+						(sizeof(muttRPoint) * font->maxp->max_points)
+						// contour_ends
+						+ (sizeof(uint16_m) * font->maxp->max_contours)
+					;
+				}
+
+			/* Composite */
+
+				// Composite glyph -> raster glyph
+				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+
+				// Memory maximum
+				MUDEF uint32_m mutt_composite_rglyph_max(muttFont* font) {
+					return 0; if (font) {}
+				}
+
+			/* Header */
+
+				// Glyph header -> raster glyph
+				MUDEF muttResult mutt_header_rglyph(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written) {
+					muttResult res = MUTT_SUCCESS;
+					uint32_m write0 = 0, write1 = 0;
+
+					// Just memory calculations:
+					if (!data) {
+						// Simple:
+						if (header->number_of_contours >= 0) {
+							// Glyph data:
+							res = mutt_simple_glyph(font, header, 0, 0, &write0);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+							// Rglyph data:
+							res = mutt_simple_rglyph(font, header, 0, 0, point_size, ppi, 0, &write1);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+						}
+						// Composite:
+						else {
+							// Glyph data:
+							res = mutt_composite_glyph(font, header, 0, 0, &write0);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+							// Rglyph data:
+							//res = mutt_composite_rglyph(font, header, 0, 0, point_size, ppi, 0, &write1);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+						}
+
+						// Write sum of memory needed
+						*written = write0 + write1;
+						return res;
+					}
+
+					// Simple:
+					if (header->number_of_contours >= 0) {
+						// Load simple glyph
+						muttSimpleGlyph glyph;
+						res = mutt_simple_glyph(font, header, &glyph, data, &write0);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+						data += write0;
+
+						// Convert to rglyph
+						res = mutt_simple_rglyph(font, header, &glyph, rglyph, point_size, ppi, data, &write1);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+						//data += write1;
+					}
+					// Composite:
+					else {
+						// @TODO
+						return MUTT_UNKNOWN_RASTER_METHOD;
+					}
+
+					// Write written
+					if (written) {
+						*written = write0 + write1;
+					}
+					return MUTT_SUCCESS;
+				}
+
+				MUDEF uint32_m mutt_header_rglyph_max(muttFont* font) {
+					// Simple:
+					uint32_m sim = mutt_simple_glyph_max_size(font) + mutt_simple_rglyph_max(font);
+					// Composite:
+					uint32_m com = mutt_composite_glyph_max_size(font) + mutt_composite_rglyph_max(font);
+					// Return greater
+					return (sim > com) ?(sim) :(com);
+				}
 
 	/* Result */
 

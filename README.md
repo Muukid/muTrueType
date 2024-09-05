@@ -491,7 +491,7 @@ MUDEF muttResult mutt_simple_glyph(muttFont* font, muttGlyphHeader* header, mutt
 ```
 
 
-Upon a non-fatal result, `glyph` is filled with valid simple glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+Upon a non-fatal result, `glyph` is filled with valid simple glyph information for the given glyph ID using memory from `data`. Upon a fatal result, the contents of `glyph` and `data` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
@@ -583,7 +583,7 @@ MUDEF muttResult mutt_composite_glyph(muttFont* font, muttGlyphHeader* header, m
 ```
 
 
-Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID. Upon a fatal result, the contents of `glyph` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+Upon a non-fatal result, `glyph` is filled with valid composite glyph information for the given glyph ID using memory from `data`. Upon a fatal result, the contents of `glyph` and `data` are undefined. The given glyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
 This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
@@ -1373,7 +1373,7 @@ The raster API has the ability to [rasterize](#rasterize-glyph) [TrueType-like g
 
 A "raster glyph" (often shortened to "rglyph", respective struct [`muttRGlyph`](#rglyph-struct)) is a glyph described for rasterization in the raster API, being similar to how a simple glyph is defined in the low-level API, and is heavily based on how glyphs are specified in TrueType.
 
-The most common usage of rglyphs is for rasterizing given glyphs in a TrueType font. This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do automatically via rendering a glyph purely based on its glyph ID.
+The most common usage of rglyphs is for [rasterizing given glyphs in a TrueType font](#rasterization-of-truetype-glyphs). This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do [automatically via rendering a glyph purely based on its glyph ID](#rasterize-glyph-id).
 
 Rglyphs don't necessarily need to come from a simple or composite glyph, however. The user can pass in their own rglyphs, and as long as they use the struct correctly, the raster API will rasterize it correctly.
 
@@ -1495,6 +1495,99 @@ Some rasterization methods have a possibility of setting pixels as (at least par
 In terms of rglyphs, this is prevented by offsetting the coordinates of each point by 1 pixel, ensuring that there is at least a single pixel to the left and top and of any pixel that is mathematically inside of the glyph, and thus can catch any theoretical bleeding. This is automatically performed when converting simple and composite glyphs from the low-level API to an rglyph, and should be done by the user when creating/modifying rglyphs.
 
 In terms of rasterization, this is prevented by increasing the width and height of the bitmap to be 1 pixel greater than the maximum x- and y-coordinates within the glyph (`glyph->x_max` and `glyph->y_max`). The conversion from the decimal values of `x_max` and `y_max` to an integer width and height should be performed via a ceiling of the final result.
+
+## Rasterization of TrueType glyphs
+
+The raster API gives access to rasterizing TrueType glyphs by converting them to an rglyph, which can then be [rasterized directly](#rasterize-glyph). This conversion can be done rather by the user directly [giving a simple glyph](#simple-glyph-to-rglyph), [giving a composite glyph](#composite-glyph-to-rglyph), or by [giving the header of a simple or composite glyph](#glyph-header-to-rglyph).
+
+This conversion can also automatically be performed internally via [rasterizing the glyph based on a given glyph ID](#rasterize-glyph-id), handling all of the allocation and conversions. This can be inefficient to call on large groups of glyphs, as new memory has to be repeatedly allocated and deallocated.
+
+### Font units to pixel units
+
+The rasterization of any TrueType glyph involves converting the Truetype "font units" (FUnits) to pixel units (which is what a raster glyph uses). This conversion requires a [point size](https://en.wikipedia.org/wiki/Point_(typography)) and the [pixels per inch](https://en.wikipedia.org/wiki/Pixel_density), or PPI, of the display (usually 72 or 96). These two variables allow the coordinates of an rglyph to be rasterized at a predictable and calculatable physical size when displayed.
+
+The function `mutt_funits_to_punits` performs the conversion described above for a given font based on its unitsPerEm value (stored in the head table), defined below: 
+
+```c
+MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi);
+```
+
+
+Although the font unit range in TrueType can be expressed with a signed 16-bit integer, `funits` is a `float` for the sake of being able to perform the conversion on transformed coordinates in composite glyphs, which can result in decimal numbers.
+
+### Simple glyph to rglyph
+
+The function `mutt_simple_rglyph` converts a simple glyph to an rglyph, defined below: 
+
+```c
+MUDEF muttResult mutt_simple_rglyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+```
+
+
+Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given simple glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+The given simple glyph must have at least one contour, and that one contour must have points. The simple glyph given must be valid.
+
+This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+#### Simple glyph to rglyph memory maximum
+
+The maximum amount of memory that will be needed for converting a simple glyph to a raster glyph for a given font, in bytes, is provided by the function `mutt_simple_rglyph_max`, defined below: 
+
+```c
+MUDEF uint32_m mutt_simple_rglyph_max(muttFont* font);
+```
+
+
+### Composite glyph to rglyph
+
+The function `mutt_composite_rglyph` converts a composite glyph to an rglyph, defined below: 
+
+```c
+MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+```
+
+
+Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given composite glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+The given composite glyph must have at least one contour, and that one contour must have points. The composite glyph given must be valid.
+
+This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+#### Composite glyph to rglyph memory maximum
+
+The maximum amount of memory that will be needed for converting a composite glyph to a raster glyph for a given font, in bytes, is provided by the function `mutt_composite_rglyph_max`, defined below: 
+
+```c
+MUDEF uint32_m mutt_composite_rglyph_max(muttFont* font);
+```
+
+
+### Glyph header to rglyph
+
+The function `mutt_header_rglyph` converts a glyph header to a glyph, defined below: 
+
+```c
+MUDEF muttResult mutt_header_rglyph(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+```
+
+
+Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given glyph based on its header, using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
+
+The given glyph must have at least one contour, and that one contour must have points. The glyph header given must be valid.
+
+This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+
+#### Glyph header to rglyph memory maximum
+
+The maximum amount of memory that will be needed for converting a glyph header to a raster glyph for a given font, in bytes, is provided by the function `mutt_header_rglyph_max`, defined below: 
+
+```c
+MUDEF uint32_m mutt_header_rglyph_max(muttFont* font);
+```
+
+
+This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
 
 # Result
 
