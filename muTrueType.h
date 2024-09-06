@@ -5291,9 +5291,9 @@ mutt is developed primarily off of these sources of documentation:
 					muttR_Line* l0 = (muttR_Line*)p, * l1 = (muttR_Line*)q;
 					// Return value to indicate smallest y1 value
 					if (l0->y1 < l1->y1) {
-						return -1;
-					} else if (l0->y1 > l1->y1) {
 						return 1;
+					} else if (l0->y1 > l1->y1) {
+						return -1;
 					}
 					return 0;
 				}
@@ -5373,33 +5373,6 @@ mutt is developed primarily off of these sources of documentation:
 					}
 				}
 
-				// Calculates the amount of lines needed to represent a glyph
-				uint32_m muttR_GlyphLineCount(muttRGlyph* glyph) {
-					// Keep count of lines:
-					uint32_m count = 0;
-					// Keep count of contours:
-					//uint16_m c = 0;
-
-					// Loop through each point
-					for (uint16_m p = 0; p < glyph->num_points; ++p) {
-						// Add 1 line if on-curve, lines per bezier if off-curve
-						count += (glyph->points[p].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
-
-						// Consider the first point of each contour twice for loop-back line/curve
-						// Note: I don't think this should be done from what I can tell...
-						/*if (glyph->contour_ends[c] == p) {
-							// First point is 0 if contour is 0; contour_ends[c-1] if otherwise
-							uint16_m cp = (c == 0) ?(0) :(glyph->contour_ends[c-1]);
-							count += (glyph->points[cp].flags & MUTTR_ON_CURVE) ?(1) :(MUTTR_LINES_PER_BEZIER);
-							// Increment contour
-							++c;
-						}*/
-					}
-
-					// Return final count
-					return count;
-				}
-
 				// Gets the next point of a glyph based on the contour ends
 				static inline muttRPoint* muttR_GlyphNextPoint(muttRGlyph* glyph, uint32_m p, uint32_m i, uint32_m c) {
 					// The next point is p incremented
@@ -5414,6 +5387,53 @@ mutt is developed primarily off of these sources of documentation:
 						}
 					}
 					return pn;
+				}
+
+				// Calculates the amount of lines needed to represent a glyph
+				uint32_m muttR_GlyphLineCount(muttRGlyph* glyph) {
+					// Keep count of lines:
+					uint32_m count = 0;
+					// Keep count of contours:
+					uint16_m c = 0;
+
+					// Loop through each point
+					for (uint32_m p = 0; p < glyph->num_points;) {
+						// Increment contour ID if necessary
+						if (p > glyph->contour_ends[c]) {
+							++c;
+						}
+
+						// Get current point
+						muttRPoint* p0 = &glyph->points[p];
+
+						// If current point is ON curve (ON...):
+						if (p0->flags & MUTTR_ON_CURVE) {
+							// Get next point
+							muttRPoint* p1 = muttR_GlyphNextPoint(glyph, p, 1, c);
+							// If next point is ON curve (ON, ON):
+							if (p1->flags & MUTTR_ON_CURVE) {
+								// One more line, go to next point
+								++count;
+								++p;
+								continue;
+							}
+
+							// If we're here, the next point is OFF curve (ON, OFF...)
+							// It must be a Bezier, and we must go forward two points
+							count += MUTTR_LINES_PER_BEZIER;
+							p += 2;
+							continue;
+						}
+
+						// If we're here, we started on an OFF point
+						// It must be a Bezier, and we must go forward one point
+						count += MUTTR_LINES_PER_BEZIER;
+						++p;
+						//continue;
+					}
+
+					// Return final count
+					return count;
 				}
 
 				// Converts an rglyph to a shape
