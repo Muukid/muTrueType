@@ -2277,6 +2277,10 @@ mutt is developed primarily off of these sources of documentation:
 				#define MUTTR_FULL_PIXEL_BI_LEVEL 0x0000
 				// @DOCLINE * [0x0001] `MUTTR_FULL_PIXEL_AA2X2` - [full-pixel](#full-pixel) two-by-two [anti-aliased](#anti-aliasing) rasterization.
 				#define MUTTR_FULL_PIXEL_AA2X2 0x0001
+				// @DOCLINE * [0x0002] `MUTTR_FULL_PIXEL_AA4X4` - [full-pixel](#full-pixel) four-by-four [anti-aliased](#anti-aliasing) rasterization.
+				#define MUTTR_FULL_PIXEL_AA4X4 0x0002
+				// @DOCLINE * [0x0003] `MUTTR_FULL_PIXEL_AA8X8` - [full-pixel](#full-pixel) eight-by-eight [anti-aliased](#anti-aliasing) rasterization.
+				#define MUTTR_FULL_PIXEL_AA8X8 0x0003
 
 				// @DOCLINE Most of the terms used to describe these rendering methods are taken from terms used in [The Raster Tragedy](http://rastertragedy.com).
 
@@ -5285,15 +5289,15 @@ mutt is developed primarily off of these sources of documentation:
 				};
 				typedef struct muttR_Line muttR_Line;
 
-				// Used to sort the lines in DECREASING order of top point
+				// Used to sort the lines in increasing order of bottom point
 				int muttR_CompareLines(const void* p, const void* q) {
 					// Get lines
 					muttR_Line* l0 = (muttR_Line*)p, * l1 = (muttR_Line*)q;
-					// Return value to indicate smallest y1 value
-					if (l0->y1 < l1->y1) {
-						return 1;
-					} else if (l0->y1 > l1->y1) {
+					// Return value to indicate greatest y1 value
+					if (l0->y0 < l1->y0) {
 						return -1;
+					} else if (l0->y0 > l1->y0) {
+						return 1;
 					}
 					return 0;
 				}
@@ -5323,10 +5327,13 @@ mutt is developed primarily off of these sources of documentation:
 				};
 				typedef struct muttR_Shape muttR_Shape;
 
-				// Sorts the lines of a shape in DECREASING order of top point
+				// Sorts the lines of a shape in increasing order of bottom point
+				// This does nothing currently; not sorting because it's usually
+				// used for the active line list, but I failed to implement it
 				void muttR_ShapeSort(muttR_Shape* shape) {
 					// Just call qsort for the job
-					mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Line), muttR_CompareLines);
+					//mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Line), muttR_CompareLines);
+					return; if (shape) {}
 				}
 
 			/* Conversions */
@@ -5568,10 +5575,12 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Updates the active line list based on the ray
+			// This function should totally work from what I'm aware, but it
+			// seems to not work properly. Don't know why
 			static inline void muttR_ActiveLines(muttR_Line* lines, uint32_m num_lines, uint32_m* first, uint32_m* len, float ry) {
-				// Increase length to include possible new in-rage lines
+				// Increase length to include possible new in-range lines
 				while (*first + *len < num_lines) {
-					if (ry <= lines[*first + *len].y1 + MUTTR_LINE_EPSILON32) {
+					if (ry >= lines[*first + *len].y0 - MUTTR_LINE_EPSILON32) {
 						++*len;
 					} else {
 						break;
@@ -5580,7 +5589,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Move up the first active line until we're in range of the next nearest line
 				while (*len != 0) {
-					if (ry <= lines[*first].y0 - MUTTR_LINE_EPSILON32) {
+					if (ry > lines[*first].y1 + MUTTR_LINE_EPSILON32) {
 						++*first;
 						--*len;
 					} else {
@@ -5631,10 +5640,10 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Initialize active lines
-				uint32_m first_line = 0;
-				uint32_m line_len = 0;
+				//uint32_m first_line = 0;
+				//uint32_m line_len = 0;
 
-				// Loop through each horizontal strip
+				// Loop through each horizontal strip from bottom to top
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
 					// Calculate horizontal pixel offset
 					uint64_m hpix_offset = bitmap->stride*((bitmap->height-h)-1);
@@ -5650,7 +5659,8 @@ mutt is developed primarily off of these sources of documentation:
 					float ray_y = ((float)h) + .5f;
 
 					// Update active line list
-					muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
+					//muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
+					// ^ Not doing this because it doesn't work for some reason...
 					// Calculate all hits with active lines (+ winding)
 					int32_m winding;
 					uint32_m num_hits = muttR_Hits(shape->lines, shape->num_lines, ray_y, hits, &winding);
@@ -5681,6 +5691,119 @@ mutt is developed primarily off of these sources of documentation:
 					}
 				}
 
+				mu_free(hits);
+				return MUTT_SUCCESS;
+			}
+
+			// A ray
+			struct muttR_Ray {
+				// Its y-value
+				float y;
+				// Each line its hit
+				muttR_Hit* hits;
+				// Number of hits
+				uint32_m num_hits;
+				// Its winding
+				int32_m winding;
+				// Upcoming hit
+				uint32_m ih;
+			};
+			typedef struct muttR_Ray muttR_Ray;
+
+			// Fills information about a ray
+			static inline void muttR_PixelRayCalc(muttR_Shape* shape, muttR_Ray* ray, float ray_y) {
+				// Fill y-value
+				ray->y = ray_y;
+				// Calculate hit and winding
+				ray->num_hits = muttR_Hits(shape->lines, shape->num_lines, ray_y, ray->hits, &ray->winding);
+				// Set upcoming hit to 0
+				ray->ih = 0;
+			}
+
+			// MUTTR_FULL_PIXEL_AANXN inner handling
+			void muttR_FullPixelAANXNInner(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs, muttR_Ray* rays) {
+				// Weight of each sample:
+				float weight = 1.f / ((float)(vs*hs));
+
+				// Loop through each horizontal strip from bottom to top
+				for (uint32_m h = 0; h < bitmap->height; ++h) {
+					// Calculate horizontal pixel offset
+					uint64_m hpix_offset = bitmap->stride*((bitmap->height-h)-1);
+
+					// Just fill all x-values with out if the height is now outside of the glyph range
+					// (+ double-pixel extra for bleeding and ceiling)
+					if (h > shape->y_max+2) {
+						mu_memset(&bitmap->pixels[hpix_offset], out, bitmap->width*adv);
+						continue;
+					}
+
+					// Calculate each ray
+					for (uint8_m r = 0; r < hs; ++r) {
+						// a=\left[\frac{1}{n+1},\frac{2}{n+1}...\frac{n}{n+1}\right]
+						muttR_PixelRayCalc(shape, rays+r, ((float)h) + (((float)(r+1)) / ((float)(hs+1))));
+					}
+
+					// Loop through each x-value
+					for (uint32_m w = 0; w < bitmap->width; ++w) {
+						// Just fill all remaining x-values with out if width is now outside of glyph range
+						// (+ double-pixel extra for bleeding and ceiling)
+						if (w > shape->x_max+2) {
+							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, (bitmap->width-w)*adv);
+							continue;
+						}
+
+						// Percentage amount the pixel is in
+						float in_per = 0.f;
+
+						// Loop through each vertical sample
+						for (uint8_m x = 0; x < vs; ++x) {
+							// Calculate x-coordinate
+							// (Same math as y-ray)
+							float ray_x = ((float)w) + (((float)(x+1)) / ((float)(vs+1)));
+
+							// Loop through each horizontal sample
+							for (uint8_m y = 0; y < hs; ++y) {
+								// Skip over each hit, removing windings
+								while (rays[y].ih < rays[y].num_hits && ray_x > rays[y].hits[rays[y].ih].x) {
+									// winding -= muttR_LineWinding(ray_y, &shape->lines[hits[ih++].l]);
+									rays[y].winding -= muttR_LineWinding(rays[y].y, &shape->lines[rays[y].hits[rays[y].ih++].l]);
+								}
+								// Add if sample is in
+								in_per += (rays[y].winding==0) ?(0.f) :(weight);
+							}
+						}
+
+						// Calculate pixel color based on how much the pixel is in
+						// \left(a\right)\left(m_{1}-m_{0}\right)+m_{0}
+						bitmap->pixels[hpix_offset+(w*adv)] = (in_per * (in-out)) + out;
+					}
+				}
+			}
+
+			// MUTTR_FULL_PIXEL_AANXN
+			muttResult muttR_FullPixelAANXN(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, uint8_m in, uint8_m out, uint8_m vs, uint8_m hs) {
+				// Allocate hits
+				muttR_Hit* hits = (muttR_Hit*)mu_malloc(shape->num_lines * hs * sizeof(muttR_Hit));
+				if (!hits) {
+					return MUTT_FAILED_MALLOC;
+				}
+				// Allocate rays
+				muttR_Ray* rays = (muttR_Ray*)mu_malloc(hs * sizeof(muttR_Ray));
+				if (!rays) {
+					mu_free(hits);
+					return MUTT_FAILED_MALLOC;
+				}
+
+				// Fill all rays with their hit pointer
+				for (uint8_m r = 0; r < hs; ++r) {
+					rays[r].hits = hits + (shape->num_lines * r);
+				}
+
+				// Rasterize
+				muttR_FullPixelAANXNInner(shape, bitmap, adv, (float)in, (float)out, vs, hs, rays);
+
+				// Deallocate and return
+				mu_free(rays);
 				mu_free(hits);
 				return MUTT_SUCCESS;
 			}
@@ -5722,6 +5845,19 @@ mutt is developed primarily off of these sources of documentation:
 					// Full-pixel bi-level
 					case MUTTR_FULL_PIXEL_BI_LEVEL: {
 						res = muttR_FullPixelBiLevel(&shape, bitmap, adv, in, out);
+					} break;
+
+					// Full-pixel AA 2x2
+					case MUTTR_FULL_PIXEL_AA2X2: {
+						res = muttR_FullPixelAANXN(&shape, bitmap, adv, in, out, 2, 2);
+					} break;
+					// Full-pixel AA 4x4
+					case MUTTR_FULL_PIXEL_AA4X4: {
+						res = muttR_FullPixelAANXN(&shape, bitmap, adv, in, out, 4, 4);
+					} break;
+					// Full-pixel AA 8x8
+					case MUTTR_FULL_PIXEL_AA8X8: {
+						res = muttR_FullPixelAANXN(&shape, bitmap, adv, in, out, 8, 8);
 					} break;
 				}
 

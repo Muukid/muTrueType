@@ -1472,6 +1472,10 @@ The type `muttRMethod` (typedef for `uint16_m`) represents what rasterization me
 
 * [0x0001] `MUTTR_FULL_PIXEL_AA2X2` - [full-pixel](#full-pixel) two-by-two [anti-aliased](#anti-aliasing) rasterization.
 
+* [0x0002] `MUTTR_FULL_PIXEL_AA4X4` - [full-pixel](#full-pixel) four-by-four [anti-aliased](#anti-aliasing) rasterization.
+
+* [0x0003] `MUTTR_FULL_PIXEL_AA8X8` - [full-pixel](#full-pixel) eight-by-eight [anti-aliased](#anti-aliasing) rasterization.
+
 Most of the terms used to describe these rendering methods are taken from terms used in [The Raster Tragedy](http://rastertragedy.com).
 
 ### Full-pixel
