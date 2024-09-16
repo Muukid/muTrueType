@@ -4825,10 +4825,10 @@ mutt is developed primarily off of these sources of documentation:
 						res = MUTT_INVALID_GLYF_SIMPLE_X_COORD;
 					}
 					// - Consider it with currently calculated x min/max
-					if (test_val < x_min) {
+					if ((test_val < x_min) || (pi == 0)) {
 						x_min = test_val;
 					}
-					if (test_val > x_max) {
+					if ((test_val > x_max) || (pi == 0)) {
 						x_max = test_val;
 					}
 					// - Assign
@@ -4877,10 +4877,10 @@ mutt is developed primarily off of these sources of documentation:
 						res = MUTT_INVALID_GLYF_SIMPLE_Y_COORD;
 					}
 					// - Consider it with currently calculated y min/max values
-					if (test_val < y_min) {
+					if ((test_val < y_min) || (pi == 0)) {
 						y_min = test_val;
 					}
-					if (test_val > y_max) {
+					if ((test_val > y_max) || (pi == 0)) {
 						y_max = test_val;
 					}
 					// - Assign
@@ -5387,6 +5387,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Converts three-point Bezier (on, off, on) to lines
 				// - Constants:
 				#define MUTTR_LINES_PER_BEZIER 25
+				//#define MUTTR_LINES_PER_BEZIER 1
 				static const float MUTTR_LINES_PER_BEZIER_F = ((float)MUTTR_LINES_PER_BEZIER);
 				static const float MUTTR_LINES_PER_BEZIER_INV = 1.f / ((float)MUTTR_LINES_PER_BEZIER);
 				// - Function:
@@ -5411,7 +5412,7 @@ mutt is developed primarily off of these sources of documentation:
 				static inline muttRPoint* muttR_GlyphNextPoint(muttRGlyph* glyph, uint32_m p, uint32_m i, uint32_m c) {
 					// The next point is p incremented
 					muttRPoint* pn = &glyph->points[p+i];
-					// ...unless this is the last point of the contour:
+					// ...unless this goes over the contour's end...
 					if (p+i > glyph->contour_ends[c]) {
 						// ..in which case the next point wraps back around to the first
 						// point of the contour
@@ -5434,6 +5435,8 @@ mutt is developed primarily off of these sources of documentation:
 					for (uint32_m p = 0; p < glyph->num_points;) {
 						// Increment contour ID if necessary
 						if (p > glyph->contour_ends[c]) {
+							// Go to beginning of contour to avoid over-counting sometimes
+							p = glyph->contour_ends[c]+1;
 							++c;
 						}
 
@@ -5456,6 +5459,29 @@ mutt is developed primarily off of these sources of documentation:
 							// It must be a Bezier, and we must go forward two points
 							count += MUTTR_LINES_PER_BEZIER;
 							p += 2;
+							continue;
+						}
+
+						// Get previous point
+						muttRPoint* pn1 = &glyph->points[p-1];
+						muttRPoint n1;
+						// Edge case for point being 0:
+						if (p == 0) {
+							// Wrap to end of this contour
+							pn1 = &n1;
+							n1.flags = glyph->points[glyph->contour_ends[0]].flags;
+						}
+						// Edge case for point being first point of this contour:
+						else if (c > 0 && (uint16_m)(glyph->contour_ends[c-1]+1) == p) {
+							// Wrap to end of this contour
+							pn1 = &n1;
+							n1.flags = glyph->points[glyph->contour_ends[c]].flags;
+						}
+
+						// Skip is previous point is ON curve;
+						// this avoids duplicate lines from what I'm aware
+						if (pn1->flags & MUTTR_ON_CURVE) {
+							++p;
 							continue;
 						}
 
@@ -5486,6 +5512,8 @@ mutt is developed primarily off of these sources of documentation:
 					for (uint32_m p = 0; p < glyph->num_points;) {
 						// Increment contour ID if necessary
 						if (p > glyph->contour_ends[c]) {
+							// Go to beginning of contour to avoid over-counting sometimes
+							p = glyph->contour_ends[c]+1;
 							++c;
 						}
 
@@ -5522,6 +5550,7 @@ mutt is developed primarily off of these sources of documentation:
 								muttR_GlyphCurve(l, p0->x, p0->y, p1->x, p1->y,
 									(p1->x + p2->x) / 2.f, (p1->y + p2->y) / 2.f
 								);
+
 								l += MUTTR_LINES_PER_BEZIER;
 								p += 2;
 								continue;
@@ -5529,18 +5558,33 @@ mutt is developed primarily off of these sources of documentation:
 						}
 
 						// If we're here, the current point is OFF curve (OFF...)
-						// From that, we know that the previous point has to also
-						// be OFF curve (OFF, OFF[0]...) due to the logic of this
-						// loop.
 						// Get previous point:
 						muttRPoint* pn1 = &glyph->points[p-1];
-						// (Edge case for first point being off)
 						muttRPoint n1;
+						// Edge case for point being 0:
 						if (p == 0) {
+							// Wrap to last point of this contour
 							pn1 = &n1;
-							n1.x = 0.f;
-							n1.y = 0.f;
+							n1.x = glyph->points[glyph->contour_ends[0]].x;
+							n1.y = glyph->points[glyph->contour_ends[0]].y;
+							n1.flags = glyph->points[glyph->contour_ends[0]].flags;
 						}
+						// Edge case for point being first of contour:
+						else if (c > 0 && (uint16_m)(glyph->contour_ends[c-1]+1) == p) {
+							// Wrap to last point of this contour
+							pn1 = &n1;
+							n1.x = glyph->points[glyph->contour_ends[c]].x;
+							n1.y = glyph->points[glyph->contour_ends[c]].y;
+							n1.flags = glyph->points[glyph->contour_ends[c]].flags;
+						}
+
+						// Leave if previous point is ON;
+						// this avoids duplicate lines from what I'm aware
+						if (pn1->flags & MUTTR_ON_CURVE) {
+							++p;
+							continue;
+						}
+
 						// Get next point:
 						muttRPoint* p1 = muttR_GlyphNextPoint(glyph, p, 1, c);
 
@@ -6037,6 +6081,7 @@ mutt is developed primarily off of these sources of documentation:
 						if (mutt_result_is_fatal(res)) {
 							return res;
 						}
+
 						//data += write1;
 					}
 					// Composite:
