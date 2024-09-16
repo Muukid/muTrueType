@@ -1346,6 +1346,8 @@ mutt is developed primarily off of these sources of documentation:
 
 						// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
+						// @DOCLINE The x/y min/max values within `header` are overwritten upon a call to this function with correct values. If the values provided in `header` were invalid before mutt overwrites them, the non-fatal result values `MUTT_INVALID_GLYF_SIMPLE_X_COORD` or `MUTT_INVALID_GLYF_SIMPLE_X_COORD` will be given.
+
 						// @DOCLINE > This function checks if all of the values are compliant with information from other tables (especially maxp) and compliant with TrueType's specification with a few exceptions: as far as I'm aware, it's invalid to have a flag that uses values from a prior point (such as X_IS_SAME...) when the current flag is the first flag specified, since in that case, there's no "previous value" to repeat from. This is done in several common fonts, however, so mutt permits this, setting the value to 0 in this case.
 
 						// @DOCLINE > It's also invalid (from what I'm aware) to have the first point be off-curve, but in the case that such happens, mutt permits this, pretending that the previous point was an on-curve point at (0,0). It's also invalid (from what I'm aware) to have a repeat flag count that exceeds the amount of points, but since it's easy to internally make sure to simply not go over the point count, mutt permits this.
@@ -4561,6 +4563,8 @@ mutt is developed primarily off of these sources of documentation:
 
 			// Fills in (or calculates memory needed for) "muttSimpleGlyph" struct
 			MUDEF muttResult mutt_simple_glyph(muttFont* font, muttGlyphHeader* header, muttSimpleGlyph* glyph, muByte* data, uint32_m* written) {
+				muttResult res = MUTT_SUCCESS;
+
 				// Verify length for endPtsOfContours and instructionLength
 				// (req is u64 to avoid possible overflow)
 				uint64_m req = (((uint32_m)header->number_of_contours)*2) + 2;
@@ -4780,6 +4784,8 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Loop through each x-coordinate
+				int16_m x_min = 0;
+				int16_m x_max = 0;
 				pi = 0;
 				while (pi < points) {
 					// Get flags
@@ -4816,13 +4822,22 @@ mutt is developed primarily off of these sources of documentation:
 					int32_m test_val = prev_x + glyph->points[pi].x;
 					// - Verify that the point is within range
 					if (test_val < header->x_min || test_val > header->x_max) {
-						return MUTT_INVALID_GLYF_SIMPLE_X_COORD;
+						res = MUTT_INVALID_GLYF_SIMPLE_X_COORD;
+					}
+					// - Consider it with currently calculated x min/max
+					if (test_val < x_min) {
+						x_min = test_val;
+					}
+					if (test_val > x_max) {
+						x_max = test_val;
 					}
 					// - Assign
 					glyph->points[pi++].x = (int16_m)test_val;
 				}
 
 				// Loop through each y-coordinate
+				int16_m y_min = 0;
+				int16_m y_max = 0;
 				pi = 0;
 				while (pi < points) {
 					// Get flags
@@ -4859,17 +4874,29 @@ mutt is developed primarily off of these sources of documentation:
 					int32_m test_val = prev_y + glyph->points[pi].y;
 					// - Verify that the point is within range
 					if (test_val < header->y_min || test_val > header->y_max) {
-						return MUTT_INVALID_GLYF_SIMPLE_Y_COORD;
+						res = MUTT_INVALID_GLYF_SIMPLE_Y_COORD;
+					}
+					// - Consider it with currently calculated y min/max values
+					if (test_val < y_min) {
+						y_min = test_val;
+					}
+					if (test_val > y_max) {
+						y_max = test_val;
 					}
 					// - Assign
 					glyph->points[pi++].y = (int16_m)test_val;
 				}
 
+				// Write calculated x/y min/max values
+				header->x_min = x_min;
+				header->y_min = y_min;
+				header->x_max = x_max;
+				header->y_max = y_max;
 				// Write how many bytes of data were used
 				if (written) {
 					*written = data-orig_data;
 				}
-				return MUTT_SUCCESS;
+				return res;
 			}
 
 			// Simple glyph memory maximum
@@ -5507,6 +5534,13 @@ mutt is developed primarily off of these sources of documentation:
 						// loop.
 						// Get previous point:
 						muttRPoint* pn1 = &glyph->points[p-1];
+						// (Edge case for first point being off)
+						muttRPoint n1;
+						if (p == 0) {
+							pn1 = &n1;
+							n1.x = 0.f;
+							n1.y = 0.f;
+						}
 						// Get next point:
 						muttRPoint* p1 = muttR_GlyphNextPoint(glyph, p, 1, c);
 
@@ -6015,7 +6049,7 @@ mutt is developed primarily off of these sources of documentation:
 					if (written) {
 						*written = write0 + write1;
 					}
-					return MUTT_SUCCESS;
+					return res;
 				}
 
 				MUDEF uint32_m mutt_header_rglyph_max(muttFont* font) {
@@ -6032,7 +6066,9 @@ mutt is developed primarily off of these sources of documentation:
 		MUDEF muBool mutt_result_is_fatal(muttResult result) {
 			switch (result) {
 				default: return MU_TRUE; break;
-				case MUTT_SUCCESS: return MU_FALSE; break;
+				case MUTT_SUCCESS:
+				case MUTT_INVALID_GLYF_SIMPLE_X_COORD: case MUTT_INVALID_GLYF_SIMPLE_Y_COORD:
+					return MU_FALSE; break;
 			}
 		}
 

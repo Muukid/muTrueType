@@ -495,6 +495,8 @@ Upon a non-fatal result, `glyph` is filled with valid simple glyph information f
 
 This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
 
+The x/y min/max values within `header` are overwritten upon a call to this function with correct values. If the values provided in `header` were invalid before mutt overwrites them, the non-fatal result values `MUTT_INVALID_GLYF_SIMPLE_X_COORD` or `MUTT_INVALID_GLYF_SIMPLE_X_COORD` will be given.
+
 > This function checks if all of the values are compliant with information from other tables (especially maxp) and compliant with TrueType's specification with a few exceptions: as far as I'm aware, it's invalid to have a flag that uses values from a prior point (such as X_IS_SAME...) when the current flag is the first flag specified, since in that case, there's no "previous value" to repeat from. This is done in several common fonts, however, so mutt permits this, setting the value to 0 in this case.
 
 > It's also invalid (from what I'm aware) to have the first point be off-curve, but in the case that such happens, mutt permits this, pretending that the previous point was an on-curve point at (0,0). It's also invalid (from what I'm aware) to have a repeat flag count that exceeds the amount of points, but since it's easy to internally make sure to simply not go over the point count, mutt permits this.
