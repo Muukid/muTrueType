@@ -75,6 +75,10 @@ Currently, mutt only supports loading cmap formats 0, 4, and 12. This should be 
 
 mutt does not use the most efficient algorithms to convert codepoints to glyph IDs and vice versa for cmap formats.
 
+## Fairly slow rendering
+
+mutt is not particularly optimized extremely well in its rendering techniques, but could be optimized with fairly minimal effort in the future. It scans horizontal line by horizontal line, converting the glyph to a series of line segments and counting intersections. It considers each line segment for each horizontal line, which could be optimized by sorting the line segments in such a way that once a line is no longer being considered, every line before it is also not being considered. This optimization has yet to be implemented.
+
 # TrueType documentation
 
 Involved usage of the low-level API of mutt necessitates an understanding of the TrueType documentation. Terms from the TrueType documentation will be used with the assumption that the user has read it and understands these terms.
@@ -1357,6 +1361,13 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE The maximum amount of memory that will be needed for loading a simple glyph, in bytes, is provided by the function `mutt_simple_glyph_max_size`, defined below: @NLNT
 						MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
 
+					// @DOCLINE #### Simple glyph point count
+
+						// @DOCLINE Getting just the amount of points within a simple glyph based on its header is a fairly cheap operating requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: @NLNT
+						MUDEF muttResult mutt_simple_glyph_points(muttFont* font, muttGlyphHeader* header, uint16_m* num_points);
+
+						// @DOCLINE Upon a non-fatal result, `num_points` is dereferenced and set to the amount of points within the simple glyph indicated by `header`.
+
 				// @DOCLINE ### Composite glyph
 
 					typedef struct muttComponentGlyph muttComponentGlyph;
@@ -1392,7 +1403,7 @@ mutt is developed primarily off of these sources of documentation:
 
 					// @DOCLINE * If the `MUTT_WE_HAVE_A_SCALE` bit is 1, `scales[0]` is the scale; the contents of all other float indexes are undefined.
 					// @DOCLINE * If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively; the contents of all other float indexes are undefined.
-					// @DOCLINE * If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, yscale respectively).
+					// @DOCLINE * If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, and yscale respectively).
 					// @DOCLINE * If none of the bits mentioned above are 1, the values of `scales` are undefined.
 
 					// @DOCLINE The value for `glyph_index` is not verified to be a non-infinite loop of composite glyphs, and must be manually checked for by the user, unless being converted to a pixel glyph, in which case the conversion checks for this case.
@@ -1443,6 +1454,28 @@ mutt is developed primarily off of these sources of documentation:
 
 						// @DOCLINE The maximum amount of memory that will be needed for loading a composite glyph, in bytes, is provided by the function `mutt_composite_glyph_max_size`, defined below: @NLNT
 						MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font);
+
+					// @DOCLINE #### Composite glyph component retrieval
+
+						// @DOCLINE A composite glyph can be processed component-by-component using the function `mutt_composite_component`, defined below: @NLNT
+						MUDEF muttResult mutt_composite_component(muttFont* font, muttGlyphHeader* header, muByte** prog, muttComponentGlyph* component, muBool* no_more);
+
+						// @DOCLINE The upside of this is that it requires no upfront manual allocation. This function performs the same checks for validity as `mutt_composite_glyph` besides the component count being valid, which must be tracked by the user themself.
+
+						// @DOCLINE `prog` is a pointer to a pointer holding where mutt is reading TrueType data from, and should be initialized to `header->data` on the first call to `mutt_composite_component`.
+
+						// @DOCLINE Upon a non-fatal result, `component` will be dereferenced & set to the next component within the composite glyph (or the first component upon the first call to `mutt_composite_component`). `prog` will be incremented to the location of the next component, and if there *isn't* a next component, `no_more` will be dereferenced and set to `MU_TRUE`.
+
+					// @DOCLINE #### Composite glyph glyph indexes
+
+						// @DOCLINE The ability to go through each component within a composite glyph individually to get their glyph indexes with limited error checking is provided by the function `mutt_composite_component_glyph`, defined below: @NLNT
+						MUDEF muttResult mutt_composite_component_glyph(muttFont* font, muttGlyphHeader* header, muByte** prog, uint16_m* glyph_index, muBool* no_more);
+
+						// @DOCLINE `prog` is a pointer to a pointer holding where mutt is reading TrueType data from, and should be initialized to `header->data` on the first call to `mutt_composite_component_glyph`.
+
+						// @DOCLINE Upon a non-fatal result, `glyph_index` will be dereferenced & set to the glyph index of the current component, `prog` will be incremented to the next component, and if there *isn't* a next component, `no_more` will be dereferenced and set to `MU_TRUE`.
+
+						// @DOCLINE Limited error checking is performed on the composite glyph with this function. For example, the amount of components is not checked to be valid, nor the flag exclusivity of the transform flags when moving past them. The user should make sure that, when calling this function, they make sure that the number of components being scanned is valid when compared to the maximums listed within the maxp table. The glyph index is checkd to be valid before being given to the user.
 
 				// @DOCLINE ### Max glyph size
 
@@ -2342,13 +2375,15 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ### Composite glyph to rglyph
 
 				// @DOCLINE The function `mutt_composite_rglyph` converts a composite glyph to an rglyph, defined below: @NLNT
-				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data);
 
 				// @DOCLINE Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given composite glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
+				// @DOCLINE `data` should be a pointer to user-allocated memory of size `mutt_composite_rglyph_max` (in bytes). This makes it ***not*** follow the conventional format of a user-allocated function within mutt: the required amount of memory needed for converting a composite glyph to an rglyph is fixed across each font, and thus, has no `written` parameter.
+
 				// @DOCLINE The given composite glyph must have at least one contour, and that one contour must have points. The composite glyph given must be valid.
 
-				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+				// @DOCLINE This function does ***not*** currently work with composite glyphs that use ***phantom points***, as the table required for processing them (gvar) is not currently supported.
 
 				// @DOCLINE #### Composite glyph to rglyph memory maximum
 
@@ -2364,7 +2399,7 @@ mutt is developed primarily off of these sources of documentation:
 
 				// @DOCLINE The given glyph must have at least one contour, and that one contour must have points. The glyph header given must be valid.
 
-				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+				// @DOCLINE This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions). However, since the conversion of a composite glyph to an rglyph requires a fixed amount of memory per font, if `written` is ever dereferenced and set by this function relative to a composite glyph, it will be set to `mutt_composite_rglyph_max`.
 
 				// @DOCLINE #### Glyph header to rglyph memory maximum
 
@@ -2531,9 +2566,9 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT 522
 			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH` - the instruction length given by the simple glyph exceeded the maximum set by the maxp table.
 			#define MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH 523
-			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its minimum/maximum values.
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its listed minimum/maximum values. This is non-fatal, as mutt automatically overwrites the existing min/max values within the header.
 			#define MUTT_INVALID_GLYF_SIMPLE_X_COORD 524
-			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values. This is non-fatal, as mutt automatically overwrites the existing min/max values within the header.
 			#define MUTT_INVALID_GLYF_SIMPLE_Y_COORD 525
 
 			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_LENGTH` - the length of the composite glyph description is invalid/insufficient to describe the composite glyph.
@@ -2593,6 +2628,24 @@ mutt is developed primarily off of these sources of documentation:
 
 			// @DOCLINE * `MUTT_UNKNOWN_RASTER_METHOD` - the given raster method value was unrecognized.
 			#define MUTT_UNKNOWN_RASTER_METHOD 640
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had more contours than the maximum contour count indicated in the maxp table.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT 641
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had more points than the maximum point count indicated in the maxp table.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT 642
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had a larger component depth than the maximum component depth indicated in the maxp table.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH 643
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph (or a composite component within it) had more components than the maximum component count indicated in the maxp table.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT 644
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1` - the process of converting a composite glyph to an rglyph failed because a simple glyph had an argument1 value giving a point number that was out of range for the parent glyph.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1 645
+
+			// @DOCLINE * `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2` - the process of converting a composite glyph to an rglyph failed because a simple glyph had an argument2 value giving a point number that was out of range for the child glyph.
+			#define MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2 646
 
 		// @DOCLINE ## Check if result is fatal
 
@@ -2666,7 +2719,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		#endif /* string.h */
 
-		#if !defined(mu_fabsf)
+		#if !defined(mu_fabsf) || \
+			!defined(mu_roundf)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2674,6 +2728,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_fabsf` - equivalent to `fabsf`.
 			#ifndef mu_fabsf
 				#define mu_fabsf fabsf
+			#endif
+
+			// @DOCLINE * `mu_roundf` - equivalent to `roundf`.
+			#ifndef mu_roundf
+				#define mu_roundf roundf
 			#endif
 
 		#endif /* math.h */
@@ -4899,6 +4958,36 @@ mutt is developed primarily off of these sources of documentation:
 				return res;
 			}
 
+			// Calculates amount of points within a simple glyph
+			MUDEF muttResult mutt_simple_glyph_points(muttFont* font, muttGlyphHeader* header, uint16_m* num_points) {
+				// Give 0 for no contours
+				if (header->number_of_contours == 0) {
+					*num_points = 0;
+					return MUTT_SUCCESS;
+				}
+
+				// Verify length for endPtsOfContours
+				uint32_m req = ((uint32_m)header->number_of_contours) * 2;
+				if (header->length < req) {
+					return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+				}
+
+				// Skip to last element of endPtsOfContours and read
+				uint16_m rnum_points = MU_RBEU16(header->data + (((uint32_m)(header->number_of_contours-1)) * 2));
+				// Verify number of points won't overflow
+				if (rnum_points == 0xFFFF) {
+					return MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS;
+				}
+				// See if point count is good for maxp
+				if (++rnum_points > font->maxp->max_points) {
+					return MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT;
+				}
+
+				// Write point count and give success
+				*num_points = rnum_points;
+				return MUTT_SUCCESS;
+			}
+
 			// Simple glyph memory maximum
 			MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font) {
 				return
@@ -5214,6 +5303,188 @@ mutt is developed primarily off of these sources of documentation:
 				if (written) {
 					*written = data-orig_data;
 				}
+				return MUTT_SUCCESS;
+			}
+
+			// Gets a component of a composite glyph
+			// no_more is set to true when no more components exist
+			MUDEF muttResult mutt_composite_component(muttFont* font, muttGlyphHeader* header, muByte** prog, muttComponentGlyph* component, muBool* no_more) {
+				// Much of this code is very similar to the code in mutt_composite_glyph
+
+				// So-far component length:
+				uint32_m req = (*prog) - header->data;
+
+				// Verify length for flags and glyphIndex
+				req += 4;
+				if (header->length < req) {
+					return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+				}
+
+				// Read flags
+				component->flags = MU_RBEU16(*prog);
+				*prog += 2;
+				// Mark next component
+				if (!(component->flags & MUTT_MORE_COMPONENTS)) {
+					*no_more = MU_TRUE;
+				}
+
+				// Read glyphIndex
+				component->glyph_index = MU_RBEU16(*prog);
+				*prog += 2;
+				// Verify index range
+				if (component->glyph_index >= font->maxp->num_glyphs) {
+					return MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX;
+				}
+
+				// Argument handling:
+				if (component->flags & MUTT_ARG_1_AND_2_ARE_WORDS) {
+					// 2 bytes per arg.
+					req += 4;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Read values
+					if (component->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						// int16 xy values
+						component->argument1 = MU_RBES16(*prog);
+						*prog += 2;
+						component->argument2 = MU_RBES16(*prog);
+						*prog += 2;
+					} else {
+						// uint16 point numbers
+						component->argument1 = MU_RBEU16(*prog);
+						*prog += 2;
+						component->argument2 = MU_RBEU16(*prog);
+						*prog += 2;
+					}
+				}
+				else {
+					// 1 byte per arg.
+					req += 2;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Read values
+					if (component->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						// int8 xy values
+						component->argument1 = MU_RBES8((*prog)++);
+						component->argument2 = MU_RBES8((*prog)++);
+					} else {
+						// uint8 point numbers
+						component->argument1 = MU_RBEU8((*prog)++);
+						component->argument2 = MU_RBEU8((*prog)++);
+					}
+				}
+
+				// Transform data handling
+				if (component->flags & MUTT_WE_HAVE_A_SCALE) {
+					// One F2DOT14
+					req += 2;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Flag exclusivity
+					if ((component->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) || (component->flags & MUTT_WE_HAVE_A_TWO_BY_TWO)) {
+						return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+					}
+
+					// Read value
+					component->scales[0] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+				}
+				else if (component->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+					// Two F2DOT14s
+					req += 4;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Flag exclusivity
+					if ((component->flags & MUTT_WE_HAVE_A_SCALE) || (component->flags & MUTT_WE_HAVE_A_TWO_BY_TWO)) {
+						return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+					}
+
+					// Read values
+					component->scales[0] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+					component->scales[1] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+				}
+				else if (component->flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+					// Four F2DOT14s
+					req += 8;
+					if (header->length < req) {
+						return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+					}
+
+					// Flag exclusivity
+					if ((component->flags & MUTT_WE_HAVE_A_SCALE) || (component->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE)) {
+						return MUTT_INVALID_GLYF_COMPOSITE_FLAGS;
+					}
+
+					// Read values
+					component->scales[0] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+					component->scales[1] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+					component->scales[2] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+					component->scales[3] = MUTT_F2DOT14(*prog);
+					*prog += 2;
+				}
+
+				return MUTT_SUCCESS;
+			}
+
+			// Gets the glyph index component by component within a composite glyph
+			// no_more is set to true when no more components exist
+			// ^ There will always be at least one component from what I'm aware
+			MUDEF muttResult mutt_composite_component_glyph(muttFont* font, muttGlyphHeader* header, muByte** prog, uint16_m* glyph_index, muBool* no_more) {
+				// prog is always at the beginning of a component record
+
+				// Ensure length for flags + glyphIndex
+				if (((*prog+4)-header->data) > header->length) {
+					return MUTT_INVALID_GLYF_COMPOSITE_LENGTH;
+				}
+
+				// Read flags to see if there's any more after this
+				uint16_m flags = MU_RBEU16(*prog);
+				*prog += 2;
+				if (!(flags & MUTT_MORE_COMPONENTS)) {
+					*no_more = MU_TRUE;
+				}
+				// Read glyphIndex
+				uint16_m read_glyph_index = MU_RBEU16(*prog);
+				*prog += 2;
+				if (read_glyph_index >= font->maxp->num_glyphs) {
+					return MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX;
+				}
+
+				// Increment prog past argument1 and argument2
+				if (flags & MUTT_ARG_1_AND_2_ARE_WORDS) {
+					*prog += 4;
+				} else {
+					*prog += 2;
+				}
+
+				// Increment prog past transform data
+				// (Not checking for flag exclusivity)
+				if (flags & MUTT_WE_HAVE_A_SCALE) {
+					*prog += 2;
+				} else if (flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+					*prog += 4;
+				} else if (flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+					*prog += 8;
+				}
+
+				// (Not checking for length after argument1, argument2, and transform
+				// since we're not reading data from there)
+
+				// Write gylphIndex and give success
+				*glyph_index = read_glyph_index;
 				return MUTT_SUCCESS;
 			}
 
@@ -6017,12 +6288,456 @@ mutt is developed primarily off of these sources of documentation:
 
 			/* Composite */
 
+				// Used to pass data between function calls within composite glyph processing
+				struct muttR_CompProg {
+					// Progressives (move up between rglyphs):
+					uint32_m num_contours;
+					uint32_m num_points;
+					uint16_m* contour_ends;
+					muttRPoint* points;
+					float x_min;
+					float y_min;
+					float x_max;
+					float y_max;
+					// Actual rglyph being filled in:
+					muttRGlyph* rglyph;
+					// Temp simple glyph mem:
+					muByte* temp_simple_max;
+					// Max values:
+					uint16_m max_contours;
+					uint16_m max_points;
+				};
+				typedef struct muttR_CompProg muttR_CompProg;
+
+				// Initializes a CompProg struct
+				void muttR_CompProg_init(muttR_CompProg* prog, muttRGlyph* rglyph, muByte* temp_simple_max, muttFont* font) {
+					// Set numerical progressives to 0
+					prog->num_contours = 0;
+					prog->num_points = 0;
+					prog->x_min = 0.f;
+					prog->y_min = 0.f;
+					prog->x_max = 0.f;
+					prog->y_max = 0.f;
+					// Set initial progressive pointers
+					prog->contour_ends = rglyph->contour_ends;
+					prog->points = rglyph->points;
+					// Rglyph
+					prog->rglyph = rglyph;
+					rglyph->num_points = 0;
+					rglyph->num_contours = 0;
+					// Temp simple max
+					prog->temp_simple_max = temp_simple_max;
+					// Max values
+					prog->max_contours = font->maxp->max_composite_contours;
+					prog->max_points = font->maxp->max_composite_points;
+				}
+
+				// Converts simple glyph component to rglyph within the CompProg
+				// Glyph must have at least 1 contour
+				// This process gives the raw TrueType coordinates in float form;
+				// point and PPI are accounted for afterwards to separate that
+				// logic from the point alignment and such.
+				muttResult mutt_composite_simple_rglyph(muttR_CompProg* prog, muttGlyphHeader* header, muttSimpleGlyph* glyph, muttComponentGlyph* comp) {
+					// Account for number of contours
+					prog->num_contours += header->number_of_contours;
+					if (prog->num_contours > prog->max_contours) {
+						return MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT;
+					}
+					// Account for number of points
+					prog->num_points += glyph->end_pts_of_contours[header->number_of_contours-1]+1;
+					if (prog->num_points > prog->max_points) {
+						return MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT;
+					}
+					uint16_m num_points = glyph->end_pts_of_contours[header->number_of_contours-1]+1;
+
+					// Calculate scales
+					float xscale=1.f, scale01=0.f, scale10=0.f, yscale=1.f;
+
+					if (comp->flags & MUTT_WE_HAVE_A_SCALE) {
+						// One scale applied to x and y
+						xscale = yscale = comp->scales[0];
+					}
+					else if (comp->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+						// Individual x and y scale
+						xscale = comp->scales[0];
+						yscale = comp->scales[1];
+					}
+					else if (comp->flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+						// Full 2x2 affine transformation
+						xscale  = comp->scales[0];
+						scale01 = comp->scales[1];
+						scale10 = comp->scales[2];
+						yscale  = comp->scales[3];
+					}
+
+
+					// Calculate argument1 & argument2 offsets
+					float argument1, argument2;
+					if (comp->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						// Just read the offsets
+						argument1 = comp->argument1;
+						argument2 = comp->argument2;
+						// Possible scaling:
+						if (comp->flags & MUTT_SCALED_COMPONENT_OFFSET) {
+							float n_argument1 = (xscale  * argument1) + (scale10 * argument2);
+							float n_argument2 = (scale01 * argument1) + (yscale  * argument2);
+							argument1 = n_argument1;
+							argument2 = n_argument2;
+							// Possible rounding:
+							if (comp->flags & MUTT_ROUND_XY_TO_GRID) {
+								argument1 = mu_roundf(argument1);
+								argument2 = mu_roundf(argument2);
+							}
+						}
+					}
+					else {
+						// argument1 is parent (prog->rglyph) point number
+						// argument2 is child (glyph) point number
+						// Offset should align these two points
+
+						// NOTE: phantom points can be used in this process, but
+						// mutt v1.0.0 doesn't have support for gvar (which, as
+						// far as I can tell, is needed to process the phantom
+						// points); composite glyphs that depend on phantom
+						// points will, for now, render incorrectly or possibly
+						// not render successfully at all.
+
+						// - Parent point -
+						// Ensure point number is in range
+						if (comp->argument1 >= prog->rglyph->num_points) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1;
+						}
+						// Get parent x and y
+						float parent_x = prog->rglyph->points[comp->argument1].x;
+						float parent_y = prog->rglyph->points[comp->argument1].y;
+
+						// - Child point -
+						// Ensure point number is in range
+						if (comp->argument2 >= num_points) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2;
+						}
+						// Get child x and y
+						float t_child_x = glyph->points[comp->argument2].x;
+						float t_child_y = glyph->points[comp->argument2].y;
+						// Calculate it with scales applied so that point is still
+						// aligned with scales
+						float child_x = (xscale  * t_child_x) + (scale10 * t_child_y);
+						float child_y = (scale01 * t_child_x) + (yscale  * t_child_y);
+
+						// Calcaulte argument1 & argument2 to be offsets that align
+						// the child point to the parent point
+						argument1 = parent_x - child_x;
+						argument2 = parent_y - child_y;
+					}
+
+					// Loop through each point
+					for (uint16_m p = 0; p < num_points; ++p) {
+						// Calculate scaled point
+						float point_x = glyph->points[p].x;
+						float point_y = glyph->points[p].y;
+						prog->points[p].x = (xscale  * point_x) + (scale10 * point_y);
+						prog->points[p].y = (scale01 * point_x) + (yscale  * point_y);
+						// Add offsets
+						prog->points[p].x += argument1;
+						prog->points[p].y += argument2;
+
+						// Set x/y min/max values if this is the first defined point
+						// of the composite glyph
+						/*if (&prog->points[p] == prog->rglyph->points) {
+							prog->x_min = prog->x_max = prog->points[p].x;
+							prog->y_min = prog->y_max = prog->points[p].y;
+						}
+						// Adjust x/y min/max values if it's out of the existing
+						// boundaries
+						else {
+							// x min/max
+							if (prog->points[p].x < prog->x_min) {
+								prog->x_min = prog->points[p].x;
+							}
+							if (prog->points[p].x > prog->x_max) {
+								prog->x_max = prog->points[p].x;
+							}
+							// y min/max
+							if (prog->points[p].y < prog->y_min) {
+								prog->y_min = prog->points[p].y;
+							}
+							if (prog->points[p].y > prog->y_max) {
+								prog->y_max = prog->points[p].y;
+							}
+						}*/
+
+						// Flags of this point
+						prog->points[p].flags = (glyph->points[p].flags & MUTT_ON_CURVE_POINT) ?(MUTTR_ON_CURVE) :(0);
+					}
+					// Push progressive points pointer
+					prog->points += num_points;
+
+					// Loop through each contour end
+					for (uint16_m c = 0; c < header->number_of_contours; ++c) {
+						// Each contour end is the glyph-relative contour end
+						// with the offset of all the previous points
+						// I'm bad at explaining numbers
+						prog->contour_ends[c] = prog->rglyph->num_points + glyph->end_pts_of_contours[c];
+					}
+					// Push progressive contour ends pointer
+					prog->contour_ends += header->number_of_contours;
+
+					// Add to rglyph
+					prog->rglyph->num_points += num_points;
+					prog->rglyph->num_contours += header->number_of_contours;
+					return MUTT_SUCCESS;
+				}
+
+				// Processes composite component for CompProg
+				muttResult mutt_component_rglyph(muttFont* font, muttR_CompProg* prog, muttComponentGlyph* comp, uint32_m depth) {
+					muttResult res = MUTT_SUCCESS;
+
+					// Store point stuff BEFORE all points for this component are processed
+					uint16_m prev_num_points = prog->num_points;
+					muttRPoint* prev_points = prog->points;
+
+					// Get header of glyph index
+					muttGlyphHeader header;
+					res = mutt_glyph_header(font, comp->glyph_index, &header);
+					if (mutt_result_is_fatal(res)) {
+						return res;
+					}
+
+					// Simple glyph with contours:
+					if (header.number_of_contours > 0) {
+						// Get simple glyph
+						muttSimpleGlyph glyph;
+						res = mutt_simple_glyph(font, &header, &glyph, prog->temp_simple_max, 0);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+
+						// Process simple glyph
+						res = mutt_composite_simple_rglyph(prog, &header, &glyph, comp);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+
+						return res;
+					}
+
+					// Simple glyph with no contours:
+					else if (header.number_of_contours == 0) {
+						// Do nothing for this guy
+						return res;
+					}
+
+					// Composite glyph
+					else {
+						// Increment depth tracker
+						if (++depth > font->maxp->max_component_depth) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH;
+						}
+
+						// Loop through each component
+						uint32_m component_count = 0;
+						muBool no_more = MU_FALSE;
+						muByte* bprog = header.data;
+						while (!no_more) {
+							// Verify incremented component count
+							if (++component_count > font->maxp->max_component_elements) {
+								return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT;
+							}
+
+							// Get individual component
+							muttComponentGlyph this_component;
+							res = mutt_composite_component(font, &header, &bprog, &this_component, &no_more);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+							// Process component with this current function
+							// (Scary recursion)
+							res = mutt_component_rglyph(font, prog, &this_component, depth);
+							if (mutt_result_is_fatal(res)) {
+								return res;
+							}
+						}
+					}
+
+					// This code is considerably similar to mutt_composite_simple_rglyph
+
+					// Calculate this component's values
+					uint16_m num_points = prog->num_points - prev_num_points;
+
+					// Calculate scales
+					float xscale=1.f, scale01=0.f, scale10=0.f, yscale=1.f;
+
+					if (comp->flags & MUTT_WE_HAVE_A_SCALE) {
+						// One scale applied to x and y
+						xscale = yscale = comp->scales[0];
+					}
+					else if (comp->flags & MUTT_WE_HAVE_AN_X_AND_Y_SCALE) {
+						// Individual x and y scale
+						xscale = comp->scales[0];
+						yscale = comp->scales[1];
+					}
+					else if (comp->flags & MUTT_WE_HAVE_A_TWO_BY_TWO) {
+						// Full 2x2 affine transformation
+						xscale  = comp->scales[0];
+						scale01 = comp->scales[1];
+						scale10 = comp->scales[2];
+						yscale  = comp->scales[3];
+					}
+
+					// Calculate argument1 and argument2 offsets
+					float argument1, argument2;
+					if (comp->flags & MUTT_ARGS_ARE_XY_VALUES) {
+						// Just read the offsets
+						argument1 = comp->argument1;
+						argument2 = comp->argument2;
+						// Possible scaling:
+						if (comp->flags & MUTT_SCALED_COMPONENT_OFFSET) {
+							float n_argument1 = (xscale  * argument1) + (scale10 * argument2);
+							float n_argument2 = (scale01 * argument1) + (yscale  * argument2);
+							argument1 = n_argument1;
+							argument2 = n_argument2;
+							// Possible rounding:
+							if (comp->flags & MUTT_ROUND_XY_TO_GRID) {
+								argument1 = mu_roundf(argument1);
+								argument2 = mu_roundf(argument2);
+							}
+						}
+					}
+					else {
+						// argument1 is parent (rglyph->points, prev_num_points)
+						// argument2 is child (prev_points, num_points)
+
+						// - Parent point -
+						// Ensure point range
+						if (comp->argument1 >= prev_num_points) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1;
+						}
+						// Get parent x and y
+						float parent_x = prog->rglyph->points[comp->argument1].x;
+						float parent_y = prog->rglyph->points[comp->argument1].y;
+
+						// - Child point -
+						// Ensure point range
+						if (comp->argument2 >= num_points) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2;
+						}
+						// Get child x and y
+						float t_child_x = prev_points[comp->argument2].x;
+						float t_child_y = prev_points[comp->argument2].y;
+						// Calculate it with scales applied so that point is still
+						// aligned with scales
+						float child_x = (xscale  * t_child_x) + (scale10 * t_child_y);
+						float child_y = (scale01 * t_child_x) + (yscale  * t_child_y);
+
+						// Calculate argument1 & argument2 to be offsets that align
+						// the child point to the parent point
+						argument1 = parent_x - child_x;
+						argument2 = parent_y - child_y;
+					}
+
+					// Loop through each point
+					for (uint16_m p = 0; p < num_points; ++p) {
+						// Calculate scaled point
+						float point_x = prev_points[p].x;
+						float point_y = prev_points[p].y;
+						prev_points[p].x = (xscale  * point_x) + (scale10 * point_y);
+						prev_points[p].y = (scale01 * point_x) + (yscale  * point_y);
+						// Add offsets
+						prev_points[p].x += argument1;
+						prev_points[p].y += argument2;
+					}
+
+					return res;
+				}
+
+				// Converts all TrueType-calculated coordinates from a composite-converted rglyph
+				// to pixel coordinates
+				void mutt_composite_rglyph_coords(muttFont* font, muttR_CompProg* prog, muttRGlyph* rglyph, float point_size, float ppi) {
+					// Calculate x/y min/max values
+					prog->x_min = prog->x_max = rglyph->points[0].x;
+					prog->y_min = prog->y_max = rglyph->points[0].y;
+					for (uint16_m p = 1; p < rglyph->num_points; ++p) {
+						// x min/max
+						if (rglyph->points[p].x < prog->x_min) {
+							prog->x_min = rglyph->points[p].x;
+						}
+						if (rglyph->points[p].x > prog->x_max) {
+							prog->x_max = rglyph->points[p].x;
+						}
+						// y min/max
+						if (rglyph->points[p].y < prog->y_min) {
+							prog->y_min = rglyph->points[p].y;
+						}
+						if (rglyph->points[p].y > prog->y_max) {
+							prog->y_max = rglyph->points[p].y;
+						}
+					}
+
+					// Much of this code is considerably similar to mutt_simple_rglyph
+
+					// Calculate point offsets based on glyph's min/max values
+					float px = -mutt_funits_to_punits(font, prog->x_min, point_size, ppi) + 1.f;
+					float py = -mutt_funits_to_punits(font, prog->y_min, point_size, ppi) + 1.f;
+
+					// Loop through each point
+					for (uint16_m p = 0; p < rglyph->num_points; ++p) {
+						// X and Y
+						rglyph->points[p].x = px + mutt_funits_to_punits(font, rglyph->points[p].x, point_size, ppi);
+						rglyph->points[p].y = py + mutt_funits_to_punits(font, rglyph->points[p].y, point_size, ppi);
+					}
+
+					// Calculate x/y max
+					rglyph->x_max = px + mutt_funits_to_punits(font, prog->x_max, point_size, ppi);
+					rglyph->y_max = py + mutt_funits_to_punits(font, prog->y_max, point_size, ppi);
+				}
+
 				// Composite glyph -> raster glyph
-				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+				// NO mem req abilities unfortunately
+				MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data) {
+					muttResult res = MUTT_SUCCESS;
+
+					// Allocate temp simple max memory
+					// This cannot be allocated within font, as it could lead to
+					// very unpredictable multi-threaded behavior
+					muByte* temp_simple_max = (muByte*)mu_malloc(mutt_simple_glyph_max_size(font));
+					if (!temp_simple_max) {
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Set rglyph data
+					rglyph->contour_ends = (uint16_m*)data;
+					rglyph->points = (muttRPoint*)((data + (((uint32_m)font->maxp->max_composite_contours)*2)));
+
+					// Initialize CompProg
+					muttR_CompProg prog;
+					muttR_CompProg_init(&prog, rglyph, temp_simple_max, font);
+
+					// Loop through each component
+					for (uint16_m c = 0; c < glyph->component_count; ++c) {
+						// Process component
+						res = mutt_component_rglyph(font, &prog, &glyph->components[c], 1);
+						if (mutt_result_is_fatal(res)) {
+							mu_free(temp_simple_max);
+							return res;
+						}
+					}
+
+					// Convert collected TrueType coordinates to pixel coordinates
+					mutt_composite_rglyph_coords(font, &prog, rglyph, point_size, ppi);
+
+					// Free temp simple max memory
+					mu_free(temp_simple_max);
+					return res; if (header) {}
+				}
 
 				// Memory maximum
 				MUDEF uint32_m mutt_composite_rglyph_max(muttFont* font) {
-					return 0; if (font) {}
+					return
+						// contour_ends
+						(sizeof(uint16_m) * font->maxp->max_composite_contours)
+						// points
+						+ (sizeof(muttRPoint) * font->maxp->max_composite_points)
+					;
 				}
 
 			/* Header */
@@ -6055,10 +6770,7 @@ mutt is developed primarily off of these sources of documentation:
 								return res;
 							}
 							// Rglyph data:
-							//res = mutt_composite_rglyph(font, header, 0, 0, point_size, ppi, 0, &write1);
-							if (mutt_result_is_fatal(res)) {
-								return res;
-							}
+							write1 = mutt_composite_rglyph_max(font);
 						}
 
 						// Write sum of memory needed
@@ -6086,8 +6798,22 @@ mutt is developed primarily off of these sources of documentation:
 					}
 					// Composite:
 					else {
-						// @TODO
-						return MUTT_UNKNOWN_RASTER_METHOD;
+						// Load composite glyph
+						muttCompositeGlyph glyph;
+						res = mutt_composite_glyph(font, header, &glyph, data, &write0);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+						data += write0;
+
+						// Convert to rglyph
+						// MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data)
+						res = mutt_composite_rglyph(font, header, &glyph, rglyph, point_size, ppi, data);
+						if (mutt_result_is_fatal(res)) {
+							return res;
+						}
+						write1 = mutt_composite_rglyph_max(font);
+						//data += write1;
 					}
 
 					// Write written
@@ -6205,6 +6931,12 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_CMAP12_END_CHAR_CODE: return "MUTT_INVALID_CMAP12_END_CHAR_CODE"; break;
 				case MUTT_CMAP_REQUIRES_MAXP: return "MUTT_CMAP_REQUIRES_MAXP"; break;
 				case MUTT_UNKNOWN_RASTER_METHOD: return "MUTT_UNKNOWN_RASTER_METHOD"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT: return "MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT: return "MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH: return "MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT: return "MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1: return "MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1"; break;
+				case MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2: return "MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2"; break;
 			}
 		}
 

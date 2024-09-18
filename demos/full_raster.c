@@ -5,7 +5,7 @@
 DEMO NAME:          full_raster.c
 DEMO WRITTEN BY:    Muukid
 CREATION DATE:      2024-09-16
-LAST UPDATED:       2024-09-16
+LAST UPDATED:       2024-09-18
 
 ============================================================
                         DEMO PURPOSE
@@ -57,7 +57,7 @@ More explicit license information at the end of file.
 	muttResult result = MUTT_SUCCESS;
 
 	// Point size of rasterization
-	float point_size = 50.f;
+	float point_size = 100.f;
 	// PPI of display for rasterization
 	float PPI = 96.f;
 
@@ -147,7 +147,7 @@ int main(void)
 		muttRGlyph glyph;
 		uint32_m written;
 		result = mutt_header_rglyph(&font, &header, &glyph, point_size, PPI, rdata, &written);
-		if (result != MUTT_SUCCESS && result != MUTT_UNKNOWN_RASTER_METHOD) {
+		if (result != MUTT_SUCCESS) {
 			printf("%" PRIu16 " (rglyph) - %s", g, mutt_result_get_name(result));
 			if (mutt_result_is_fatal(result)) {
 				printf(" (fatal)\n\n");
@@ -192,7 +192,12 @@ int main(void)
 
 		// Create filename based on codepoint
 		char name[24];
-		sprintf(name, "output/%" PRIu16 ".png", g);
+		// Simple glyph name:
+		if (header.number_of_contours > 0) {
+			sprintf(name, "output/%" PRIu16 " (s).png", g);
+		} else {
+			sprintf(name, "output/%" PRIu16 " (c).png", g);
+		}
 		// Output result to PNG file
 		if (!stbi_write_png(name, bitmap.width, bitmap.height, 1, bitmap.pixels, bitmap.stride)) {
 			printf("%" PRIu16 " (outputting) - stbi_write_png failed to write '%s'\n", g, name);
@@ -204,7 +209,6 @@ int main(void)
 
 		// Deallocate pixels
 		free(bitmap.pixels);
-		if (g == 327) {printf("...\n");}
 	}
 
 	// Free rgylph data

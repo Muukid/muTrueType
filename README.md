@@ -66,6 +66,10 @@ Currently, mutt only supports loading cmap formats 0, 4, and 12. This should be 
 
 mutt does not use the most efficient algorithms to convert codepoints to glyph IDs and vice versa for cmap formats.
 
+## Fairly slow rendering
+
+mutt is not particularly optimized extremely well in its rendering techniques, but could be optimized with fairly minimal effort in the future. It scans horizontal line by horizontal line, converting the glyph to a series of line segments and counting intersections. It considers each line segment for each horizontal line, which could be optimized by sorting the line segments in such a way that once a line is no longer being considered, every line before it is also not being considered. This optimization has yet to be implemented.
+
 # TrueType documentation
 
 Involved usage of the low-level API of mutt necessitates an understanding of the TrueType documentation. Terms from the TrueType documentation will be used with the assumption that the user has read it and understands these terms.
@@ -510,6 +514,17 @@ MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
 ```
 
 
+#### Simple glyph point count
+
+Getting just the amount of points within a simple glyph based on its header is a fairly cheap operating requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: 
+
+```c
+MUDEF muttResult mutt_simple_glyph_points(muttFont* font, muttGlyphHeader* header, uint16_m* num_points);
+```
+
+
+Upon a non-fatal result, `num_points` is dereferenced and set to the amount of points within the simple glyph indicated by `header`.
+
 ### Composite glyph
 
 The struct `muttCompositeGlyph` represents a composite glyph in mutt, and has the following members:
@@ -540,7 +555,7 @@ The data of `scales` depends on the value of `flags` (see TrueType/OpenType docu
 
 * If the `MUTT_WE_HAVE_AN_X_AND_Y_SCALE` bit is 1, `scales[0]` and `scales[1]` are the x- and y-scales respectively; the contents of all other float indexes are undefined.
 
-* If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, yscale respectively).
+* If the `MUTT_WE_HAVE_A_TWO_BY_TWO` bit is 1, `scales[0]`, `scales[1]`, `scales[2]`, and `scales[3]` are the 2-by-2 affine transformation values (xscale, scale01, scale10, and yscale respectively).
 
 * If none of the bits mentioned above are 1, the values of `scales` are undefined.
 
@@ -599,6 +614,36 @@ The maximum amount of memory that will be needed for loading a composite glyph, 
 MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font);
 ```
 
+
+#### Composite glyph component retrieval
+
+A composite glyph can be processed component-by-component using the function `mutt_composite_component`, defined below: 
+
+```c
+MUDEF muttResult mutt_composite_component(muttFont* font, muttGlyphHeader* header, muByte** prog, muttComponentGlyph* component, muBool* no_more);
+```
+
+
+The upside of this is that it requires no upfront manual allocation. This function performs the same checks for validity as `mutt_composite_glyph` besides the component count being valid, which must be tracked by the user themself.
+
+`prog` is a pointer to a pointer holding where mutt is reading TrueType data from, and should be initialized to `header->data` on the first call to `mutt_composite_component`.
+
+Upon a non-fatal result, `component` will be dereferenced & set to the next component within the composite glyph (or the first component upon the first call to `mutt_composite_component`). `prog` will be incremented to the location of the next component, and if there *isn't* a next component, `no_more` will be dereferenced and set to `MU_TRUE`.
+
+#### Composite glyph glyph indexes
+
+The ability to go through each component within a composite glyph individually to get their glyph indexes with limited error checking is provided by the function `mutt_composite_component_glyph`, defined below: 
+
+```c
+MUDEF muttResult mutt_composite_component_glyph(muttFont* font, muttGlyphHeader* header, muByte** prog, uint16_m* glyph_index, muBool* no_more);
+```
+
+
+`prog` is a pointer to a pointer holding where mutt is reading TrueType data from, and should be initialized to `header->data` on the first call to `mutt_composite_component_glyph`.
+
+Upon a non-fatal result, `glyph_index` will be dereferenced & set to the glyph index of the current component, `prog` will be incremented to the next component, and if there *isn't* a next component, `no_more` will be dereferenced and set to `MU_TRUE`.
+
+Limited error checking is performed on the composite glyph with this function. For example, the amount of components is not checked to be valid, nor the flag exclusivity of the transform flags when moving past them. The user should make sure that, when calling this function, they make sure that the number of components being scanned is valid when compared to the maximums listed within the maxp table. The glyph index is checkd to be valid before being given to the user.
 
 ### Max glyph size
 
@@ -1550,15 +1595,17 @@ MUDEF uint32_m mutt_simple_rglyph_max(muttFont* font);
 The function `mutt_composite_rglyph` converts a composite glyph to an rglyph, defined below: 
 
 ```c
-MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data, uint32_m* written);
+MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data);
 ```
 
 
 Upon a non-fatal result, `rglyph` is filled with valid raster glyph information for the given composite glyph using memory from `data`. Upon a fatal result, the contents of `rglyph` and `data` are undefined. The given rglyph information is only valid for as long as `font` is not deloaded, and as long as `data` goes unmodified.
 
+`data` should be a pointer to user-allocated memory of size `mutt_composite_rglyph_max` (in bytes). This makes it ***not*** follow the conventional format of a user-allocated function within mutt: the required amount of memory needed for converting a composite glyph to an rglyph is fixed across each font, and thus, has no `written` parameter.
+
 The given composite glyph must have at least one contour, and that one contour must have points. The composite glyph given must be valid.
 
-This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+This function does ***not*** currently work with composite glyphs that use ***phantom points***, as the table required for processing them (gvar) is not currently supported.
 
 #### Composite glyph to rglyph memory maximum
 
@@ -1582,7 +1629,7 @@ Upon a non-fatal result, `rglyph` is filled with valid raster glyph information 
 
 The given glyph must have at least one contour, and that one contour must have points. The glyph header given must be valid.
 
-This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions).
+This function follows the format of a user-allocated function. For an explanation of how `data` and `written` are supposed to be used within this function, see [the user-allocated function section](#user-allocated-functions). However, since the conversion of a composite glyph to an rglyph requires a fixed amount of memory per font, if `written` is ever dereferenced and set by this function relative to a composite glyph, it will be set to `mutt_composite_rglyph_max`.
 
 #### Glyph header to rglyph memory maximum
 
@@ -1733,9 +1780,9 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_INVALID_GLYF_SIMPLE_INSTRUCTION_LENGTH` - the instruction length given by the simple glyph exceeded the maximum set by the maxp table.
 
-* `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its minimum/maximum values.
+* `MUTT_INVALID_GLYF_SIMPLE_X_COORD` - an x-coordinate within the simple glyph was out of range for its listed minimum/maximum values. This is non-fatal, as mutt automatically overwrites the existing min/max values within the header.
 
-* `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values.
+* `MUTT_INVALID_GLYF_SIMPLE_Y_COORD` - a y-coordinate within the simple glyph was out of range for its minimum/maximum values. This is non-fatal, as mutt automatically overwrites the existing min/max values within the header.
 
 * `MUTT_INVALID_GLYF_COMPOSITE_LENGTH` - the length of the composite glyph description is invalid/insufficient to describe the composite glyph.
 
@@ -1785,6 +1832,18 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_UNKNOWN_RASTER_METHOD` - the given raster method value was unrecognized.
 
+* `MUTT_INVALID_RGLYPH_COMPOSITE_CONTOUR_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had more contours than the maximum contour count indicated in the maxp table.
+
+* `MUTT_INVALID_RGLYPH_COMPOSITE_POINT_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had more points than the maximum point count indicated in the maxp table.
+
+* `MUTT_INVALID_RGLYPH_COMPOSITE_DEPTH` - the process of converting a composite glyph to an rglyph failed because the given composite glyph had a larger component depth than the maximum component depth indicated in the maxp table.
+
+* `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT` - the process of converting a composite glyph to an rglyph failed because the given composite glyph (or a composite component within it) had more components than the maximum component count indicated in the maxp table.
+
+* `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT1` - the process of converting a composite glyph to an rglyph failed because a simple glyph had an argument1 value giving a point number that was out of range for the parent glyph.
+
+* `MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_ARGUMENT2` - the process of converting a composite glyph to an rglyph failed because a simple glyph had an argument2 value giving a point number that was out of range for the child glyph.
+
 ## Check if result is fatal
 
 The function `mutt_result_is_fatal` returns whether or not a given `muttResult` value is fatal, defined below: 
@@ -1832,3 +1891,5 @@ mutt has several C standard library dependencies, all of which are overridable b
 ## `math.h` dependencies
 
 * `mu_fabsf` - equivalent to `fabsf`.
+
+* `mu_roundf` - equivalent to `roundf`.
