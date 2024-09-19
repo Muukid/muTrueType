@@ -30,9 +30,13 @@ Demos are designed for mutt to both test its functionality and to allow users to
 
 ## Demo resources
 
-The demos use other files to operate correctly. These other files can be found in the `resources` folder within `demos`, and this folder is expected to be in the same location that the program is executing from. For example, if a user compiles a demo into `main.exe`, and decides to run it, the `resources` folder from `demos` should be in the same directory as `main.exe`.
+The demos use other files to operate correctly when running as a compiled executable. These other files can be found in the `resources` folder within `demos`, and this folder is expected to be in the same location that the program is executing from. For example, if a user compiles a demo into `main.exe`, and decides to run it, the `resources` folder from `demos` should be in the same directory as `main.exe`.
 
 The resources' licenses may differ from the licensing of mutt itself; see the [license section that covers demo resources](#licensing-of-demo-resources).
+
+## Demo include dependencies
+
+Some demos use other include files to function properly. These files can be found in the `include` folder within `demos`, and should be within the user's include directory when compiling the demos.
 
 # Licensing
 
@@ -431,7 +435,7 @@ Every glyph, simple or composite, is described initially by its header, which is
 
 * `uint32_m length` - the length of the data after the header in bytes. If this member is equal to 0, the given glyph has no outline, and should not be called with any functions.
 
-The minimums and maximums for x- and y-coordinates within the glyph header are not checked initially (besides making sure the minimums are less than or equal to the maximums, and that they're within range of the values provided by the head table); if the actual glyph coordinates are not confined within the given minimums and maximums, a bad result will be provided upon loading the simple glyph data.
+The minimums and maximums for x- and y-coordinates within the glyph header are not checked initially (besides making sure the minimums are less than or equal to the maximums, and that they're within range of the values provided by the head table); if the actual glyph coordinates are not confined within the given minimums and maximums, a non-fatal result will be provided upon loading the simple glyph data. Either way, the header's listed x/y min/max values are overwritten with mutt's upon loading a simple glyph.
 
 #### Get glyph header
 
@@ -516,7 +520,7 @@ MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
 
 #### Simple glyph point count
 
-Getting just the amount of points within a simple glyph based on its header is a fairly cheap operating requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: 
+Getting just the amount of points within a simple glyph based on its header is a fairly cheap operation, requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: 
 
 ```c
 MUDEF muttResult mutt_simple_glyph_points(muttFont* font, muttGlyphHeader* header, uint16_m* num_points);
@@ -1420,7 +1424,7 @@ The raster API has the ability to [rasterize](#rasterize-glyph) [TrueType-like g
 
 A "raster glyph" (often shortened to "rglyph", respective struct [`muttRGlyph`](#rglyph-struct)) is a glyph described for rasterization in the raster API, being similar to how a simple glyph is defined in the low-level API, and is heavily based on how glyphs are specified in TrueType.
 
-The most common usage of rglyphs is for [rasterizing given glyphs in a TrueType font](#rasterization-of-truetype-glyphs). This can be achieved via converting a simple or composite glyph retrieved from the low-level API to an rglyph equivalent, which mutt has built-in support for, and can do [automatically via rendering a glyph purely based on its glyph ID](#rasterize-glyph-id).
+The most common usage of rglyphs is for [rasterizing given glyphs in a TrueType font](#rasterization-of-truetype-glyphs). This can be achieved via [converting a simple](simple-glyph-to-rglyph) or [composite glyph](#composite-glyph-to-rglyph), or [just its header](#glyph-header-to-rglyph), to an rglyph equivalent, which mutt has built-in support for.
 
 Rglyphs don't necessarily need to come from a simple or composite glyph, however. The user can pass in their own rglyphs, and as long as they use the struct correctly, the raster API will rasterize it correctly.
 
@@ -1460,9 +1464,9 @@ Some rendering methods have the possibility of "[bleeding](#raster-bleeding)" ov
 
 The type `muttRFlags` (typedef for `uint8_m`) represents the flags of a given point in an rglyph. It has the following defined values for bitmasking:
 
-* [0x01] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
+* [0x01] `MUTTR_ON_CURVE` - represents whether or not the point is on (1) or off (0) the curve; conceptually equivalent to "ON_CURVE_POINT" for simple glyphs in TrueType.
 
-No other bits other than the ones defined above are read for any point in an rglyph.
+No bits other than the ones defined above are read for any point in an rglyph.
 
 ## Raster bitmap
 
@@ -1550,8 +1554,6 @@ In terms of rasterization, this is prevented by increasing the width and height 
 ## Rasterization of TrueType glyphs
 
 The raster API gives access to rasterizing TrueType glyphs by converting them to an rglyph, which can then be [rasterized directly](#rasterize-glyph). This conversion can be done rather by the user directly [giving a simple glyph](#simple-glyph-to-rglyph), [giving a composite glyph](#composite-glyph-to-rglyph), or by [giving the header of a simple or composite glyph](#glyph-header-to-rglyph).
-
-This conversion can also automatically be performed internally via [rasterizing the glyph based on a given glyph ID](#rasterize-glyph-id), handling all of the allocation and conversions. This can be inefficient to call on large groups of glyphs, as new memory has to be repeatedly allocated and deallocated.
 
 ### Font units to pixel units
 
