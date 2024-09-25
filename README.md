@@ -518,6 +518,17 @@ MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
 ```
 
 
+#### Simple glyph min/max
+
+The minimum/maximum x/y ranges for a simple glyph can be calculated using the function `mutt_simple_glyph_min_max`, defined below: 
+
+```c
+MUDEF muttResult mutt_simple_glyph_min_max(muttFont* font, muttGlyphHeader* header);
+```
+
+
+The values `x_min`, `y_min`, `x_max`, and `y_max` are filled in for `header` upon a non-fatal result. The given glyph must have at least one contour.
+
 #### Simple glyph point count
 
 Getting just the amount of points within a simple glyph based on its header is a fairly cheap operation, requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: 
@@ -618,6 +629,19 @@ The maximum amount of memory that will be needed for loading a composite glyph, 
 MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font);
 ```
 
+
+#### Composite min max
+
+The minimum/maximum x/y ranges for a composite glyph can be calculated using the function `mutt_composite_glyph_min_max`, defined below: 
+
+```c
+MUDEF muttResult mutt_composite_glyph_min_max(muttFont* font, muttGlyphHeader* header);
+```
+
+
+The values `x_min`, `y_min`, `x_max`, and `y_max` are filled in for `header` upon a non-fatal result. The given glyph must have at least one contour.
+
+Since composite glyphs allow for non-integer coordinates, the coordinates filled in are the ceiling equivalents.
 
 #### Composite glyph component retrieval
 
@@ -1644,6 +1668,21 @@ MUDEF uint32_m mutt_header_rglyph_max(muttFont* font);
 
 This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
 
+### TrueType x/y min/max to rglyph x/y max
+
+The function `mutt_funits_punits_min_max` converts a set of x/y min/max values, in FUnits (usually retrieved from loading a simple/composite glyph, with said values being stored in the header), to what an rglyph's x/y maximum values will be when converting it to an rglyph, defined below: 
+
+```c
+MUDEF void mutt_funits_punits_min_max(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi);
+```
+
+
+This function takes in the x/y min/max values from `header` and converts them to valid x/y max values within `rglyph`. Note that this function implicitly assumes that the given x/y min/max values are valid for the glyph, which may not be the case in a few scenarios:
+
+* If only the header has been loaded, and not the corresponding simple/composite glyph, the x/y min/max values within the header are only what the font has provided, and may not be fully accurate.
+
+* If the glyph is composite and it has been loaded, both in header form and in `muttCompositeGlyph` form, the x/y min/max values still haven't been validated, since `mutt_composite_glyph` does not check coordinate values; the assuredly correct x/y min/max values for a composite glyph can be retrieved with the function [`mutt_composite_glyph_min_max`](#composite-min-max).
+
 # Result
 
 The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -1796,6 +1835,14 @@ The following values are defined for `muttResult` (all values not explicitly sta
 
 * `MUTT_INVALID_GLYF_COMPOSITE_FLAGS` - the flags in a component within the composite glyph were invalid (multiple mutually exclusive transform data flags were set).
 
+* `MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS` - an x-coordinate within the simple glyph was out of the font-unit range.
+
+* `MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS` - a y-coordinate within the simple glyph was out of the font-unit range.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS` - an x-coordinate within the composite glyph was out of the font-unit range. This check is only performed when converting a composite glyph to an rglyph or calculating the x/y min/max range of a composite glyph.
+
+* `MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS` - a y-coordinate within the composite glyph was out of the font-unit range. This check is only performed when converting a composite glyph to an rglyph or calculating the x/y min/max range of a composite glyph.
+
 ### Cmap result values
 
 * `MUTT_INVALID_CMAP_LENGTH` - the length of the cmap table was invalid.
@@ -1895,3 +1942,5 @@ mutt has several C standard library dependencies, all of which are overridable b
 * `mu_fabsf` - equivalent to `fabsf`.
 
 * `mu_roundf` - equivalent to `roundf`.
+
+* `mu_ceilf` - equivalent to `ceilf`.

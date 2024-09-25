@@ -1365,6 +1365,13 @@ mutt is developed primarily off of these sources of documentation:
 						// @DOCLINE The maximum amount of memory that will be needed for loading a simple glyph, in bytes, is provided by the function `mutt_simple_glyph_max_size`, defined below: @NLNT
 						MUDEF uint32_m mutt_simple_glyph_max_size(muttFont* font);
 
+					// @DOCLINE #### Simple glyph min/max
+
+						// @DOCLINE The minimum/maximum x/y ranges for a simple glyph can be calculated using the function `mutt_simple_glyph_min_max`, defined below: @NLNT
+						MUDEF muttResult mutt_simple_glyph_min_max(muttFont* font, muttGlyphHeader* header);
+
+						// @DOCLINE The values `x_min`, `y_min`, `x_max`, and `y_max` are filled in for `header` upon a non-fatal result. The given glyph must have at least one contour.
+
 					// @DOCLINE #### Simple glyph point count
 
 						// @DOCLINE Getting just the amount of points within a simple glyph based on its header is a fairly cheap operation, requiring no manual allocation. The function `mutt_simple_glyph_points` calculates the amount of points that a simple glyph contains, defined below: @NLNT
@@ -1458,6 +1465,15 @@ mutt is developed primarily off of these sources of documentation:
 
 						// @DOCLINE The maximum amount of memory that will be needed for loading a composite glyph, in bytes, is provided by the function `mutt_composite_glyph_max_size`, defined below: @NLNT
 						MUDEF uint32_m mutt_composite_glyph_max_size(muttFont* font);
+
+					// @DOCLINE #### Composite min max
+
+						// @DOCLINE The minimum/maximum x/y ranges for a composite glyph can be calculated using the function `mutt_composite_glyph_min_max`, defined below: @NLNT
+						MUDEF muttResult mutt_composite_glyph_min_max(muttFont* font, muttGlyphHeader* header);
+
+						// @DOCLINE The values `x_min`, `y_min`, `x_max`, and `y_max` are filled in for `header` upon a non-fatal result. The given glyph must have at least one contour.
+
+						// @DOCLINE Since composite glyphs allow for non-integer coordinates, the coordinates filled in are the ceiling equivalents.
 
 					// @DOCLINE #### Composite glyph component retrieval
 
@@ -2410,6 +2426,17 @@ mutt is developed primarily off of these sources of documentation:
 
 					// @DOCLINE This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
 
+			// @DOCLINE ### TrueType x/y min/max to rglyph x/y max
+
+				// @DOCLINE The function `mutt_funits_punits_min_max` converts a set of x/y min/max values, in FUnits (usually retrieved from loading a simple/composite glyph, with said values being stored in the header), to what an rglyph's x/y maximum values will be when converting it to an rglyph, defined below: @NLNT
+				MUDEF void mutt_funits_punits_min_max(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi);
+
+				// @DOCLINE This function takes in the x/y min/max values from `header` and converts them to valid x/y max values within `rglyph`. Note that this function implicitly assumes that the given x/y min/max values are valid for the glyph, which may not be the case in a few scenarios:
+
+				// @DOCLINE * If only the header has been loaded, and not the corresponding simple/composite glyph, the x/y min/max values within the header are only what the font has provided, and may not be fully accurate.
+
+				// @DOCLINE * If the glyph is composite and it has been loaded, both in header form and in `muttCompositeGlyph` form, the x/y min/max values still haven't been validated, since `mutt_composite_glyph` does not check coordinate values; the assuredly correct x/y min/max values for a composite glyph can be retrieved with the function [`mutt_composite_glyph_min_max`](#composite-min-max).
+
 	// @DOCLINE # Result
 
 		// @DOCLINE The type `muttResult` (typedef for `uint32_m`) is defined to represent how a task went. Result values can be "fatal" (meaning that the task completely failed to execute, and the program will continue as if the task had never been attempted), "non-fatal" (meaning that the task partially failed, but was still able to complete the task), and "successful" (meaning that the task fully succeeded).
@@ -2584,6 +2611,15 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_FLAGS` - the flags in a component within the composite glyph were invalid (multiple mutually exclusive transform data flags were set).
 			#define MUTT_INVALID_GLYF_COMPOSITE_FLAGS 530
 
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS` - an x-coordinate within the simple glyph was out of the font-unit range.
+			#define MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS 531
+			// @DOCLINE * `MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS` - a y-coordinate within the simple glyph was out of the font-unit range.
+			#define MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS 532
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS` - an x-coordinate within the composite glyph was out of the font-unit range. This check is only performed when converting a composite glyph to an rglyph or calculating the x/y min/max range of a composite glyph.
+			#define MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS 533
+			// @DOCLINE * `MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS` - a y-coordinate within the composite glyph was out of the font-unit range. This check is only performed when converting a composite glyph to an rglyph or calculating the x/y min/max range of a composite glyph.
+			#define MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS 534
+
 		// @DOCLINE ### Cmap result values
 		// 576 -> 639 //
 
@@ -2722,7 +2758,8 @@ mutt is developed primarily off of these sources of documentation:
 		#endif /* string.h */
 
 		#if !defined(mu_fabsf) || \
-			!defined(mu_roundf)
+			!defined(mu_roundf) || \
+			!defined(mu_ceilf)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2735,6 +2772,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_roundf` - equivalent to `roundf`.
 			#ifndef mu_roundf
 				#define mu_roundf roundf
+			#endif
+
+			// @DOCLINE * `mu_ceilf` - equivalent to `ceilf`.
+			#ifndef mu_ceilf
+				#define mu_ceilf ceilf
 			#endif
 
 		#endif /* math.h */
@@ -4885,6 +4927,10 @@ mutt is developed primarily off of these sources of documentation:
 					if (test_val < header->x_min || test_val > header->x_max) {
 						res = MUTT_INVALID_GLYF_SIMPLE_X_COORD;
 					}
+					// - Verify that the point is within FUnit range
+					if (test_val < -16384 || test_val > 16383) {
+						return MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS;
+					}
 					// - Consider it with currently calculated x min/max
 					if ((test_val < x_min) || (pi == 0)) {
 						x_min = test_val;
@@ -4936,6 +4982,10 @@ mutt is developed primarily off of these sources of documentation:
 					// - Verify that the point is within range
 					if (test_val < header->y_min || test_val > header->y_max) {
 						res = MUTT_INVALID_GLYF_SIMPLE_Y_COORD;
+					}
+					// - Verify that the point is within FUnit range
+					if (test_val < -16384 || test_val > 16383) {
+						return MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS;
 					}
 					// - Consider it with currently calculated y min/max values
 					if ((test_val < y_min) || (pi == 0)) {
@@ -5000,6 +5050,214 @@ mutt is developed primarily off of these sources of documentation:
 					// maxPoints
 					+(font->maxp->max_points*sizeof(muttGlyphPoint))
 				;
+			}
+
+			// Calculates the x/y min/max for the given simple glyph
+			MUDEF muttResult mutt_simple_glyph_min_max(muttFont* font, muttGlyphHeader* header) {
+				// Verify length for endPtsOfContours and instructionLength
+				uint64_m req = (((uint32_m)header->number_of_contours)*2) + 2;
+				if (header->length < req) {
+					return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+				}
+
+				// Progressive glyph data:
+				// (Move to endPtsOfContours[numContours-1])
+				muByte* data = header->data + (req-4);
+				// Read last element of endPtsOfContours
+				uint16_m num_points = MU_RBEU16(data);
+				data += 2;
+				// Verify it for number of points
+				if (num_points++ == 0xFFFF) {
+					return MUTT_INVALID_GLYF_SIMPLE_END_PTS_OF_CONTOURS;
+				}
+				if (num_points > font->maxp->max_points) {
+					return MUTT_INVALID_GLYF_SIMPLE_POINT_COUNT;
+				}
+
+				// Read instructionLength
+				uint16_m instruction_len = MU_RBEU16(data);
+				data += 2;
+				// Verify instructions
+				req += instruction_len;
+				if (header->length < req) {
+					return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+				}
+				// Move past instructions
+				data += instruction_len;
+
+				// Allocate flags
+				uint8_m* flags = (uint8_m*)mu_malloc(num_points);
+				if (!flags) {
+					return MUTT_FAILED_MALLOC;
+				}
+
+				// Loop through each flag
+				uint16_m pi = 0;
+				while (pi < num_points) {
+					// Verify length for this flag
+					if (header->length < ++req) {
+						mu_free(flags);
+						return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+					}
+
+					// Get flag
+					uint8_m flag = flags[pi] = *data;
+
+					// Get implied length of x- and y-coordinates based on flag
+					uint8_m coord_length = 0;
+					// - x
+					if (flag & MUTT_X_SHORT_VECTOR) {
+						// 1-byte x-coordinate
+						coord_length += 1;
+					} else if (!(flag & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR)) {
+						// 2-byte x-coordinate
+						coord_length += 2;
+					}
+					// - y
+					if (flag & MUTT_Y_SHORT_VECTOR) {
+						// 1-byte y-coordinate
+						coord_length += 1;
+					} else if (!(flag & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR)) {
+						// 2-byte y-coordinate
+						coord_length += 2;
+					}
+
+					// Verify length based on coord length
+					req += coord_length;
+					if (header->length < req) {
+						mu_free(flags);
+						return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+					}
+
+					// Increment past this point/flag
+					++pi;
+					++data;
+
+					// Handle repeating flags:
+					if (flag & MUTT_REPEAT_FLAG) {
+						// Verify length for next flag
+						if (header->length < ++req) {
+							mu_free(flags);
+							return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+						}
+
+						// Get next flag as length
+						uint8_m next = *data++;
+						// If next is 0, we don't repeat at all, and pretend
+						// like this never happened
+						if (next == 0) {
+							continue;
+						}
+
+						// Verify length for repeated coordinate flags
+						req += ((uint32_m)coord_length) * ((uint32_m)(next-1));
+						if (header->length < req) {
+							mu_free(flags);
+							return MUTT_INVALID_GLYF_SIMPLE_LENGTH;
+						}
+
+						// Go through each repeat flag and copy it down
+						for (uint8_m r = 0; r < next && pi < num_points; ++r) {
+							flags[pi++] = flag;
+						}
+					}
+				}
+
+				// Loop through each x-coordinate
+				pi = 0;
+				int16_m prev_x = 0;
+				while (pi < num_points) {
+					// Get x-coordinate
+					int16_m x;
+					if (flags[pi] & MUTT_X_SHORT_VECTOR) {
+						// 1-byte
+						if (flags[pi] & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+							// Positive
+							x = (int16_m)*data++;
+						} else {
+							// Negative
+							x = -((int16_m)*data++);
+						}
+					} else {
+						if (flags[pi] & MUTT_X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) {
+							// Repeated x-coordinate
+							++pi;
+							continue;
+						} else {
+							// 2-bytes, signed
+							x = MU_RBES16(data);
+							data += 2;
+						}
+					}
+
+					// Add as vector to prior value
+					int32_m test_val = prev_x + x;
+					// Verify FUnit range
+					if (test_val < -16384 || test_val > 16383) {
+						mu_free(flags);
+						return MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS;
+					}
+					// Consider it with currently calculated x min/max
+					if ((test_val < header->x_min) || (pi == 0)) {
+						header->x_min = test_val;
+					}
+					if ((test_val > header->x_max) || (pi == 0)) {
+						header->x_max = test_val;
+					}
+					// Set previous x as current x
+					prev_x = test_val;
+					++pi;
+				}
+
+				// Loop through each y-coordinate
+				pi = 0;
+				int16_m prev_y = 0;
+				while (pi < num_points) {
+					// Get y-coordinate
+					int16_m y;
+					if (flags[pi] & MUTT_Y_SHORT_VECTOR) {
+						// 1-byte
+						if (flags[pi] & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+							// Positive
+							y = (int16_m)*data++;
+						} else {
+							// Negative
+							y = -((int16_m)*data++);
+						}
+					} else {
+						if (flags[pi] & MUTT_Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) {
+							// Repeated y-coordinate
+							++pi;
+							continue;
+						} else {
+							// 2 bytes, signed
+							y = MU_RBES16(data);
+							data += 2;
+						}
+					}
+
+					// Add as vector to prior value
+					int32_m test_val = prev_y + y;
+					// Verify FUnit range
+					if (test_val < -16384 || test_val > 16383) {
+						mu_free(flags);
+						return MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS;
+					}
+					// Consider it with currently calculated y min/max
+					if ((test_val < header->y_min) || (pi == 0)) {
+						header->y_min = test_val;
+					}
+					if ((test_val > header->y_max) || (pi == 0)) {
+						header->y_max = test_val;
+					}
+					// Set previous y as current y
+					prev_y = test_val;
+					++pi;
+				}
+
+				// Deallocate flags
+				mu_free(flags);
+				return MUTT_SUCCESS; if (font) {}
 			}
 
 			// Fills in (or calculates memory needed for) "muttCompositeGlyph" struct
@@ -6629,7 +6887,9 @@ mutt is developed primarily off of these sources of documentation:
 
 				// Converts all TrueType-calculated coordinates from a composite-converted rglyph
 				// to pixel coordinates
-				void mutt_composite_rglyph_coords(muttFont* font, muttR_CompProg* prog, muttRGlyph* rglyph, float point_size, float ppi) {
+				// OR, if convert_to_punits is false, it just calculates the x/y min/max within
+				// prog
+				muttResult mutt_composite_rglyph_coords(muttFont* font, muttR_CompProg* prog, muttRGlyph* rglyph, float point_size, float ppi, muBool convert_to_punits) {
 					// Calculate x/y min/max values
 					prog->x_min = prog->x_max = rglyph->points[0].x;
 					prog->y_min = prog->y_max = rglyph->points[0].y;
@@ -6650,6 +6910,21 @@ mutt is developed primarily off of these sources of documentation:
 						}
 					}
 
+					// Ensure FUnit range
+					if (prog->x_min < -16384.f || prog->x_min > 16383.f ||
+						prog->x_max < -16384.f || prog->x_max > 16383.f) {
+						return MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS;
+					}
+					if (prog->y_min < -16384.f || prog->y_min > 16383.f ||
+						prog->y_max < -16384.f || prog->y_max > 16383.f) {
+						return MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS;
+					}
+
+					// Finish here if conversion to pixel-units is not being performed
+					if (!convert_to_punits) {
+						return MUTT_SUCCESS;
+					}
+
 					// Much of this code is considerably similar to mutt_simple_rglyph
 
 					// Calculate point offsets based on glyph's min/max values
@@ -6666,6 +6941,8 @@ mutt is developed primarily off of these sources of documentation:
 					// Calculate x/y max
 					rglyph->x_max = px + mutt_funits_to_punits(font, prog->x_max, point_size, ppi);
 					rglyph->y_max = py + mutt_funits_to_punits(font, prog->y_max, point_size, ppi);
+
+					return MUTT_SUCCESS;
 				}
 
 				// Composite glyph -> raster glyph
@@ -6700,11 +6977,93 @@ mutt is developed primarily off of these sources of documentation:
 					}
 
 					// Convert collected TrueType coordinates to pixel coordinates
-					mutt_composite_rglyph_coords(font, &prog, rglyph, point_size, ppi);
+					res = mutt_composite_rglyph_coords(font, &prog, rglyph, point_size, ppi, MU_TRUE);
+					if (mutt_result_is_fatal(res)) {
+						mu_free(temp_simple_max);
+						return res;
+					}
 
 					// Free temp simple max memory
 					mu_free(temp_simple_max);
 					return res; if (header) {}
+				}
+
+				// X/Y min/max composite calculator
+				MUDEF muttResult mutt_composite_glyph_min_max(muttFont* font, muttGlyphHeader* header) {
+					muttResult res = MUTT_SUCCESS;
+
+					// Unfortunately, there's no realistic way to do this without
+					// doing the usual allocation as far as I'm aware.
+
+					// Much of this code is considerably similar to mutt_composite_rglyph
+
+					// Allocate composite memory
+					muByte* composite_mem = (muByte*)mu_malloc(mutt_composite_rglyph_max(font));
+					if (!composite_mem) {
+						return MUTT_FAILED_MALLOC;
+					}
+					// Allocate temp simple max memory
+					muByte* temp_simple_max = (muByte*)mu_malloc(mutt_simple_glyph_max_size(font));
+					if (!temp_simple_max) {
+						mu_free(composite_mem);
+						return MUTT_FAILED_MALLOC;
+					}
+
+					// Set rglyph data
+					muttRGlyph rglyph;
+					rglyph.contour_ends = (uint16_m*)composite_mem;
+					rglyph.points = (muttRPoint*)((composite_mem + (((uint32_m)font->maxp->max_composite_contours)*2)));
+
+					// Initialize CompProg
+					muttR_CompProg prog;
+					muttR_CompProg_init(&prog, &rglyph, temp_simple_max, font);
+
+					// Loop through each component
+					uint32_m component_count = 0;
+					muBool no_more = MU_FALSE;
+					muByte* bprog = header->data;
+					while (!no_more) {
+						// Verify incremented component count
+						if (++component_count > font->maxp->max_component_elements) {
+							return MUTT_INVALID_RGLYPH_COMPOSITE_COMPONENT_COUNT;
+						}
+
+						// Get individual component
+						muttComponentGlyph this_component;
+						res = mutt_composite_component(font, header, &bprog, &this_component, &no_more);
+						if (mutt_result_is_fatal(res)) {
+							mu_free(temp_simple_max);
+							mu_free(composite_mem);
+							return res;
+						}
+
+						// Process component
+						res = mutt_component_rglyph(font, &prog, &this_component, 1);
+						if (mutt_result_is_fatal(res)) {
+							mu_free(temp_simple_max);
+							mu_free(composite_mem);
+							return res;
+						}
+					}
+
+					// Calculate x/y min/max
+					res = mutt_composite_rglyph_coords(font, &prog, &rglyph, 0.f, 0.f, MU_FALSE);
+					if (mutt_result_is_fatal(res)) {
+						mu_free(temp_simple_max);
+						mu_free(composite_mem);
+						return res;
+					}
+
+					// Set x/y min/max values
+					header->x_min = mu_ceilf(prog.x_min);
+					header->y_min = mu_ceilf(prog.y_min);
+					header->x_max = mu_ceilf(prog.x_max);
+					header->y_max = mu_ceilf(prog.y_max);
+
+					// Free and return
+					mu_free(temp_simple_max);
+					mu_free(composite_mem);
+					return res;
 				}
 
 				// Memory maximum
@@ -6800,6 +7159,14 @@ mutt is developed primarily off of these sources of documentation:
 					return res;
 				}
 
+				// Glyph header x/y min/max -> raster x/y max
+				MUDEF void mutt_funits_punits_min_max(muttFont* font, muttGlyphHeader* header, muttRGlyph* rglyph, float point_size, float ppi) {
+					rglyph->x_max = (-mutt_funits_to_punits(font, header->x_min, point_size, ppi) + 1.f)
+						+ mutt_funits_to_punits(font, header->x_max, point_size, ppi);
+					rglyph->y_max = (-mutt_funits_to_punits(font, header->y_min, point_size, ppi) + 1.f)
+						+ mutt_funits_to_punits(font, header->y_max, point_size, ppi);
+				}
+
 				MUDEF uint32_m mutt_header_rglyph_max(muttFont* font) {
 					// Simple:
 					uint32_m sim = mutt_simple_glyph_max_size(font) + mutt_simple_rglyph_max(font);
@@ -6891,6 +7258,10 @@ mutt is developed primarily off of these sources of documentation:
 				case MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT: return "MUTT_INVALID_GLYF_COMPOSITE_COMPONENT_COUNT"; break;
 				case MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX: return "MUTT_INVALID_GLYF_COMPOSITE_GLYPH_INDEX"; break;
 				case MUTT_INVALID_GLYF_COMPOSITE_FLAGS: return "MUTT_INVALID_GLYF_COMPOSITE_FLAGS"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS: return "MUTT_INVALID_GLYF_SIMPLE_X_COORD_FUNITS"; break;
+				case MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS: return "MUTT_INVALID_GLYF_SIMPLE_Y_COORD_FUNITS"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS: return "MUTT_INVALID_GLYF_COMPOSITE_X_COORD_FUNITS"; break;
+				case MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS: return "MUTT_INVALID_GLYF_COMPOSITE_Y_COORD_FUNITS"; break;
 				case MUTT_INVALID_CMAP_LENGTH: return "MUTT_INVALID_CMAP_LENGTH"; break;
 				case MUTT_INVALID_CMAP_VERSION: return "MUTT_INVALID_CMAP_VERSION"; break;
 				case MUTT_INVALID_CMAP_ENCODING_RECORD_OFFSET: return "MUTT_INVALID_CMAP_ENCODING_RECORD_OFFSET"; break;
