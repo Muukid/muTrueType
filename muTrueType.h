@@ -2241,7 +2241,17 @@ mutt is developed primarily off of these sources of documentation:
 					float x_max;
 					// @DOCLINE * `@NLFT y_max` - the greatest y-coordinate value of any point within the glyph.
 					float y_max;
+					// @DOCLINE * `@NLFT ascender` - the ascender value for the given glyph, retrieved from the hhea table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+					float ascender;
+					// @DOCLINE * `@NLFT descender` - the descender value for the given glyph, retrieved from the hhea table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+					float descender;
+					// @DOCLINE * `@NLFT lsb` - the left-side bearing for the given glyph, retrieved from the hmtx table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+					float lsb;
+					// @DOCLINE * `@NLFT advance_width` - the advance width for the given glyph, retrieved from the hmtx table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+					float advance_width;
 				};
+
+				// @DOCLINE Values for the rglyph's ascender, descender, left-side bearing, and advance width are given due to the fact that the coordinates of a TrueType glyph are transformed upon being converted to an rglyph, making these values difficult for the user to retrieve for rglyphs. They are *not* filled in upon conversion of a TrueType glyph to an rglyph; these values are filled in with the function [`mutt_rglyph_metrics`](#truetype-metrics-to-rglyph-metrics).
 
 				// @DOCLINE A point in an rglyph is represented with the struct `muttRPoint`, which has the following members:
 				struct muttRPoint {
@@ -2425,6 +2435,13 @@ mutt is developed primarily off of these sources of documentation:
 					MUDEF uint32_m mutt_header_rglyph_max(muttFont* font);
 
 					// @DOCLINE This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
+
+			// @DOCLINE ### TrueType metrics to rglyph metrics
+
+				// @DOCLINE The function `mutt_rglyph_metrics` fills in the metric information about a TrueType-to-rglyph conversion, converting the TrueType glyph's metrics to the pixel-unit equivalents for the rglyph, defined below: @NLNT
+				MUDEF void mutt_rglyph_metrics(muttFont* font, muttGlyphHeader* header, uint16_m glyph_id, muttRGlyph* rglyph, float point_size, float ppi);
+
+				// @DOCLINE The values `rglyph->ascender`, `rglyph->descender`, `rglyph->lsb`, and `rglyph->advance_width` are filled in. `glyph_id` must be a valid glyph ID. The x/y min/max values within `header` must be accurate.
 
 			// @DOCLINE ### TrueType x/y min/max to rglyph x/y max
 
@@ -6480,6 +6497,35 @@ mutt is developed primarily off of these sources of documentation:
 			// FUnits to pixel-units
 			MUDEF float mutt_funits_to_punits(muttFont* font, float funits, float point_size, float ppi) {
 				return point_size * funits * ppi / (72.f * font->head->units_per_em);
+			}
+
+			// Gets the ascent/descent/lsb/advance-width of an rglyph for a glyph ID
+			MUDEF void mutt_rglyph_metrics(muttFont* font, muttGlyphHeader* header, uint16_m glyph_id, muttRGlyph* rglyph, float point_size, float ppi) {
+				// Offsets
+				float px = -mutt_funits_to_punits(font, header->x_min, point_size, ppi) + 1.f;
+				float py = -mutt_funits_to_punits(font, header->y_min, point_size, ppi) + 1.f;
+
+				// Ascender + Descender
+				rglyph->ascender  = px + mutt_funits_to_punits(font, font->hhea->ascender , point_size, ppi);
+				rglyph->descender = py + mutt_funits_to_punits(font, font->hhea->descender, point_size, ppi);
+
+				// Left-side bearing + Advance width
+				if (glyph_id >= font->hhea->number_of_hmetrics) {
+					// lsb is in lsb array:
+					rglyph->lsb = px + mutt_funits_to_punits(font, font->hmtx->left_side_bearings[glyph_id - font->hhea->number_of_hmetrics], point_size, ppi);
+					// Advance width is last advance width
+					if (font->hhea->number_of_hmetrics > 0) {
+						rglyph->advance_width = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[font->hhea->number_of_hmetrics - 1].advance_width, point_size, ppi);
+					} else {
+						// Defaulting on 0 for advance width with no hmetrics specified
+						rglyph->advance_width = 0;
+					}
+				} else {
+					// lsb is in hmetrics array:
+					rglyph->lsb = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].lsb, point_size, ppi);
+					// As well as advance width:
+					rglyph->advance_width = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].advance_width, point_size, ppi);
+				}
 			}
 
 			/* Simple */

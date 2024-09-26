@@ -1468,6 +1468,16 @@ An rglyph is represented via the struct `muttRGlyph`, which has the following me
 
 * `float y_max` - the greatest y-coordinate value of any point within the glyph.
 
+* `float ascender` - the ascender value for the given glyph, retrieved from the hhea table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+
+* `float descender` - the descender value for the given glyph, retrieved from the hhea table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+
+* `float lsb` - the left-side bearing for the given glyph, retrieved from the hmtx table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+
+* `float advance_width` - the advance width for the given glyph, retrieved from the hmtx table. This is only relevant for glyphs converted from TrueType glyphs to rglyphs.
+
+Values for the rglyph's ascender, descender, left-side bearing, and advance width are given due to the fact that the coordinates of a TrueType glyph are transformed upon being converted to an rglyph, making these values difficult for the user to retrieve for rglyphs. They are *not* filled in upon conversion of a TrueType glyph to an rglyph; these values are filled in with the function [`mutt_rglyph_metrics`](#truetype-metrics-to-rglyph-metrics).
+
 A point in an rglyph is represented with the struct `muttRPoint`, which has the following members:
 
 * `float x` - the x-coordinate of the point, in [pixel units](#raster-bitmap).
@@ -1667,6 +1677,17 @@ MUDEF uint32_m mutt_header_rglyph_max(muttFont* font);
 
 
 This function rather returns (the sum of `mutt_simple_glyph_max_size` and `mutt_simple_rglyph_max`) or (the sum of `mutt_composite_glyph_max_size` and `mutt_composite_rglyph_max`), whichever is greater. All the table loading requirements of these functions apply.
+
+### TrueType metrics to rglyph metrics
+
+The function `mutt_rglyph_metrics` fills in the metric information about a TrueType-to-rglyph conversion, converting the TrueType glyph's metrics to the pixel-unit equivalents for the rglyph, defined below: 
+
+```c
+MUDEF void mutt_rglyph_metrics(muttFont* font, muttGlyphHeader* header, uint16_m glyph_id, muttRGlyph* rglyph, float point_size, float ppi);
+```
+
+
+The values `rglyph->ascender`, `rglyph->descender`, `rglyph->lsb`, and `rglyph->advance_width` are filled in. `glyph_id` must be a valid glyph ID. The x/y min/max values within `header` must be accurate.
 
 ### TrueType x/y min/max to rglyph x/y max
 
