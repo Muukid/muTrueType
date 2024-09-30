@@ -6313,7 +6313,11 @@ mutt is developed primarily off of these sources of documentation:
 
 						// Set pixel to whether or not we're in glyph
 						// Winding == 0 means in the glyph, and vice versa
-						bitmap->pixels[hpix_offset+(w*adv)] = (winding==0) ?(out) :(in);
+						if (winding == 0) {
+							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, adv);
+						} else {
+							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], in, adv);
+						}
 					}
 				}
 
@@ -6401,7 +6405,10 @@ mutt is developed primarily off of these sources of documentation:
 
 						// Calculate pixel color based on how much the pixel is in
 						// \left(a\right)\left(m_{1}-m_{0}\right)+m_{0}
-						bitmap->pixels[hpix_offset+(w*adv)] = (in_per * (in-out)) + out;
+						for (uint8_m a = 0; a < adv-1; ++a) {
+							bitmap->pixels[hpix_offset+(w*adv)+a] = 255;
+						}
+						bitmap->pixels[hpix_offset+(w*adv)+(adv-1)] = (in_per * (in-out)) + out;
 					}
 				}
 			}
@@ -6502,29 +6509,28 @@ mutt is developed primarily off of these sources of documentation:
 			// Gets the ascent/descent/lsb/advance-width of an rglyph for a glyph ID
 			MUDEF void mutt_rglyph_metrics(muttFont* font, muttGlyphHeader* header, uint16_m glyph_id, muttRGlyph* rglyph, float point_size, float ppi) {
 				// Offsets
-				float px = -mutt_funits_to_punits(font, header->x_min, point_size, ppi) + 1.f;
 				float py = -mutt_funits_to_punits(font, header->y_min, point_size, ppi) + 1.f;
 
 				// Ascender + Descender
-				rglyph->ascender  = px + mutt_funits_to_punits(font, font->hhea->ascender , point_size, ppi);
+				rglyph->ascender  = py + mutt_funits_to_punits(font, font->hhea->ascender , point_size, ppi);
 				rglyph->descender = py + mutt_funits_to_punits(font, font->hhea->descender, point_size, ppi);
 
 				// Left-side bearing + Advance width
 				if (glyph_id >= font->hhea->number_of_hmetrics) {
 					// lsb is in lsb array:
-					rglyph->lsb = px + mutt_funits_to_punits(font, font->hmtx->left_side_bearings[glyph_id - font->hhea->number_of_hmetrics], point_size, ppi);
+					rglyph->lsb = mutt_funits_to_punits(font, font->hmtx->left_side_bearings[glyph_id - font->hhea->number_of_hmetrics], point_size, ppi);
 					// Advance width is last advance width
 					if (font->hhea->number_of_hmetrics > 0) {
-						rglyph->advance_width = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[font->hhea->number_of_hmetrics - 1].advance_width, point_size, ppi);
+						rglyph->advance_width = mutt_funits_to_punits(font, font->hmtx->hmetrics[font->hhea->number_of_hmetrics - 1].advance_width, point_size, ppi);
 					} else {
 						// Defaulting on 0 for advance width with no hmetrics specified
 						rglyph->advance_width = 0;
 					}
 				} else {
 					// lsb is in hmetrics array:
-					rglyph->lsb = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].lsb, point_size, ppi);
+					rglyph->lsb = mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].lsb, point_size, ppi);
 					// As well as advance width:
-					rglyph->advance_width = px + mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].advance_width, point_size, ppi);
+					rglyph->advance_width = mutt_funits_to_punits(font, font->hmtx->hmetrics[glyph_id].advance_width, point_size, ppi);
 				}
 			}
 
