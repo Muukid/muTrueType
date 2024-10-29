@@ -1619,6 +1619,8 @@ mutt is developed primarily off of these sources of documentation:
 					int16_m id_delta;
 					// @DOCLINE * `@NLFT id_range_offset` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable, but divided by 2 and with (`muttCmap4->seg_count` - the index for the given segment) subtracted; the start code index offset into `muttCmap4->glyph_ids`.
 					uint16_m id_range_offset;
+					// @DOCLINE * `@NLFT id_range_offset_orig` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable.
+					uint16_m id_range_offset_orig;
 					// @DOCLINE * `@NLFT start_glyph_id` - the calculated first glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
 					uint16_m start_glyph_id;
 					// @DOCLINE * `@NLFT end_glyph_id` - the calculated last glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
@@ -3749,7 +3751,7 @@ mutt is developed primarily off of these sources of documentation:
 						ps->id_delta = MU_RBES16(id_delta);
 
 						// idRangeOffset
-						ps->id_range_offset = MU_RBEU16(id_range_offset);
+						ps->id_range_offset = ps->id_range_offset_orig = MU_RBEU16(id_range_offset);
 						// Further verification is only cared about if idRangeOffset is not 0,
 						// since logic with it is only performed under that circumstance
 						if (ps->id_range_offset != 0) {
@@ -3786,7 +3788,7 @@ mutt is developed primarily off of these sources of documentation:
 								ps->end_glyph_id = mutt_id_delta(ps->end_glyph_id, ps->id_delta);
 							}
 						}
-						// If idRangeOffset IS 0, calculaing starting/ending glyph ID is just idDelta
+						// If idRangeOffset IS 0, calculating starting/ending glyph ID is just idDelta
 						else {
 							ps->start_glyph_id = mutt_id_delta(ps->start_code, ps->id_delta);
 							ps->end_glyph_id = mutt_id_delta(ps->end_code, ps->id_delta);
@@ -3832,7 +3834,7 @@ mutt is developed primarily off of these sources of documentation:
 						muttCmap4Segment* seg = &f4->seg[s];
 
 						// If idRangeOffset is 0, we're only performing delta logic
-						if (seg->id_range_offset == 0) {
+						if (seg->id_range_offset_orig == 0) {
 							glyph = mutt_id_delta(codepoint, seg->id_delta);
 						}
 						// If idRangeOffset isn't 0, we must index into glyphIdArray

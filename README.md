@@ -804,6 +804,8 @@ The struct `muttCmap4Segment` represents a segment in the cmap format 4 subtable
 
 * `uint16_m id_range_offset` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable, but divided by 2 and with (`muttCmap4->seg_count` - the index for the given segment) subtracted; the start code index offset into `muttCmap4->glyph_ids`.
 
+* `uint16_m id_range_offset_orig` - equivalent to the value for the given segment in the "idRangeOffset" array in the cmap format 4 subtable.
+
 * `uint16_m start_glyph_id` - the calculated first glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
 
 * `uint16_m end_glyph_id` - the calculated last glyph ID of the segment. This is not checked to be a valid glyph ID, and is used when converting glyph IDs into codepoints.
