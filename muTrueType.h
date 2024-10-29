@@ -11,7 +11,7 @@ More explicit license information at the end of file.
 
 # muTrueType v1.0.0
 
-muTrueType (acronymized to "mutt") is a public domain single-file C library for retrieving data from the TrueType file format via its tables (the "[low-level API](#low-level-api)"), rasterizing glyphs to a bitmap (the "[raster API](#raster-api)"), and handling the layout/placement/spacing of multiple glyphs in a graphical context (the "[layout API](#layout-api)"). Its header is automatically defined upon inclusion if not already included (`MUTT_H`), and the source code is defined if `MUTT_IMPLEMENTATION` is defined, following the internal structure of:
+muTrueType (acronymized to "mutt") is a public domain single-file C library for retrieving data from the TrueType file format via its tables (the "[low-level API](#low-level-api)") and rasterizing glyphs to a bitmap (the "[raster API](#raster-api)"). Its header is automatically defined upon inclusion if not already included (`MUTT_H`), and the source code is defined if `MUTT_IMPLEMENTATION` is defined, following the internal structure of:
 
 ```c
 #ifndef MUTT_H
@@ -909,7 +909,7 @@ mutt is developed primarily off of these sources of documentation:
 			#define MUTT_LOAD_HMTX 0x00000008
 			// @DOCLINE * [0x00000010] `MUTT_LOAD_LOCA` - load the [loca table](#loca-table).
 			#define MUTT_LOAD_LOCA 0x00000010
-			// @DOCLINE * [0x00000020] `MUTT_LOAD_POST` - load the [post table](#post-table).
+			// @DOCLINE * [0x00000020] `MUTT_LOAD_POST` - load the post table.
 			#define MUTT_LOAD_POST 0x00000020
 			// @DOCLINE * [0x00000040] `MUTT_LOAD_NAME` - load the [name table](#name-table).
 			#define MUTT_LOAD_NAME 0x00000040
