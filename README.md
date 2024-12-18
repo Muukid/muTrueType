@@ -1429,7 +1429,7 @@ mutt uses several internally-defined low-level things to make certain things eas
 The macro function `MUTT_F2DOT14` creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: 
 
 ```c
-#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&b[1]) & 0xC0)) + (((float)(MU_RBEU16(b) & 0xFFFF)) / 16384.f))
+#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&((b)[1])) & 0xC0)) + (((float)(MU_RBEU16((b)) & 0xFFFF)) / 16384.f))
 ```
 
 

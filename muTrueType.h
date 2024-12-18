@@ -2203,7 +2203,7 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE ### Reading F2DOT14 values
 
 				// @DOCLINE The macro function `MUTT_F2DOT14` creates an expression for a float equivalent of a given array that stores 2 bytes representing a big-endian F2DOT14, defined below: @NLNT
-				#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&b[1]) & 0xC0)) + (((float)(MU_RBEU16(b) & 0xFFFF)) / 16384.f))
+				#define MUTT_F2DOT14(b) (((float)((*(int8_m*)&((b)[1])) & 0xC0)) + (((float)(MU_RBEU16((b)) & 0xFFFF)) / 16384.f))
 
 			// @DOCLINE ### Delta logic
 
@@ -6845,6 +6845,7 @@ mutt is developed primarily off of these sources of documentation:
 							if (mutt_result_is_fatal(res)) {
 								return res;
 							}
+
 						}
 					}
 
@@ -7197,7 +7198,6 @@ mutt is developed primarily off of these sources of documentation:
 						data += write0;
 
 						// Convert to rglyph
-						// MUDEF muttResult mutt_composite_rglyph(muttFont* font, muttGlyphHeader* header, muttCompositeGlyph* glyph, muttRGlyph* rglyph, float point_size, float ppi, muByte* data)
 						res = mutt_composite_rglyph(font, header, &glyph, rglyph, point_size, ppi, data);
 						if (mutt_result_is_fatal(res)) {
 							return res;
