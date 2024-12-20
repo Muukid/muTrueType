@@ -6288,13 +6288,13 @@ mutt is developed primarily off of these sources of documentation:
 					// If there are any hits:
 					if (num_hits != 0) {
 						// Set each range of in x-values based on hits to being filled in
-						size_m prev_x = hits[0].x;
+						size_m prev_x = mu_roundf(hits[0].x);
 						winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
 						for (uint32_m h = 1; h < num_hits; ++h) {
 							if (winding != 0) {
-								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)hits[h].x) - prev_x));
+								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)mu_roundf(hits[h].x)) - prev_x));
 							}
-							prev_x = hits[h].x;
+							prev_x = mu_roundf(hits[h].x);
 							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[h].l]);
 						}
 					}
