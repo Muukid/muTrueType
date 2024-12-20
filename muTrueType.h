@@ -5870,10 +5870,17 @@ mutt is developed primarily off of these sources of documentation:
 				int muttR_CompareLines(const void* p, const void* q) {
 					// Get lines
 					muttR_Line* l0 = (muttR_Line*)p, * l1 = (muttR_Line*)q;
-					// Return value to indicate greatest y1 value
+					// Return value to indicate ascending y0
 					if (l0->y0 < l1->y0) {
 						return -1;
 					} else if (l0->y0 > l1->y0) {
+						return 1;
+					}
+					// If equal, indicate descending y1
+					else if (l0->y1 > l1->y1) {
+						return -1;
+					}
+					else if (l0->y1 < l1->y1) {
 						return 1;
 					}
 					return 0;
@@ -5904,13 +5911,10 @@ mutt is developed primarily off of these sources of documentation:
 				};
 				typedef struct muttR_Shape muttR_Shape;
 
-				// Sorts the lines of a shape in increasing order of bottom point
-				// This does nothing currently; not sorting because it's usually
-				// used for the active line list, but I failed to implement it
+				// Sorts the lines of a shape in ascending order of bottom point
 				void muttR_ShapeSort(muttR_Shape* shape) {
 					// Just call qsort for the job
-					//mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Line), muttR_CompareLines);
-					return; if (shape) {}
+					mu_qsort(shape->lines, shape->num_lines, sizeof(muttR_Line), muttR_CompareLines);
 				}
 
 			/* Conversions */
@@ -6203,23 +6207,11 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// Updates the active line list based on the ray
-			// This function should totally work from what I'm aware, but it
-			// seems to not work properly. Don't know why
 			static inline void muttR_ActiveLines(muttR_Line* lines, uint32_m num_lines, uint32_m* first, uint32_m* len, float ry) {
 				// Increase length to include possible new in-range lines
-				while (*first + *len < num_lines) {
-					if (ry >= lines[*first + *len].y0 - MUTTR_LINE_EPSILON32) {
-						++*len;
-					} else {
-						break;
-					}
-				}
-
-				// Move up the first active line until we're in range of the next nearest line
-				while (*len != 0) {
-					if (ry > lines[*first].y1 + MUTTR_LINE_EPSILON32) {
-						++*first;
-						--*len;
+				while ((*first) + (*len) < num_lines) {
+					if (ry >= lines[(*first) + (*len)].y0 - MUTTR_LINE_EPSILON32) {
+						*len += 1;
 					} else {
 						break;
 					}
@@ -6268,8 +6260,8 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Initialize active lines
-				//uint32_m first_line = 0;
-				//uint32_m line_len = 0;
+				uint32_m first_line = 0;
+				uint32_m line_len = 0;
 
 				// Loop through each horizontal strip from bottom to top
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
@@ -6287,11 +6279,10 @@ mutt is developed primarily off of these sources of documentation:
 					float ray_y = ((float)h) + .5f;
 
 					// Update active line list
-					//muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
-					// ^ Not doing this because it doesn't work for some reason...
+					muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
 					// Calculate all hits with active lines (+ winding)
 					int32_m winding;
-					uint32_m num_hits = muttR_Hits(shape->lines, shape->num_lines, ray_y, hits, &winding);
+					uint32_m num_hits = muttR_Hits(&shape->lines[first_line], line_len, ray_y, hits, &winding);
 
 					// Loop through each x-value
 					uint32_m ih = 0; // (Upcoming hit)
@@ -6343,11 +6334,13 @@ mutt is developed primarily off of these sources of documentation:
 			typedef struct muttR_Ray muttR_Ray;
 
 			// Fills information about a ray
-			static inline void muttR_PixelRayCalc(muttR_Shape* shape, muttR_Ray* ray, float ray_y) {
+			static inline void muttR_PixelRayCalc(muttR_Shape* shape, muttR_Ray* ray, float ray_y, uint32_m* first_line, uint32_m* line_len) {
 				// Fill y-value
 				ray->y = ray_y;
+				// Update active line list
+				muttR_ActiveLines(shape->lines, shape->num_lines, first_line, line_len, ray->y);
 				// Calculate hit and winding
-				ray->num_hits = muttR_Hits(shape->lines, shape->num_lines, ray_y, ray->hits, &ray->winding);
+				ray->num_hits = muttR_Hits(&shape->lines[*first_line], *line_len, ray_y, ray->hits, &ray->winding);
 				// Set upcoming hit to 0
 				ray->ih = 0;
 			}
@@ -6356,6 +6349,9 @@ mutt is developed primarily off of these sources of documentation:
 			void muttR_FullPixelAANXNInner(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs, muttR_Ray* rays) {
 				// Weight of each sample:
 				float weight = 1.f / ((float)(vs*hs));
+
+				uint32_m first_line = 0;
+				uint32_m line_len = 0;
 
 				// Loop through each horizontal strip from bottom to top
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
@@ -6372,7 +6368,7 @@ mutt is developed primarily off of these sources of documentation:
 					// Calculate each ray
 					for (uint8_m r = 0; r < hs; ++r) {
 						// a=\left[\frac{1}{n+1},\frac{2}{n+1}...\frac{n}{n+1}\right]
-						muttR_PixelRayCalc(shape, rays+r, ((float)h) + (((float)(r+1)) / ((float)(hs+1))));
+						muttR_PixelRayCalc(shape, rays+r, ((float)h) + (((float)(r+1)) / ((float)(hs+1))), &first_line, &line_len);
 					}
 
 					// Loop through each x-value
