@@ -6226,7 +6226,7 @@ mutt is developed primarily off of these sources of documentation:
 				// Loop through each line
 				for (uint32_m l = 0; l < num_lines; ++l) {
 					// If ray intersects with line:
-					if (muttR_LineRay(ry, lines[l].y0, lines[l].y1)) {
+					if (ry < lines[l].y1 + MUTTR_LINE_EPSILON32) {
 						// Add intersection values
 						float x = muttR_LineRayHit(ry, lines[l].x0, lines[l].y0, lines[l].x1, lines[l].y1);
 						// Add if intersection is valid
@@ -6259,6 +6259,8 @@ mutt is developed primarily off of these sources of documentation:
 					return MUTT_FAILED_MALLOC;
 				}
 
+				mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+
 				// Initialize active lines
 				uint32_m first_line = 0;
 				uint32_m line_len = 0;
@@ -6271,8 +6273,7 @@ mutt is developed primarily off of these sources of documentation:
 					// Just fill all x-values with out if the height is now outside of the glyph range
 					// (+ double-pixel extra for bleeding and ceiling)
 					if (h > shape->y_max+2) {
-						mu_memset(&bitmap->pixels[hpix_offset], out, bitmap->width*adv);
-						continue;
+						break;
 					}
 
 					// Calculate y-value of ray (middle of pixel)
@@ -6284,32 +6285,17 @@ mutt is developed primarily off of these sources of documentation:
 					int32_m winding;
 					uint32_m num_hits = muttR_Hits(&shape->lines[first_line], line_len, ray_y, hits, &winding);
 
-					// Loop through each x-value
-					uint32_m ih = 0; // (Upcoming hit)
-					for (uint32_m w = 0; w < bitmap->width; ++w) {
-						// Just fill all remaining x-values with out if width is now outside of glyph range
-						// (+ double-pixel extra for bleeding and ceiling)
-						if (w > shape->x_max+2) {
-							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, (bitmap->width-w)*adv);
-							continue;
-						}
-
-						// Calculate x-coordinate (middle of pixel)
-						float ray_x = ((float)w) + .5f;
-
-						// Skip over every hit we've passed, and remove their windings
-						// "ray_x > ..." ensures rule 2 of scan converting:
-						// "If a contour falls exactly on a pixel’s center, that pixel is turned on."
-						while (ih < num_hits && ray_x > hits[ih].x) {
-							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[ih++].l]);
-						}
-
-						// Set pixel to whether or not we're in glyph
-						// Winding == 0 means in the glyph, and vice versa
-						if (winding == 0) {
-							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, adv);
-						} else {
-							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], in, adv);
+					// If there are any hits:
+					if (num_hits != 0) {
+						// Set each range of in x-values based on hits to being filled in
+						size_m prev_x = hits[0].x;
+						winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
+						for (uint32_m h = 1; h < num_hits; ++h) {
+							if (winding != 0) {
+								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)hits[h].x) - prev_x));
+							}
+							prev_x = hits[h].x;
+							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[h].l]);
 						}
 					}
 				}
