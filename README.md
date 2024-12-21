@@ -1967,3 +1967,5 @@ mutt has several C standard library dependencies, all of which are overridable b
 * `mu_roundf` - equivalent to `roundf`.
 
 * `mu_ceilf` - equivalent to `ceilf`.
+
+* `mu_floorf` - equivalent to `floorf`.

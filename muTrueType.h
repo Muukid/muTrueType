@@ -2778,7 +2778,8 @@ mutt is developed primarily off of these sources of documentation:
 
 		#if !defined(mu_fabsf) || \
 			!defined(mu_roundf) || \
-			!defined(mu_ceilf)
+			!defined(mu_ceilf) || \
+			!defined(mu_floorf)
 
 			// @DOCLINE ## `math.h` dependencies
 			#include <math.h>
@@ -2796,6 +2797,11 @@ mutt is developed primarily off of these sources of documentation:
 			// @DOCLINE * `mu_ceilf` - equivalent to `ceilf`.
 			#ifndef mu_ceilf
 				#define mu_ceilf ceilf
+			#endif
+
+			// @DOCLINE * `mu_floorf` - equivalent to `floorf`.
+			#ifndef mu_floorf
+				#define mu_floorf floorf
 			#endif
 
 		#endif /* math.h */
@@ -6290,12 +6296,12 @@ mutt is developed primarily off of these sources of documentation:
 						// Set each range of in x-values based on hits to being filled in
 						size_m prev_x = mu_roundf(hits[0].x);
 						winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
-						for (uint32_m h = 1; h < num_hits; ++h) {
+						for (uint32_m hn = 1; hn < num_hits; ++hn) {
 							if (winding != 0) {
-								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)mu_roundf(hits[h].x)) - prev_x));
+								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)mu_roundf(hits[hn].x)) - prev_x));
 							}
-							prev_x = mu_roundf(hits[h].x);
-							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[h].l]);
+							prev_x = mu_roundf(hits[hn].x);
+							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[hn].l]);
 						}
 					}
 				}
@@ -6332,69 +6338,75 @@ mutt is developed primarily off of these sources of documentation:
 			}
 
 			// MUTTR_FULL_PIXEL_AANXN inner handling
-			void muttR_FullPixelAANXNInner(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs, muttR_Ray* rays) {
-				// Weight of each sample:
-				float weight = 1.f / ((float)(vs*hs));
+			muttResult muttR_FullPixelAANXNInner(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs, muttR_Ray* rays) {
+				// Allocate hit tracker
+				muttR_Hit* hits = (muttR_Hit*)mu_malloc(shape->num_lines * sizeof(muttR_Hit));
+				if (!hits) {
+					return MUTT_FAILED_MALLOC;
+				}
 
+				mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+
+				if (out) {} if (rays) {} if (vs) {}
+
+				// Initialize active lines
 				uint32_m first_line = 0;
 				uint32_m line_len = 0;
+
+				uint8_m div = mu_floorf(((float)in) / ((float)hs));
 
 				// Loop through each horizontal strip from bottom to top
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
 					// Calculate horizontal pixel offset
-					uint64_m hpix_offset = bitmap->stride*((bitmap->height-h)-1);
+					uint64_m hpix_offset = bitmap->stride * ((bitmap->height - h) - 1);
 
-					// Just fill all x-values with out if the height is now outside of the glyph range
-					// (+ double-pixel extra for bleeding and ceiling)
-					if (h > shape->y_max+2) {
-						mu_memset(&bitmap->pixels[hpix_offset], out, bitmap->width*adv);
-						continue;
-					}
+					// Loop through each inner horiz. strip
+					for (uint8_m hi = 0; hi < hs; ++hi) {
+						// Calculate y-value of ray (middle of pixel)
+						float ray_y = ((float)h) + (((float)(hi+1)) / ((float)hs)) - (1.f / (2.f * ((float)hs)));
 
-					// Calculate each ray
-					for (uint8_m r = 0; r < hs; ++r) {
-						// a=\left[\frac{1}{n+1},\frac{2}{n+1}...\frac{n}{n+1}\right]
-						muttR_PixelRayCalc(shape, rays+r, ((float)h) + (((float)(r+1)) / ((float)(hs+1))), &first_line, &line_len);
-					}
+						// Update active line list
+						muttR_ActiveLines(shape->lines, shape->num_lines, &first_line, &line_len, ray_y);
+						// Calculate all hits with active lines (+ winding)
+						int32_m winding;
+						uint32_m num_hits = muttR_Hits(&shape->lines[first_line], line_len, ray_y, hits, &winding);
 
-					// Loop through each x-value
-					for (uint32_m w = 0; w < bitmap->width; ++w) {
-						// Just fill all remaining x-values with out if width is now outside of glyph range
-						// (+ double-pixel extra for bleeding and ceiling)
-						if (w > shape->x_max+2) {
-							mu_memset(&bitmap->pixels[hpix_offset+(w*adv)], out, (bitmap->width-w)*adv);
-							continue;
-						}
-
-						// Percentage amount the pixel is in
-						float in_per = 0.f;
-
-						// Loop through each vertical sample
-						for (uint8_m x = 0; x < vs; ++x) {
-							// Calculate x-coordinate
-							// (Same math as y-ray)
-							float ray_x = ((float)w) + (((float)(x+1)) / ((float)(vs+1)));
-
-							// Loop through each horizontal sample
-							for (uint8_m y = 0; y < hs; ++y) {
-								// Skip over each hit, removing windings
-								while (rays[y].ih < rays[y].num_hits && ray_x > rays[y].hits[rays[y].ih].x) {
-									// winding -= muttR_LineWinding(ray_y, &shape->lines[hits[ih++].l]);
-									rays[y].winding -= muttR_LineWinding(rays[y].y, &shape->lines[rays[y].hits[rays[y].ih++].l]);
+						// If there are any hits:
+						if (num_hits != 0) {
+							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
+							for (uint32_m hn = 1; hn < num_hits; ++hn) {
+								if (winding != 0) {
+									muByte* first = &bitmap->pixels[hpix_offset+(((size_m)mu_floorf(hits[hn-1].x))*adv)];
+									muByte* last = &bitmap->pixels[hpix_offset+(((size_m)mu_floorf(hits[hn].x))*adv)];
+									if (first != last) {
+										// First pixel handling
+										float pix_x = mu_floorf(hits[hn-1].x);
+										float per = mu_roundf((1.f - (hits[hn-1].x - pix_x)) * ((float)vs)) / ((float)vs);
+										for (uint8_m a = 0; a < adv; ++a) {
+											*first += div * per;
+											first++;
+										}
+										// Last pixel handling
+										pix_x = mu_floorf(hits[hn].x);
+										per = mu_roundf((1.f - (hits[hn].x - pix_x)) * ((float)vs)) / ((float)vs);
+										for (uint8_m a = 0; a < adv; ++a) {
+											*(last + a) += div * (1.f - per);
+										}
+										// Intermediate pixels handling
+										while (first != last) {
+											*first += div;
+											++first;
+										}
+									}
 								}
-								// Add if sample is in
-								in_per += (rays[y].winding==0) ?(0.f) :(weight);
+								winding -= muttR_LineWinding(ray_y, &shape->lines[hits[hn].l]);
 							}
 						}
-
-						// Calculate pixel color based on how much the pixel is in
-						// \left(a\right)\left(m_{1}-m_{0}\right)+m_{0}
-						for (uint8_m a = 0; a < adv-1; ++a) {
-							bitmap->pixels[hpix_offset+(w*adv)+a] = 255;
-						}
-						bitmap->pixels[hpix_offset+(w*adv)+(adv-1)] = (in_per * (in-out)) + out;
 					}
 				}
+
+				mu_free(hits);
+				return MUTT_SUCCESS;
 			}
 
 			// MUTTR_FULL_PIXEL_AANXN
@@ -6417,12 +6429,12 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Rasterize
-				muttR_FullPixelAANXNInner(shape, bitmap, adv, (float)in, (float)out, vs, hs, rays);
+				muttResult res = muttR_FullPixelAANXNInner(shape, bitmap, adv, (float)in, (float)out, vs, hs, rays);
 
 				// Deallocate and return
 				mu_free(rays);
 				mu_free(hits);
-				return MUTT_SUCCESS;
+				return res;
 			}
 
 		/* Rasterization */
