@@ -6310,49 +6310,22 @@ mutt is developed primarily off of these sources of documentation:
 				return MUTT_SUCCESS;
 			}
 
-			// A ray
-			struct muttR_Ray {
-				// Its y-value
-				float y;
-				// Each line its hit
-				muttR_Hit* hits;
-				// Number of hits
-				uint32_m num_hits;
-				// Its winding
-				int32_m winding;
-				// Upcoming hit
-				uint32_m ih;
-			};
-			typedef struct muttR_Ray muttR_Ray;
-
-			// Fills information about a ray
-			static inline void muttR_PixelRayCalc(muttR_Shape* shape, muttR_Ray* ray, float ray_y, uint32_m* first_line, uint32_m* line_len) {
-				// Fill y-value
-				ray->y = ray_y;
-				// Update active line list
-				muttR_ActiveLines(shape->lines, shape->num_lines, first_line, line_len, ray->y);
-				// Calculate hit and winding
-				ray->num_hits = muttR_Hits(&shape->lines[*first_line], *line_len, ray_y, ray->hits, &ray->winding);
-				// Set upcoming hit to 0
-				ray->ih = 0;
-			}
-
 			// MUTTR_FULL_PIXEL_AANXN inner handling
-			muttResult muttR_FullPixelAANXNInner(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs, muttR_Ray* rays) {
+			muttResult muttR_FullPixelAANXN(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, float in, float out, uint8_m vs, uint8_m hs) {
 				// Allocate hit tracker
 				muttR_Hit* hits = (muttR_Hit*)mu_malloc(shape->num_lines * sizeof(muttR_Hit));
 				if (!hits) {
 					return MUTT_FAILED_MALLOC;
 				}
 
+				// Set all pixels to out first
 				mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
-
-				if (out) {} if (rays) {} if (vs) {}
 
 				// Initialize active lines
 				uint32_m first_line = 0;
 				uint32_m line_len = 0;
 
+				// Calculate how much a single horizontal pixel is worth
 				uint8_m div = mu_floorf(((float)in) / ((float)hs));
 
 				// Loop through each horizontal strip from bottom to top
@@ -6375,7 +6348,9 @@ mutt is developed primarily off of these sources of documentation:
 						if (num_hits != 0) {
 							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
 							for (uint32_m hn = 1; hn < num_hits; ++hn) {
+								// If this range between these two hits should be filled:
 								if (winding != 0) {
+									// Calculate first and last pixel of range
 									muByte* first = &bitmap->pixels[hpix_offset+(((size_m)mu_floorf(hits[hn-1].x))*adv)];
 									muByte* last = &bitmap->pixels[hpix_offset+(((size_m)mu_floorf(hits[hn].x))*adv)];
 									if (first != last) {
@@ -6392,7 +6367,7 @@ mutt is developed primarily off of these sources of documentation:
 										for (uint8_m a = 0; a < adv; ++a) {
 											*(last + a) += div * (1.f - per);
 										}
-										// Intermediate pixels handling
+										// Intermediate pixel handling
 										while (first != last) {
 											*first += div;
 											++first;
@@ -6407,34 +6382,6 @@ mutt is developed primarily off of these sources of documentation:
 
 				mu_free(hits);
 				return MUTT_SUCCESS;
-			}
-
-			// MUTTR_FULL_PIXEL_AANXN
-			muttResult muttR_FullPixelAANXN(muttR_Shape* shape, muttRBitmap* bitmap, uint8_m adv, uint8_m in, uint8_m out, uint8_m vs, uint8_m hs) {
-				// Allocate hits
-				muttR_Hit* hits = (muttR_Hit*)mu_malloc(shape->num_lines * hs * sizeof(muttR_Hit));
-				if (!hits) {
-					return MUTT_FAILED_MALLOC;
-				}
-				// Allocate rays
-				muttR_Ray* rays = (muttR_Ray*)mu_malloc(hs * sizeof(muttR_Ray));
-				if (!rays) {
-					mu_free(hits);
-					return MUTT_FAILED_MALLOC;
-				}
-
-				// Fill all rays with their hit pointer
-				for (uint8_m r = 0; r < hs; ++r) {
-					rays[r].hits = hits + (shape->num_lines * r);
-				}
-
-				// Rasterize
-				muttResult res = muttR_FullPixelAANXNInner(shape, bitmap, adv, (float)in, (float)out, vs, hs, rays);
-
-				// Deallocate and return
-				mu_free(rays);
-				mu_free(hits);
-				return res;
 			}
 
 		/* Rasterization */
