@@ -6325,8 +6325,8 @@ mutt is developed primarily off of these sources of documentation:
 				uint32_m first_line = 0;
 				uint32_m line_len = 0;
 
-				// Calculate how much a single horizontal pixel is worth
-				uint8_m div = mu_floorf(((float)in) / ((float)hs));
+				// Calculate how much a pixel is worth
+				uint8_m div = roundf(256.f / ((float)vs));
 
 				// Loop through each horizontal strip from bottom to top
 				for (uint32_m h = 0; h < bitmap->height; ++h) {
@@ -6357,19 +6357,59 @@ mutt is developed primarily off of these sources of documentation:
 										// First pixel handling
 										float pix_x = mu_floorf(hits[hn-1].x);
 										float per = mu_roundf((1.f - (hits[hn-1].x - pix_x)) * ((float)vs)) / ((float)vs);
+										uint8_m add = mu_roundf(((float)div) * per);
 										for (uint8_m a = 0; a < adv; ++a) {
-											*first += div * per;
+											if (in == 255) {
+												if (*first + add > 255) {
+													*first = 255;
+												} else {
+													*first += add;
+												}
+											}
+											else {
+												if (*first - add < 0) {
+													*first = 0;
+												} else {
+													*first -= add;
+												}
+											}
 											first++;
 										}
 										// Last pixel handling
 										pix_x = mu_floorf(hits[hn].x);
 										per = mu_roundf((1.f - (hits[hn].x - pix_x)) * ((float)vs)) / ((float)vs);
+										add = mu_roundf(((float)div) * (1.f - per));
 										for (uint8_m a = 0; a < adv; ++a) {
-											*(last + a) += div * (1.f - per);
+											if (in == 255) {
+												if (*(last + a) + add > 255) {
+													*(last + a) = 255;
+												} else {
+													*(last + a) += add;
+												}
+											} else {
+												if (*(last + a) - add < 0) {
+													*(last + a) = 0;
+												} else {
+													*(last + a) -= add;
+												}
+											}
 										}
 										// Intermediate pixel handling
 										while (first != last) {
-											*first += div;
+											if (in == 255) {
+												if (*first + div > 255) {
+													*first = 255;
+												} else {
+													*first += div;
+												}
+											}
+											else {
+												if (*first - div < 0) {
+													*first = 0;
+												} else {
+													*first -= div;
+												}
+											}
 											++first;
 										}
 									}
