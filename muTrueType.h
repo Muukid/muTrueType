@@ -6265,7 +6265,12 @@ mutt is developed primarily off of these sources of documentation:
 					return MUTT_FAILED_MALLOC;
 				}
 
-				mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+				// Set all pixels to out first
+				if (adv != 4) {
+					mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+				} else {
+					mu_memset(bitmap->pixels, 0, bitmap->width * bitmap->height * adv);
+				}
 
 				// Initialize active lines
 				uint32_m first_line = 0;
@@ -6298,7 +6303,15 @@ mutt is developed primarily off of these sources of documentation:
 						winding -= muttR_LineWinding(ray_y, &shape->lines[hits[0].l]);
 						for (uint32_m hn = 1; hn < num_hits; ++hn) {
 							if (winding != 0) {
-								mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)mu_roundf(hits[hn].x)) - prev_x));
+								if (adv != 4 || in != 0) {
+									mu_memset(&bitmap->pixels[hpix_offset+(prev_x*adv)], in, ((size_m)adv) * (((size_m)mu_roundf(hits[hn].x)) - prev_x));
+								} else {
+									uint8_m arr[4] = { 0, 0, 0, 255 };
+									size_m ie = (((size_m)mu_roundf(hits[hn].x)) - prev_x);
+									for (size_m i = 0; i < ie; ++i) {
+										mu_memcpy(&bitmap->pixels[hpix_offset+(prev_x*adv)+(i*4)], arr, 4);
+									}
+								}
 							}
 							prev_x = mu_roundf(hits[hn].x);
 							winding -= muttR_LineWinding(ray_y, &shape->lines[hits[hn].l]);
@@ -6319,7 +6332,11 @@ mutt is developed primarily off of these sources of documentation:
 				}
 
 				// Set all pixels to out first
-				mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+				if (adv != 4) {
+					mu_memset(bitmap->pixels, out, bitmap->width * bitmap->height * adv);
+				} else {
+					mu_memset(bitmap->pixels, 0, bitmap->width * bitmap->height * adv);
+				}
 
 				// Initialize active lines
 				uint32_m first_line = 0;
@@ -6359,7 +6376,10 @@ mutt is developed primarily off of these sources of documentation:
 										float per = mu_roundf((1.f - (hits[hn-1].x - pix_x)) * ((float)vs)) / ((float)vs);
 										uint8_m add = mu_roundf(((float)div) * per);
 										for (uint8_m a = 0; a < adv; ++a) {
-											if (in == 255) {
+											if (adv == 4 && a+1 < adv) {
+												*first = in;
+											}
+											else if (in == 255 || adv == 4) {
 												if (*first + add > 255) {
 													*first = 255;
 												} else {
@@ -6380,7 +6400,10 @@ mutt is developed primarily off of these sources of documentation:
 										per = mu_roundf((1.f - (hits[hn].x - pix_x)) * ((float)vs)) / ((float)vs);
 										add = mu_roundf(((float)div) * (1.f - per));
 										for (uint8_m a = 0; a < adv; ++a) {
-											if (in == 255) {
+											if (adv == 4 && a+1 < adv) {
+												*(last + a) = in;
+											}
+											else if (in == 255 || adv == 4) {
 												if (*(last + a) + add > 255) {
 													*(last + a) = 255;
 												} else {
@@ -6395,8 +6418,12 @@ mutt is developed primarily off of these sources of documentation:
 											}
 										}
 										// Intermediate pixel handling
+										uint8_m a = 0;
 										while (first != last) {
-											if (in == 255) {
+											if (adv == 4 && a+1 < adv) {
+												*first = in;
+											}
+											else if (in == 255 || adv == 4) {
 												if (*first + div > 255) {
 													*first = 255;
 												} else {
@@ -6410,7 +6437,9 @@ mutt is developed primarily off of these sources of documentation:
 													*first -= div;
 												}
 											}
+
 											++first;
+											a = (a + 1) % 4;
 										}
 									}
 								}
